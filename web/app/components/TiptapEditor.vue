@@ -164,6 +164,9 @@ const editor = useEditor({
   extensions: [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
+      // Disable the drop cursor — drops are handled as file attachments, so the
+      // ProseMirror insertion-point line would otherwise show as stray noise.
+      dropcursor: false,
     }),
     Link.configure({
       openOnClick: false,
