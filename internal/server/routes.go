@@ -157,6 +157,7 @@ func (s *Server) registerRoutes() {
 
 			// Project members
 			projectGroup.GET("/members", s.projectHandler.ListMembers)
+			projectGroup.GET("/members/search", s.projectHandler.SearchUsers, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.POST("/members", s.projectHandler.AddMember, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.PATCH("/members/:userId", s.projectHandler.UpdateMemberRole, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("/members/:userId", s.projectHandler.RemoveMember, auth.ProjectRoleMiddleware("admin"))

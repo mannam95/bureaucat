@@ -222,6 +222,41 @@ export function useProjects() {
     }
   }
 
+  // Search the user directory to pick someone to add as a member. Scoped to
+  // project admins, so it works without global admin access.
+  async function searchUsers(
+    projectKey: string,
+    query: string
+  ): Promise<{
+    success: boolean;
+    data?: Array<{
+      id: string;
+      username: string;
+      email: string;
+      first_name: string;
+      last_name: string;
+    }>;
+    error?: string;
+  }> {
+    try {
+      const params = new URLSearchParams({ q: query });
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/members/search?${params}`,
+        { headers: getAuthHeader() }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to search users" };
+      }
+
+      const data = await response.json();
+      return { success: true, data: data.users ?? [] };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function updateMemberRole(
     projectKey: string,
     userId: string,
@@ -589,6 +624,7 @@ export function useProjects() {
     // Members
     listMembers,
     addMember,
+    searchUsers,
     updateMemberRole,
     removeMember,
 

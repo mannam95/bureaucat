@@ -13,8 +13,7 @@ const emit = defineEmits<{
   added: [];
 }>();
 
-const { addMember } = useProjects();
-const { listUsers } = useAdmin();
+const { addMember, searchUsers: searchUsersApi } = useProjects();
 
 const loading = ref(false);
 const searchLoading = ref(false);
@@ -43,12 +42,12 @@ async function searchUsers() {
   }
 
   searchLoading.value = true;
-  const result = await listUsers(1, 20, searchQuery.value);
+  const result = await searchUsersApi(props.projectKey, searchQuery.value);
   searchLoading.value = false;
 
   if (result.success && result.data) {
     // Filter out existing members
-    searchResults.value = result.data.users.filter(
+    searchResults.value = result.data.filter(
       (u) => !props.existingMemberIds.includes(u.id)
     );
   }

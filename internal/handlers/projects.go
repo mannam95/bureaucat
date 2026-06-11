@@ -500,6 +500,53 @@ func (h *ProjectHandler) ListMembers(c *echo.Context) error {
 	return c.JSON(http.StatusOK, memberResponses)
 }
 
+// SearchUsers searches the user directory so a project admin can pick someone to
+// add as a member. Gated by project admin role (not global admin), so project
+// admins who are not workspace admins can still add members.
+//
+//	@Summary		Search users for membership
+//	@Description	Search users by name/username/email. Requires project admin role.
+//	@Tags			Project Members
+//	@Produce		json
+//	@Param			projectKey	path	string	true	"Project key"
+//	@Param			q			query	string	false	"Search query"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/members/search [get]
+func (h *ProjectHandler) SearchUsers(c *echo.Context) error {
+	query := strings.TrimSpace(c.QueryParam("q"))
+	if query == "" {
+		return c.JSON(http.StatusOK, map[string]interface{}{"users": []UserResponse{}})
+	}
+
+	ctx := c.Request().Context()
+
+	results, err := h.store.SearchUsersPaginated(ctx, store.SearchUsersPaginatedParams{
+		Column1: pgtype.Text{String: query, Valid: true},
+		Limit:   20,
+		Offset:  0,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to search users")
+	}
+
+	users := make([]UserResponse, len(results))
+	for i, u := range results {
+		users[i] = UserResponse{
+			ID:        u.ID,
+			Username:  u.Username,
+			Email:     u.Email,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+			UserType:  u.UserType,
+			CreatedAt: u.CreatedAt.Time,
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"users": users})
+}
+
 // AddMember adds a member to a project.
 //
 //	@Summary		Add member
