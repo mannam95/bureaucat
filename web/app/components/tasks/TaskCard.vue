@@ -1,12 +1,35 @@
 <script setup lang="ts">
 import { Circle, CircleDot, CheckCircle2, XCircle, Clock, MessageSquare } from "lucide-vue-next";
-import type { Task } from "~/types";
+import type { Task, ProjectState } from "~/types";
 import { PRIORITY_LABELS } from "~/types";
 
-const props = defineProps<{
-  task: Task;
-  projectKey: string;
+const props = withDefaults(
+  defineProps<{
+    task: Task;
+    projectKey: string;
+    states?: ProjectState[];
+    isMember?: boolean;
+  }>(),
+  { states: () => [], isMember: false }
+);
+
+const emit = defineEmits<{
+  updated: [];
 }>();
+
+const { updateTask } = useTasks();
+const updatingState = ref(false);
+
+// Inline state editing is only offered to members who have states to pick from.
+const canEditState = computed(() => props.isMember && props.states.length > 0);
+
+async function changeState(stateId: string) {
+  if (stateId === props.task.state_id || updatingState.value) return;
+  updatingState.value = true;
+  const res = await updateTask(props.projectKey, props.task.task_number, { state_id: stateId });
+  updatingState.value = false;
+  if (res.success) emit("updated");
+}
 
 const stateIcon = computed(() => {
   switch (props.task.state_type) {
@@ -71,14 +94,28 @@ const involvedPeople = computed(() => {
       <!-- Col 2: Title -->
       <span class="truncate text-sm font-medium min-w-0">{{ task.title }}</span>
 
-      <!-- Col 3: State badge -->
-      <div class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit justify-self-end">
-        <component
-          :is="stateIcon"
-          class="size-3.5 shrink-0 stroke-[2.5]"
-          :style="{ color: task.state_color }"
+      <!-- Col 3: State badge (editable for members) -->
+      <div class="justify-self-end" @click.stop.prevent>
+        <TaskStateSelector
+          v-if="canEditState"
+          :states="states"
+          :model-value="task.state_id"
+          :disabled="updatingState"
+          compact
+          dense
+          @update:model-value="changeState"
         />
-        <span class="text-xs text-muted-foreground whitespace-nowrap">{{ task.state_name }}</span>
+        <div
+          v-else
+          class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit"
+        >
+          <component
+            :is="stateIcon"
+            class="size-3.5 shrink-0 stroke-[2.5]"
+            :style="{ color: task.state_color }"
+          />
+          <span class="text-xs text-muted-foreground whitespace-nowrap">{{ task.state_name }}</span>
+        </div>
       </div>
 
       <!-- Col 4: Priority badge -->

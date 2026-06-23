@@ -415,6 +415,9 @@ onMounted(() => {
                     :key="task.id"
                     :task="task"
                     :project-key="projectKey"
+                    :states="states"
+                    :is-member="isMember"
+                    @updated="() => loadTasks(tasksPage)"
                   />
                 </div>
 
