@@ -70,6 +70,11 @@ release kind="patch": release-image
     echo ""
     echo "Released ${version}"
 
+# (Re)publish the current latest tag without bumping — use to resume a release
+# that was tagged but failed partway (skips the git clean/tag-on-HEAD checks).
+publish: release-image
+    {{release-run}} goreleaser release --clean --skip=validate
+
 # Build everything locally without publishing (snapshot, no tag/push required)
 build: release-image
     {{release-run}} goreleaser release --clean --snapshot
