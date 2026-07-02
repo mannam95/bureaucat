@@ -113,11 +113,17 @@ const countAllProjectsFiltered = `-- name: CountAllProjectsFiltered :one
 SELECT COUNT(*)
 FROM projects p
 WHERE p.deleted_at IS NULL
-  AND ($1::text IS NULL OR p.name ILIKE '%' || $1 || '%' OR p.project_key ILIKE '%' || $1 || '%' OR p.description ILIKE '%' || $1 || '%')
+  AND ($1::uuid IS NULL OR p.workspace_id = $1)
+  AND ($2::text IS NULL OR p.name ILIKE '%' || $2 || '%' OR p.project_key ILIKE '%' || $2 || '%' OR p.description ILIKE '%' || $2 || '%')
 `
 
-func (q *Queries) CountAllProjectsFiltered(ctx context.Context, search pgtype.Text) (int64, error) {
-	row := q.db.QueryRow(ctx, countAllProjectsFiltered, search)
+type CountAllProjectsFilteredParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      pgtype.Text `json:"search"`
+}
+
+func (q *Queries) CountAllProjectsFiltered(ctx context.Context, arg CountAllProjectsFilteredParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllProjectsFiltered, arg.WorkspaceID, arg.Search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -225,16 +231,18 @@ SELECT COUNT(*)
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
-  AND ($2::text IS NULL OR p.name ILIKE '%' || $2 || '%' OR p.project_key ILIKE '%' || $2 || '%' OR p.description ILIKE '%' || $2 || '%')
+  AND ($2::uuid IS NULL OR p.workspace_id = $2)
+  AND ($3::text IS NULL OR p.name ILIKE '%' || $3 || '%' OR p.project_key ILIKE '%' || $3 || '%' OR p.description ILIKE '%' || $3 || '%')
 `
 
 type CountUserProjectsFilteredParams struct {
-	UserID uuid.UUID   `json:"user_id"`
-	Search pgtype.Text `json:"search"`
+	UserID      uuid.UUID   `json:"user_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      pgtype.Text `json:"search"`
 }
 
 func (q *Queries) CountUserProjectsFiltered(ctx context.Context, arg CountUserProjectsFilteredParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countUserProjectsFiltered, arg.UserID, arg.Search)
+	row := q.db.QueryRow(ctx, countUserProjectsFiltered, arg.UserID, arg.WorkspaceID, arg.Search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -317,9 +325,9 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 
 const createProject = `-- name: CreateProject :one
 
-INSERT INTO projects (project_key, name, description, icon_id, cover_id, created_by)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+INSERT INTO projects (project_key, name, description, icon_id, cover_id, created_by, workspace_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 `
 
 type CreateProjectParams struct {
@@ -329,23 +337,11 @@ type CreateProjectParams struct {
 	IconID      pgtype.UUID `json:"icon_id"`
 	CoverID     pgtype.UUID `json:"cover_id"`
 	CreatedBy   uuid.UUID   `json:"created_by"`
-}
-
-type CreateProjectRow struct {
-	ID          uuid.UUID          `json:"id"`
-	ProjectKey  string             `json:"project_key"`
-	Name        string             `json:"name"`
-	Description pgtype.Text        `json:"description"`
-	IconID      pgtype.UUID        `json:"icon_id"`
-	CoverID     pgtype.UUID        `json:"cover_id"`
-	CreatedBy   uuid.UUID          `json:"created_by"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
 }
 
 // ==================== PROJECTS ====================
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
 	row := q.db.QueryRow(ctx, createProject,
 		arg.ProjectKey,
 		arg.Name,
@@ -353,8 +349,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (C
 		arg.IconID,
 		arg.CoverID,
 		arg.CreatedBy,
+		arg.WorkspaceID,
 	)
-	var i CreateProjectRow
+	var i Project
 	err := row.Scan(
 		&i.ID,
 		&i.ProjectKey,
@@ -366,6 +363,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (C
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Disabled,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -686,7 +685,7 @@ func (q *Queries) GetNextTaskNumber(ctx context.Context, projectID uuid.UUID) (i
 }
 
 const getProjectByID = `-- name: GetProjectByID :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -706,12 +705,13 @@ func (q *Queries) GetProjectByID(ctx context.Context, id uuid.UUID) (Project, er
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Disabled,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 FROM projects
 WHERE project_key = $1 AND deleted_at IS NULL
 `
@@ -731,6 +731,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, projectKey string) (Proje
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Disabled,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -1127,7 +1128,7 @@ func (q *Queries) IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) 
 }
 
 const listAllProjects = `-- name: ListAllProjects :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, 'admin' AS role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
 WHERE p.deleted_at IS NULL
 ORDER BY p.name ASC
@@ -1150,6 +1151,7 @@ type ListAllProjectsRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Role        string             `json:"role"`
 }
 
@@ -1173,6 +1175,7 @@ func (q *Queries) ListAllProjects(ctx context.Context, arg ListAllProjectsParams
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.WorkspaceID,
 			&i.Role,
 		); err != nil {
 			return nil, err
@@ -1186,18 +1189,20 @@ func (q *Queries) ListAllProjects(ctx context.Context, arg ListAllProjectsParams
 }
 
 const listAllProjectsFiltered = `-- name: ListAllProjectsFiltered :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, 'admin' AS role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
 WHERE p.deleted_at IS NULL
-  AND ($3::text IS NULL OR p.name ILIKE '%' || $3 || '%' OR p.project_key ILIKE '%' || $3 || '%' OR p.description ILIKE '%' || $3 || '%')
+  AND ($3::uuid IS NULL OR p.workspace_id = $3)
+  AND ($4::text IS NULL OR p.name ILIKE '%' || $4 || '%' OR p.project_key ILIKE '%' || $4 || '%' OR p.description ILIKE '%' || $4 || '%')
 ORDER BY p.name ASC
 LIMIT $1 OFFSET $2
 `
 
 type ListAllProjectsFilteredParams struct {
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-	Search pgtype.Text `json:"search"`
+	Limit       int32       `json:"limit"`
+	Offset      int32       `json:"offset"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      pgtype.Text `json:"search"`
 }
 
 type ListAllProjectsFilteredRow struct {
@@ -1211,11 +1216,17 @@ type ListAllProjectsFilteredRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Role        string             `json:"role"`
 }
 
 func (q *Queries) ListAllProjectsFiltered(ctx context.Context, arg ListAllProjectsFilteredParams) ([]ListAllProjectsFilteredRow, error) {
-	rows, err := q.db.Query(ctx, listAllProjectsFiltered, arg.Limit, arg.Offset, arg.Search)
+	rows, err := q.db.Query(ctx, listAllProjectsFiltered,
+		arg.Limit,
+		arg.Offset,
+		arg.WorkspaceID,
+		arg.Search,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1234,6 +1245,7 @@ func (q *Queries) ListAllProjectsFiltered(ctx context.Context, arg ListAllProjec
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.WorkspaceID,
 			&i.Role,
 		); err != nil {
 			return nil, err
@@ -2144,7 +2156,7 @@ func (q *Queries) ListUserActivityDates(ctx context.Context, arg ListUserActivit
 }
 
 const listUserProjects = `-- name: ListUserProjects :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, pm.role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
@@ -2169,6 +2181,7 @@ type ListUserProjectsRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Role        string             `json:"role"`
 }
 
@@ -2192,6 +2205,7 @@ func (q *Queries) ListUserProjects(ctx context.Context, arg ListUserProjectsPara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.WorkspaceID,
 			&i.Role,
 		); err != nil {
 			return nil, err
@@ -2205,20 +2219,22 @@ func (q *Queries) ListUserProjects(ctx context.Context, arg ListUserProjectsPara
 }
 
 const listUserProjectsFiltered = `-- name: ListUserProjectsFiltered :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, pm.role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
-  AND ($4::text IS NULL OR p.name ILIKE '%' || $4 || '%' OR p.project_key ILIKE '%' || $4 || '%' OR p.description ILIKE '%' || $4 || '%')
+  AND ($4::uuid IS NULL OR p.workspace_id = $4)
+  AND ($5::text IS NULL OR p.name ILIKE '%' || $5 || '%' OR p.project_key ILIKE '%' || $5 || '%' OR p.description ILIKE '%' || $5 || '%')
 ORDER BY p.name ASC
 LIMIT $2 OFFSET $3
 `
 
 type ListUserProjectsFilteredParams struct {
-	UserID uuid.UUID   `json:"user_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-	Search pgtype.Text `json:"search"`
+	UserID      uuid.UUID   `json:"user_id"`
+	Limit       int32       `json:"limit"`
+	Offset      int32       `json:"offset"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      pgtype.Text `json:"search"`
 }
 
 type ListUserProjectsFilteredRow struct {
@@ -2232,6 +2248,7 @@ type ListUserProjectsFilteredRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Role        string             `json:"role"`
 }
 
@@ -2240,6 +2257,7 @@ func (q *Queries) ListUserProjectsFiltered(ctx context.Context, arg ListUserProj
 		arg.UserID,
 		arg.Limit,
 		arg.Offset,
+		arg.WorkspaceID,
 		arg.Search,
 	)
 	if err != nil {
@@ -2260,6 +2278,7 @@ func (q *Queries) ListUserProjectsFiltered(ctx context.Context, arg ListUserProj
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.WorkspaceID,
 			&i.Role,
 		); err != nil {
 			return nil, err
@@ -2667,7 +2686,7 @@ const setProjectDisabled = `-- name: SetProjectDisabled :one
 UPDATE projects
 SET disabled = $1, updated_at = NOW()
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 `
 
 type SetProjectDisabledParams struct {
@@ -2690,6 +2709,7 @@ func (q *Queries) SetProjectDisabled(ctx context.Context, arg SetProjectDisabled
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Disabled,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -2765,7 +2785,7 @@ SET name = COALESCE($2, name),
     cover_id = COALESCE($5, cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 `
 
 type UpdateProjectParams struct {
@@ -2797,6 +2817,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Disabled,
+		&i.WorkspaceID,
 	)
 	return i, err
 }

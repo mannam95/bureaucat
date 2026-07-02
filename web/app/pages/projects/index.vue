@@ -17,6 +17,7 @@ function copyLink() {
 }
 
 const { projects, loading, listProjects, total, page, totalPages } = useProjects();
+const { currentWorkspace } = useWorkspaces();
 
 const showCreateDialog = ref(false);
 const searchQuery = ref("");
@@ -33,6 +34,11 @@ watch(searchQuery, () => {
   debounceTimer = setTimeout(() => {
     fetchProjects(1);
   }, 300);
+});
+
+// Reload the list when the active workspace changes.
+watch(currentWorkspace, () => {
+  fetchProjects(1);
 });
 
 async function handleCreated() {

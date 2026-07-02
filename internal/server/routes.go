@@ -142,6 +142,26 @@ func (s *Server) registerRoutes() {
 			protected.POST("/uploads", s.uploadHandler.Upload)
 		}
 
+		// Workspace routes (authenticated). Workspaces house projects; membership
+		// governs visibility, and management is gated to global admins.
+		if s.workspaceHandler != nil {
+			protected.GET("/workspaces", s.workspaceHandler.ListWorkspaces)
+			protected.POST("/workspaces", s.workspaceHandler.CreateWorkspace, auth.AdminMiddleware())
+
+			// Workspace-specific routes (requires workspace membership; admins bypass)
+			workspaceGroup := protected.Group("/workspaces/:workspaceKey", auth.WorkspaceMiddleware(s.store))
+
+			workspaceGroup.GET("", s.workspaceHandler.GetWorkspace)
+			workspaceGroup.PATCH("", s.workspaceHandler.UpdateWorkspace, auth.AdminMiddleware())
+			workspaceGroup.DELETE("", s.workspaceHandler.DeleteWorkspace, auth.AdminMiddleware())
+
+			// Workspace members
+			workspaceGroup.GET("/members", s.workspaceHandler.ListMembers)
+			workspaceGroup.GET("/members/search", s.workspaceHandler.SearchUsers, auth.AdminMiddleware())
+			workspaceGroup.POST("/members", s.workspaceHandler.AddMember, auth.AdminMiddleware())
+			workspaceGroup.DELETE("/members/:userId", s.workspaceHandler.RemoveMember, auth.AdminMiddleware())
+		}
+
 		// Project routes (authenticated)
 		if s.projectHandler != nil {
 			protected.GET("/projects", s.projectHandler.ListProjects)

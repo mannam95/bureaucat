@@ -28,17 +28,18 @@ func NewProjectHandler(store store.Querier) *ProjectHandler {
 
 // ProjectResponse represents a project in API responses.
 type ProjectResponse struct {
-	ID          uuid.UUID  `json:"id"`
-	ProjectKey  string     `json:"project_key"`
-	Name        string     `json:"name"`
-	Description *string    `json:"description,omitempty"`
-	IconURL     *string    `json:"icon_url,omitempty"`
-	CoverURL    *string    `json:"cover_url,omitempty"`
-	Role        string     `json:"role,omitempty"`
-	Disabled    bool       `json:"disabled"`
-	CreatedBy   uuid.UUID  `json:"created_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	ProjectKey  string    `json:"project_key"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	IconURL     *string   `json:"icon_url,omitempty"`
+	CoverURL    *string   `json:"cover_url,omitempty"`
+	Role        string    `json:"role,omitempty"`
+	Disabled    bool      `json:"disabled"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	CreatedBy   uuid.UUID `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // CreateProjectRequest represents the request to create a project.
@@ -48,6 +49,7 @@ type CreateProjectRequest struct {
 	Description *string `json:"description"`
 	IconID      *string `json:"icon_id"`
 	CoverID     *string `json:"cover_id"`
+	WorkspaceID string  `json:"workspace_id"`
 }
 
 // UpdateProjectRequest represents the request to update a project.
@@ -121,6 +123,17 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 		searchParam = pgtype.Text{String: search, Valid: true}
 	}
 
+	// Optional workspace scope. When omitted, projects across all the user's
+	// workspaces are returned.
+	workspaceParam := pgtype.UUID{}
+	if ws := strings.TrimSpace(c.QueryParam("workspace_id")); ws != "" {
+		wsID, err := uuid.Parse(ws)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid workspace_id")
+		}
+		workspaceParam = pgtype.UUID{Bytes: wsID, Valid: true}
+	}
+
 	ctx := c.Request().Context()
 	userType := c.Request().Header.Get(auth.HeaderUserType)
 
@@ -128,14 +141,18 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 	var projectResponses []ProjectResponse
 
 	if userType == "admin" {
-		total, err = h.store.CountAllProjectsFiltered(ctx, searchParam)
+		total, err = h.store.CountAllProjectsFiltered(ctx, store.CountAllProjectsFilteredParams{
+			WorkspaceID: workspaceParam,
+			Search:      searchParam,
+		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count projects")
 		}
 		projects, err := h.store.ListAllProjectsFiltered(ctx, store.ListAllProjectsFilteredParams{
-			Limit:  int32(perPage),
-			Offset: int32(offset),
-			Search: searchParam,
+			Limit:       int32(perPage),
+			Offset:      int32(offset),
+			WorkspaceID: workspaceParam,
+			Search:      searchParam,
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to list projects")
@@ -150,6 +167,7 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 				IconURL:     pgtypeUUIDToURL(p.IconID),
 				CoverURL:    pgtypeUUIDToURL(p.CoverID),
 				Role:        p.Role,
+				WorkspaceID: p.WorkspaceID,
 				CreatedBy:   p.CreatedBy,
 				CreatedAt:   p.CreatedAt.Time,
 				UpdatedAt:   p.UpdatedAt.Time,
@@ -157,17 +175,19 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 		}
 	} else {
 		total, err = h.store.CountUserProjectsFiltered(ctx, store.CountUserProjectsFilteredParams{
-			UserID: userID,
-			Search: searchParam,
+			UserID:      userID,
+			WorkspaceID: workspaceParam,
+			Search:      searchParam,
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count projects")
 		}
 		projects, err := h.store.ListUserProjectsFiltered(ctx, store.ListUserProjectsFilteredParams{
-			UserID: userID,
-			Limit:  int32(perPage),
-			Offset: int32(offset),
-			Search: searchParam,
+			UserID:      userID,
+			Limit:       int32(perPage),
+			Offset:      int32(offset),
+			WorkspaceID: workspaceParam,
+			Search:      searchParam,
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to list projects")
@@ -182,6 +202,7 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 				IconURL:     pgtypeUUIDToURL(p.IconID),
 				CoverURL:    pgtypeUUIDToURL(p.CoverID),
 				Role:        p.Role,
+				WorkspaceID: p.WorkspaceID,
 				CreatedBy:   p.CreatedBy,
 				CreatedAt:   p.CreatedAt.Time,
 				UpdatedAt:   p.UpdatedAt.Time,
@@ -256,6 +277,31 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, "project key already exists")
 	}
 
+	// A project must live in a workspace the caller can access.
+	if req.WorkspaceID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "workspace_id is required")
+	}
+	workspaceID, err := uuid.Parse(req.WorkspaceID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid workspace_id")
+	}
+	if _, err := h.store.GetWorkspaceByID(ctx, workspaceID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "workspace not found")
+	}
+	// Global admins may create in any workspace; others must be a member.
+	if c.Request().Header.Get(auth.HeaderUserType) != "admin" {
+		isMember, err := h.store.IsWorkspaceMember(ctx, store.IsWorkspaceMemberParams{
+			WorkspaceID: workspaceID,
+			UserID:      userID,
+		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to check workspace membership")
+		}
+		if !isMember {
+			return echo.NewHTTPError(http.StatusForbidden, "not a member of the target workspace")
+		}
+	}
+
 	// Parse optional UUIDs
 	iconID := stringToPgtypeUUID(req.IconID)
 	coverID := stringToPgtypeUUID(req.CoverID)
@@ -268,6 +314,7 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 		IconID:      iconID,
 		CoverID:     coverID,
 		CreatedBy:   userID,
+		WorkspaceID: workspaceID,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create project")
@@ -307,6 +354,7 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 		IconURL:     pgtypeUUIDToURL(project.IconID),
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
 		Role:        "admin",
+		WorkspaceID: project.WorkspaceID,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,
@@ -349,6 +397,7 @@ func (h *ProjectHandler) GetProject(c *echo.Context) error {
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
 		Role:        role,
 		Disabled:    project.Disabled,
+		WorkspaceID: project.WorkspaceID,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,
@@ -402,6 +451,7 @@ func (h *ProjectHandler) UpdateProject(c *echo.Context) error {
 		IconURL:     pgtypeUUIDToURL(project.IconID),
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
 		Disabled:    project.Disabled,
+		WorkspaceID: project.WorkspaceID,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,
@@ -459,6 +509,7 @@ func (h *ProjectHandler) SetProjectDisabled(c *echo.Context) error {
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
 		Role:        c.Request().Header.Get(auth.HeaderProjectRole),
 		Disabled:    project.Disabled,
+		WorkspaceID: project.WorkspaceID,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,

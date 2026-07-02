@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -78,12 +79,17 @@ func Import(ctx context.Context, pool *pgxpool.Pool, adminUserID uuid.UUID, dump
 		planeUserNames[planeID] = name
 	}
 
-	// Phase 2: Bulk import projects.
+	// Phase 2: Bulk import projects. Every project must live in a workspace, so
+	// ensure one exists to hold the imported projects.
+	workspaceID, err := ensureImportWorkspace(ctx, tx, adminUserID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring import workspace: %w", err)
+	}
 	existingKeys, err := loadExistingProjectKeys(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("loading project keys: %w", err)
 	}
-	projectMap, err := bulkImportProjects(ctx, tx, dump.Projects, adminUserID, existingKeys, result)
+	projectMap, err := bulkImportProjects(ctx, tx, dump.Projects, adminUserID, workspaceID, existingKeys, result)
 	if err != nil {
 		return nil, fmt.Errorf("importing projects: %w", err)
 	}
@@ -322,8 +328,37 @@ func bulkImportUsers(ctx context.Context, tx pgx.Tx, planeUsers []map[string]str
 	return userMap, nil
 }
 
+// ensureImportWorkspace returns a workspace to attach imported projects to,
+// reusing the "DEFAULT" workspace when present and creating it (owned by the
+// importing admin) otherwise. The admin is ensured to be a member.
+func ensureImportWorkspace(ctx context.Context, tx pgx.Tx, adminUserID uuid.UUID) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx,
+		"SELECT id FROM workspaces WHERE workspace_key = 'DEFAULT' AND deleted_at IS NULL",
+	).Scan(&id)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, err
+		}
+		id = uuid.New()
+		if _, err := tx.Exec(ctx,
+			"INSERT INTO workspaces (id, workspace_key, name, description, created_by) VALUES ($1, 'DEFAULT', 'Default', 'Default workspace', $2)",
+			id, adminUserID,
+		); err != nil {
+			return uuid.Nil, err
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		"INSERT INTO workspace_members (workspace_id, user_id) VALUES ($1, $2) ON CONFLICT (workspace_id, user_id) DO NOTHING",
+		id, adminUserID,
+	); err != nil {
+		return uuid.Nil, err
+	}
+	return id, nil
+}
+
 // bulkImportProjects creates all projects and admin memberships in bulk.
-func bulkImportProjects(ctx context.Context, tx pgx.Tx, planeProjects []map[string]string, adminUserID uuid.UUID, existingKeys map[string]bool, result *ImportResult) (map[string]uuid.UUID, error) {
+func bulkImportProjects(ctx context.Context, tx pgx.Tx, planeProjects []map[string]string, adminUserID uuid.UUID, workspaceID uuid.UUID, existingKeys map[string]bool, result *ImportResult) (map[string]uuid.UUID, error) {
 	projectMap := make(map[string]uuid.UUID, len(planeProjects))
 
 	type newProject struct {
@@ -387,12 +422,12 @@ func bulkImportProjects(ctx context.Context, tx pgx.Tx, planeProjects []map[stri
 		if p.desc != "" {
 			desc = &p.desc
 		}
-		projectRows[i] = []interface{}{p.id, p.key, p.name, desc, nil, nil, adminUserID}
+		projectRows[i] = []interface{}{p.id, p.key, p.name, desc, nil, nil, adminUserID, workspaceID}
 	}
 
 	_, err := tx.CopyFrom(ctx,
 		pgx.Identifier{"projects"},
-		[]string{"id", "project_key", "name", "description", "icon_id", "cover_id", "created_by"},
+		[]string{"id", "project_key", "name", "description", "icon_id", "cover_id", "created_by", "workspace_id"},
 		pgx.CopyFromRows(projectRows),
 	)
 	if err != nil {

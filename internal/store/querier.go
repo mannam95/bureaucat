@@ -25,6 +25,8 @@ type Querier interface {
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
 	// ==================== CYCLE TASKS ====================
 	AddTasksToCycle(ctx context.Context, arg AddTasksToCycleParams) error
+	// ==================== WORKSPACE MEMBERS ====================
+	AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMemberParams) (WorkspaceMember, error)
 	// Soft-delete all children of a task (cascade-together on parent delete).
 	CascadeSoftDeleteSubtasks(ctx context.Context, parentID uuid.UUID) error
 	CheckCycleOverlap(ctx context.Context, arg CheckCycleOverlapParams) (int32, error)
@@ -33,7 +35,9 @@ type Querier interface {
 	CoalesceNotification(ctx context.Context, arg CoalesceNotificationParams) error
 	CountActiveRefreshTokens(ctx context.Context) (int64, error)
 	CountAllProjects(ctx context.Context) (int64, error)
-	CountAllProjectsFiltered(ctx context.Context, search pgtype.Text) (int64, error)
+	CountAllProjectsFiltered(ctx context.Context, arg CountAllProjectsFilteredParams) (int64, error)
+	CountAllWorkspaces(ctx context.Context) (int64, error)
+	CountAllWorkspacesFiltered(ctx context.Context, search pgtype.Text) (int64, error)
 	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountProjectCycles(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectMembers(ctx context.Context, projectID uuid.UUID) (int64, error)
@@ -47,6 +51,8 @@ type Querier interface {
 	CountUserActivity(ctx context.Context, actorID uuid.UUID) (int64, error)
 	CountUserProjects(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUserProjectsFiltered(ctx context.Context, arg CountUserProjectsFilteredParams) (int64, error)
+	CountUserWorkspaces(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountUserWorkspacesFiltered(ctx context.Context, arg CountUserWorkspacesFilteredParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	// ==================== ACTIVITY LOG ====================
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
@@ -63,7 +69,7 @@ type Querier interface {
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error)
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
 	// ==================== PROJECTS ====================
-	CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error)
+	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	// ==================== PROJECT LABELS ====================
 	CreateProjectLabel(ctx context.Context, arg CreateProjectLabelParams) (ProjectLabel, error)
 	// ==================== PROJECT STATES ====================
@@ -78,6 +84,8 @@ type Querier interface {
 	CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplateParams) (TaskTemplate, error)
 	CreateUpload(ctx context.Context, arg CreateUploadParams) (Upload, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	// ==================== WORKSPACES ====================
+	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAttachment(ctx context.Context, id uuid.UUID) error
 	DeleteAttachmentsByEntity(ctx context.Context, arg DeleteAttachmentsByEntityParams) error
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
@@ -134,9 +142,13 @@ type Querier interface {
 	GetUserByEmailOrUsername(ctx context.Context, email string) (GetUserByEmailOrUsernameRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByProviderID(ctx context.Context, arg GetUserByProviderIDParams) (GetUserByProviderIDRow, error)
+	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
+	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
+	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)
 	HasTaskLabel(ctx context.Context, arg HasTaskLabelParams) (bool, error)
 	IsProjectMember(ctx context.Context, arg IsProjectMemberParams) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
+	IsWorkspaceMember(ctx context.Context, arg IsWorkspaceMemberParams) (bool, error)
 	LinkProviderToUser(ctx context.Context, arg LinkProviderToUserParams) error
 	ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID) ([]ListActiveCyclesForUserRow, error)
 	// "Active" modules across all projects the user is a member of. Uses the
@@ -146,6 +158,8 @@ type Querier interface {
 	ListActiveRefreshTokens(ctx context.Context, arg ListActiveRefreshTokensParams) ([]ListActiveRefreshTokensRow, error)
 	ListAllProjects(ctx context.Context, arg ListAllProjectsParams) ([]ListAllProjectsRow, error)
 	ListAllProjectsFiltered(ctx context.Context, arg ListAllProjectsFilteredParams) ([]ListAllProjectsFilteredRow, error)
+	ListAllWorkspaces(ctx context.Context, arg ListAllWorkspacesParams) ([]Workspace, error)
+	ListAllWorkspacesFiltered(ctx context.Context, arg ListAllWorkspacesFilteredParams) ([]Workspace, error)
 	// Filtered list and count are now built dynamically by internal/store/tasks_filter.go
 	// from a FilterTree. The projection here is documented for reference by that runner.
 	ListAssigneesForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAssigneesForTasksRow, error)
@@ -197,7 +211,10 @@ type Querier interface {
 	ListUserActivityDates(ctx context.Context, arg ListUserActivityDatesParams) ([]ListUserActivityDatesRow, error)
 	ListUserProjects(ctx context.Context, arg ListUserProjectsParams) ([]ListUserProjectsRow, error)
 	ListUserProjectsFiltered(ctx context.Context, arg ListUserProjectsFilteredParams) ([]ListUserProjectsFilteredRow, error)
+	ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]Workspace, error)
+	ListUserWorkspacesFiltered(ctx context.Context, arg ListUserWorkspacesFilteredParams) ([]Workspace, error)
 	ListUsersPaginated(ctx context.Context, arg ListUsersPaginatedParams) ([]ListUsersPaginatedRow, error)
+	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
 	// Move a task to a different project, assigning a new project-local task number
@@ -211,6 +228,7 @@ type Querier interface {
 	RemoveTaskAssignee(ctx context.Context, arg RemoveTaskAssigneeParams) error
 	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
+	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
@@ -240,6 +258,7 @@ type Querier interface {
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProjectView(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTask(ctx context.Context, id uuid.UUID) error
+	SoftDeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	// When a member leaves a project, keep their shared views alive by reassigning ownership.
 	TransferOwnedSharedViews(ctx context.Context, arg TransferOwnedSharedViewsParams) error
 	UpdateComment(ctx context.Context, arg UpdateCommentParams) (Comment, error)
@@ -259,9 +278,11 @@ type Querier interface {
 	UpdateUserAvatarURL(ctx context.Context, arg UpdateUserAvatarURLParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserType(ctx context.Context, arg UpdateUserTypeParams) error
+	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) (Setting, error)
 	UserExistsByEmailOrUsername(ctx context.Context, arg UserExistsByEmailOrUsernameParams) (bool, error)
 	VerifyActivityChain(ctx context.Context, taskID uuid.UUID) ([]ActivityLog, error)
+	WorkspaceKeyExists(ctx context.Context, workspaceKey string) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

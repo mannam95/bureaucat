@@ -7,6 +7,7 @@ export interface Project {
   cover_url?: string;
   role: string;
   disabled: boolean;
+  workspace_id: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -57,6 +58,7 @@ export interface CreateProjectRequest {
   description?: string;
   icon_id?: string;
   cover_id?: string;
+  workspace_id?: string;
 }
 
 export interface UpdateProjectRequest {

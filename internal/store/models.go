@@ -406,6 +406,7 @@ type Project struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	Disabled    bool               `json:"disabled"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 }
 
 type ProjectLabel struct {
@@ -535,4 +536,22 @@ type User struct {
 	AuthProvider   pgtype.Text        `json:"auth_provider"`
 	ProviderUserID pgtype.Text        `json:"provider_user_id"`
 	AvatarUrl      pgtype.Text        `json:"avatar_url"`
+}
+
+type Workspace struct {
+	ID           uuid.UUID          `json:"id"`
+	WorkspaceKey string             `json:"workspace_key"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	CreatedBy    uuid.UUID          `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type WorkspaceMember struct {
+	ID          uuid.UUID          `json:"id"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	UserID      uuid.UUID          `json:"user_id"`
+	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
 }

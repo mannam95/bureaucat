@@ -25,6 +25,9 @@ onMounted(() => {
   <aside
     class="fixed inset-y-0 left-0 z-50 flex w-12 flex-col items-center border-r border-border/60 bg-muted/40 py-3 backdrop-blur-xl"
   >
+    <!-- Workspace switcher -->
+    <WorkspaceSwitcher class="mb-3" />
+
     <!-- Profile -->
     <NuxtLink
       :to="profilePath"

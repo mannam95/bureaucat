@@ -3,6 +3,7 @@ import { User, LogOut, LayoutDashboard, FolderKanban, Shield, Star, Settings, Se
 import type { Project } from "~/types";
 
 const { user, isAuthenticated, logout, getAuthHeader } = useAuth();
+const { currentWorkspace } = useWorkspaces();
 const { appName, signupSettings, fetchSignupSettings } = useSettings();
 const route = useRoute();
 
@@ -18,7 +19,11 @@ const allProjects = ref<Project[]>([]);
 
 async function fetchAllProjects() {
   try {
-    const res = await fetch("/api/v1/projects?page=1&per_page=100", {
+    let url = "/api/v1/projects?page=1&per_page=100";
+    if (currentWorkspace.value) {
+      url += `&workspace_id=${currentWorkspace.value.id}`;
+    }
+    const res = await fetch(url, {
       headers: getAuthHeader(),
     });
     if (res.ok) {
@@ -34,6 +39,12 @@ async function openCreateTask() {
   if (!allProjects.value.length) await fetchAllProjects();
   createTaskOpen.value = true;
 }
+
+// Drop the cached project list when the workspace changes so the create-task
+// picker reflects the newly selected workspace.
+watch(currentWorkspace, () => {
+  allProjects.value = [];
+});
 
 // Don't hijack the keystroke while the user is typing into a field or editor.
 function isEditableTarget(el: EventTarget | null): boolean {

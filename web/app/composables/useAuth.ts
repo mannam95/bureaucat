@@ -57,6 +57,7 @@ export function useAuth() {
       const authResponse: AuthResponse = await response.json();
       setAuthState(authResponse);
       scheduleTokenRefresh();
+      await useWorkspaces().listWorkspaces();
       return { success: true };
     } catch (e) {
       return { success: false, error: "Network error" };
@@ -82,6 +83,7 @@ export function useAuth() {
       const authResponse: AuthResponse = await response.json();
       setAuthState(authResponse);
       scheduleTokenRefresh();
+      await useWorkspaces().listWorkspaces();
       return { success: true };
     } catch (e) {
       return { success: false, error: "Network error" };
@@ -98,6 +100,7 @@ export function useAuth() {
       // Ignore errors, clear state anyway
     }
     clearAuthState();
+    useWorkspaces().clearWorkspaces();
   }
 
   async function refreshToken(): Promise<boolean> {

@@ -40,8 +40,9 @@ type Server struct {
 	authManager     *auth.Manager
 	authHandler     *handlers.AuthHandler
 	adminHandler    *handlers.AdminHandler
-	uploadHandler   *handlers.UploadHandler
-	projectHandler  *handlers.ProjectHandler
+	uploadHandler    *handlers.UploadHandler
+	workspaceHandler *handlers.WorkspaceHandler
+	projectHandler   *handlers.ProjectHandler
 	taskHandler     *handlers.TaskHandler
 	viewHandler     *handlers.ViewHandler
 	commentHandler    *handlers.CommentHandler
@@ -139,7 +140,8 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		// Initialize notification service (loads providers dynamically from settings)
 		srv.notificationService = notifier.NewService(srv.store)
 
-		// Initialize project and task handlers
+		// Initialize workspace, project and task handlers
+		srv.workspaceHandler = handlers.NewWorkspaceHandler(srv.store)
 		srv.projectHandler = handlers.NewProjectHandler(srv.store)
 		srv.taskHandler = handlers.NewTaskHandler(srv.store, srv.pool, store.NewFilterRunner(srv.pool), srv.activityService, srv.notificationService)
 		srv.viewHandler = handlers.NewViewHandler(srv.store)

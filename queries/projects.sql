@@ -1,17 +1,17 @@
 -- ==================== PROJECTS ====================
 
 -- name: CreateProject :one
-INSERT INTO projects (project_key, name, description, icon_id, cover_id, created_by)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at;
+INSERT INTO projects (project_key, name, description, icon_id, cover_id, created_by, workspace_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id;
 
 -- name: GetProjectByID :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetProjectByKey :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
 FROM projects
 WHERE project_key = $1 AND deleted_at IS NULL;
 
@@ -19,7 +19,7 @@ WHERE project_key = $1 AND deleted_at IS NULL;
 UPDATE projects
 SET disabled = sqlc.arg('disabled'), updated_at = NOW()
 WHERE id = sqlc.arg('id') AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled;
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id;
 
 -- name: UpdateProject :one
 UPDATE projects
@@ -29,7 +29,7 @@ SET name = COALESCE(sqlc.narg('name'), name),
     cover_id = COALESCE(sqlc.narg('cover_id'), cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled;
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id;
 
 -- name: SoftDeleteProject :exec
 UPDATE projects
@@ -37,7 +37,7 @@ SET deleted_at = NOW(), updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListUserProjects :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, pm.role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
@@ -51,7 +51,7 @@ JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL;
 
 -- name: ListAllProjects :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, 'admin' AS role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
 WHERE p.deleted_at IS NULL
 ORDER BY p.name ASC
@@ -63,10 +63,11 @@ FROM projects p
 WHERE p.deleted_at IS NULL;
 
 -- name: ListUserProjectsFiltered :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, pm.role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
+  AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY p.name ASC
 LIMIT $2 OFFSET $3;
@@ -76,12 +77,14 @@ SELECT COUNT(*)
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
+  AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%');
 
 -- name: ListAllProjectsFiltered :many
-SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, 'admin' AS role
+SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
 WHERE p.deleted_at IS NULL
+  AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY p.name ASC
 LIMIT $1 OFFSET $2;
@@ -90,6 +93,7 @@ LIMIT $1 OFFSET $2;
 SELECT COUNT(*)
 FROM projects p
 WHERE p.deleted_at IS NULL
+  AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%');
 
 -- name: ProjectKeyExists :one

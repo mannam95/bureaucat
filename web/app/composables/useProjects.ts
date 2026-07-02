@@ -47,6 +47,7 @@ const state = reactive<ProjectsState>({
 
 export function useProjects() {
   const { getAuthHeader } = useAuth();
+  const { currentWorkspace } = useWorkspaces();
 
   // Projects CRUD
   async function listProjects(
@@ -59,6 +60,10 @@ export function useProjects() {
       let url = `/api/v1/projects?page=${page}&per_page=${perPage}`;
       if (search) {
         url += `&search=${encodeURIComponent(search)}`;
+      }
+      // Scope the list to the active workspace.
+      if (currentWorkspace.value) {
+        url += `&workspace_id=${currentWorkspace.value.id}`;
       }
       const response = await fetch(url, { headers: getAuthHeader() });
 
@@ -85,13 +90,21 @@ export function useProjects() {
     data: CreateProjectRequest
   ): Promise<{ success: boolean; data?: Project; error?: string }> {
     try {
+      // A project always belongs to the active workspace unless one is provided.
+      const body = {
+        ...data,
+        workspace_id: data.workspace_id ?? currentWorkspace.value?.id,
+      };
+      if (!body.workspace_id) {
+        return { success: false, error: "No workspace selected" };
+      }
       const response = await fetch("/api/v1/projects", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeader(),
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
