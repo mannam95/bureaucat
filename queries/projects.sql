@@ -6,14 +6,20 @@ VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at;
 
 -- name: GetProjectByID :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetProjectByKey :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
 FROM projects
 WHERE project_key = $1 AND deleted_at IS NULL;
+
+-- name: SetProjectDisabled :one
+UPDATE projects
+SET disabled = sqlc.arg('disabled'), updated_at = NOW()
+WHERE id = sqlc.arg('id') AND deleted_at IS NULL
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled;
 
 -- name: UpdateProject :one
 UPDATE projects
@@ -23,7 +29,7 @@ SET name = COALESCE(sqlc.narg('name'), name),
     cover_id = COALESCE(sqlc.narg('cover_id'), cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at;
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled;
 
 -- name: SoftDeleteProject :exec
 UPDATE projects

@@ -61,7 +61,7 @@ type Querier interface {
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error)
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
 	// ==================== PROJECTS ====================
-	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
+	CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error)
 	// ==================== PROJECT LABELS ====================
 	CreateProjectLabel(ctx context.Context, arg CreateProjectLabelParams) (ProjectLabel, error)
 	// ==================== PROJECT STATES ====================
@@ -225,6 +225,7 @@ type Querier interface {
 	// projects the user is a member of.
 	SearchUserTasks(ctx context.Context, arg SearchUserTasksParams) ([]SearchUserTasksRow, error)
 	SearchUsersPaginated(ctx context.Context, arg SearchUsersPaginatedParams) ([]SearchUsersPaginatedRow, error)
+	SetProjectDisabled(ctx context.Context, arg SetProjectDisabledParams) (Project, error)
 	SoftDeleteComment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteCycle(ctx context.Context, id uuid.UUID) error
 	SoftDeleteModule(ctx context.Context, id uuid.UUID) error

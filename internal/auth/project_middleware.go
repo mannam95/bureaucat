@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -16,7 +17,23 @@ const (
 	HeaderProjectKey = "X-Project-Key"
 	// HeaderProjectRole is the header name for the user's role in the project.
 	HeaderProjectRole = "X-Project-Role"
+	// HeaderProjectDisabled is "true" when the project is disabled (read-only).
+	HeaderProjectDisabled = "X-Project-Disabled"
 )
+
+// isProjectWrite reports whether the request mutates project data. Read methods
+// (GET/HEAD/OPTIONS) are always allowed on a disabled project; the enable/disable
+// toggle (PATCH .../disabled) is also allowed so a project can be re-enabled.
+func isProjectWrite(method, path string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	if method == http.MethodPatch && strings.HasSuffix(path, "/disabled") {
+		return false
+	}
+	return true
+}
 
 // ProjectMiddleware returns an Echo middleware that validates project access.
 // It expects a :projectKey path parameter and the auth headers to be set.
@@ -59,10 +76,19 @@ func ProjectMiddleware(queryer store.Querier) echo.MiddlewareFunc {
 				}
 			}
 
+			// A disabled project is read-only: reject any write except the
+			// toggle that re-enables it.
+			if project.Disabled && isProjectWrite(c.Request().Method, c.Request().URL.Path) {
+				return echo.NewHTTPError(http.StatusForbidden, "project is disabled (read-only)")
+			}
+
 			// Set project info in headers for downstream handlers
 			c.Request().Header.Set(HeaderProjectID, project.ID.String())
 			c.Request().Header.Set(HeaderProjectKey, project.ProjectKey)
 			c.Request().Header.Set(HeaderProjectRole, role)
+			if project.Disabled {
+				c.Request().Header.Set(HeaderProjectDisabled, "true")
+			}
 
 			return next(c)
 		}

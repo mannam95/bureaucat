@@ -5,6 +5,7 @@ import {
   Pencil,
   Trash2,
   FolderInput,
+  Lock,
   Check,
   X,
   Calendar as CalendarIcon,
@@ -74,11 +75,16 @@ const showDeleteConfirm = ref(false);
 
 const { user } = useAuth();
 const isAdmin = computed(() => currentProject.value?.role === "admin");
+// A disabled project is read-only, so write affordances are suppressed even for
+// members. The backend enforces this too.
+const isDisabled = computed(() => currentProject.value?.disabled ?? false);
 const isMember = computed(
-  () => currentProject.value?.role === "admin" || currentProject.value?.role === "member"
+  () =>
+    !isDisabled.value &&
+    (currentProject.value?.role === "admin" || currentProject.value?.role === "member")
 );
 const isCreator = computed(() => user.value?.id === currentTask.value?.created_by);
-const canDelete = computed(() => isAdmin.value || isCreator.value);
+const canDelete = computed(() => !isDisabled.value && (isAdmin.value || isCreator.value));
 
 const priorityOptions = Object.entries(PRIORITY_LABELS).map(([value, info]) => ({
   value: parseInt(value),
@@ -484,6 +490,16 @@ onMounted(() => {
               <Link v-else class="size-3.5" />
             </button>
           </nav>
+
+          <div
+            v-if="isDisabled"
+            class="mb-6 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+          >
+            <Lock class="size-4 shrink-0" />
+            <span>
+              This project is disabled and read-only. No changes can be made until an admin re-enables it in Settings.
+            </span>
+          </div>
 
           <div class="flex flex-col gap-8 md:flex-row">
             <!-- Main content -->

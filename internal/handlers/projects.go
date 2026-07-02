@@ -35,6 +35,7 @@ type ProjectResponse struct {
 	IconURL     *string    `json:"icon_url,omitempty"`
 	CoverURL    *string    `json:"cover_url,omitempty"`
 	Role        string     `json:"role,omitempty"`
+	Disabled    bool       `json:"disabled"`
 	CreatedBy   uuid.UUID  `json:"created_by"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -347,6 +348,7 @@ func (h *ProjectHandler) GetProject(c *echo.Context) error {
 		IconURL:     pgtypeUUIDToURL(project.IconID),
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
 		Role:        role,
+		Disabled:    project.Disabled,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,
@@ -399,6 +401,64 @@ func (h *ProjectHandler) UpdateProject(c *echo.Context) error {
 		Description: textToStringPtr(project.Description),
 		IconURL:     pgtypeUUIDToURL(project.IconID),
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
+		Disabled:    project.Disabled,
+		CreatedBy:   project.CreatedBy,
+		CreatedAt:   project.CreatedAt.Time,
+		UpdatedAt:   project.UpdatedAt.Time,
+	})
+}
+
+// SetProjectDisabledRequest toggles a project's read-only (disabled) state.
+type SetProjectDisabledRequest struct {
+	Disabled bool `json:"disabled"`
+}
+
+// SetProjectDisabled enables or disables a project. A disabled project is
+// read-only. Requires project admin role.
+//
+//	@Summary		Enable/disable project
+//	@Description	Toggle a project's disabled (read-only) state. Requires project admin role.
+//	@Tags			Projects
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string						true	"Project key"
+//	@Param			body		body		SetProjectDisabledRequest	true	"Disabled flag"
+//	@Success		200			{object}	ProjectResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/disabled [patch]
+func (h *ProjectHandler) SetProjectDisabled(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	var req SetProjectDisabledRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	ctx := c.Request().Context()
+
+	project, err := h.store.SetProjectDisabled(ctx, store.SetProjectDisabledParams{
+		ID:       projectID,
+		Disabled: req.Disabled,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update project")
+	}
+
+	return c.JSON(http.StatusOK, ProjectResponse{
+		ID:          project.ID,
+		ProjectKey:  project.ProjectKey,
+		Name:        project.Name,
+		Description: textToStringPtr(project.Description),
+		IconURL:     pgtypeUUIDToURL(project.IconID),
+		CoverURL:    pgtypeUUIDToURL(project.CoverID),
+		Role:        c.Request().Header.Get(auth.HeaderProjectRole),
+		Disabled:    project.Disabled,
 		CreatedBy:   project.CreatedBy,
 		CreatedAt:   project.CreatedAt.Time,
 		UpdatedAt:   project.UpdatedAt.Time,

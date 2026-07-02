@@ -15,6 +15,7 @@ import {
   Save,
   FolderInput,
   X,
+  Lock,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { FilterTree, ProjectView, MoveTasksResponse } from "~/types";
@@ -104,6 +105,9 @@ const isAdmin = computed(() => currentProject.value?.role === "admin");
 const isMember = computed(
   () => currentProject.value?.role === "admin" || currentProject.value?.role === "member"
 );
+const isDisabled = computed(() => currentProject.value?.disabled ?? false);
+// A member can mutate the project only while it is enabled.
+const canWrite = computed(() => isMember.value && !isDisabled.value);
 
 // Bulk task selection / move.
 const selectedTasks = ref<Set<number>>(new Set());
@@ -342,6 +346,16 @@ onMounted(async () => {
             :member-count="members.length"
           />
 
+          <div
+            v-if="isDisabled"
+            class="mt-4 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+          >
+            <Lock class="size-4 shrink-0" />
+            <span>
+              This project is disabled and read-only. No changes can be made until an admin re-enables it in Settings.
+            </span>
+          </div>
+
           <Tabs v-model="activeTab" class="mt-6">
             <div class="flex items-center justify-between gap-3">
               <TabsList>
@@ -417,7 +431,7 @@ onMounted(async () => {
                   @update:group-by="(v) => (groupBy = v)"
                   @reset="resetFilters"
                 />
-                <div v-if="isMember" class="flex items-center">
+                <div v-if="canWrite" class="flex items-center">
                   <Button class="rounded-r-none" @click="showCreateTask = true">
                     <Plus class="mr-2 size-4" />
                     Create Task
@@ -450,7 +464,7 @@ onMounted(async () => {
                 <p class="mt-1 text-sm text-muted-foreground">
                   Try clearing filters or create a new task.
                 </p>
-                <Button v-if="isMember" class="mt-4" as-child>
+                <Button v-if="canWrite" class="mt-4" as-child>
                   <NuxtLink :to="`/projects/${projectKey}/tasks/new`">
                     <Plus class="mr-2 size-4" />
                     Create Task
@@ -460,7 +474,7 @@ onMounted(async () => {
 
               <template v-else>
                 <div
-                  v-if="isMember"
+                  v-if="canWrite"
                   class="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2"
                 >
                   <div class="flex items-center gap-3">
@@ -487,8 +501,8 @@ onMounted(async () => {
                   :tasks="tasks"
                   :project-key="projectKey"
                   :states="states"
-                  :is-member="isMember"
-                  :selectable="isMember"
+                  :is-member="canWrite"
+                  :selectable="canWrite"
                   :selected="selectedTasks"
                   @updated="() => loadTasks(tasksPage)"
                   @toggle-select="toggleTaskSelection"
@@ -536,7 +550,7 @@ onMounted(async () => {
                 :members="members"
                 :labels="labels"
                 :project-key="projectKey"
-                :is-member="isMember"
+                :is-member="canWrite"
                 :group-by="groupBy"
                 :current-user-id="currentUserId"
                 @refresh="() => loadTasks(tasksPage)"

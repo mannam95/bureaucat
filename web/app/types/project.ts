@@ -6,6 +6,7 @@ export interface Project {
   icon_url?: string;
   cover_url?: string;
   role: string;
+  disabled: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

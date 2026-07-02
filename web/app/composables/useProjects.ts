@@ -154,6 +154,35 @@ export function useProjects() {
     }
   }
 
+  async function setProjectDisabled(
+    projectKey: string,
+    disabled: boolean
+  ): Promise<{ success: boolean; data?: Project; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/disabled`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ disabled }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to update project" };
+      }
+
+      const project: Project = await response.json();
+      if (state.currentProject?.project_key === projectKey) {
+        state.currentProject = project;
+      }
+      return { success: true, data: project };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function deleteProject(
     projectKey: string
   ): Promise<{ success: boolean; error?: string }> {
@@ -619,6 +648,7 @@ export function useProjects() {
     createProject,
     getProject,
     updateProject,
+    setProjectDisabled,
     deleteProject,
 
     // Members

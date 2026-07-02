@@ -12,9 +12,23 @@ const emit = defineEmits<{
   refresh: [];
 }>();
 
-const { updateProject } = useProjects();
+const { updateProject, setProjectDisabled } = useProjects();
 
 const loading = ref(false);
+const togglingDisabled = ref(false);
+
+async function handleToggleDisabled(disabled: boolean) {
+  togglingDisabled.value = true;
+  const result = await setProjectDisabled(props.project.project_key, disabled);
+  togglingDisabled.value = false;
+
+  if (result.success) {
+    toast.success(disabled ? "Project disabled" : "Project enabled");
+    emit("refresh");
+  } else {
+    toast.error(result.error || "Failed to update project");
+  }
+}
 
 const form = ref({
   name: props.project.name,
@@ -88,7 +102,7 @@ const hasChanges = computed(() => {
               <Input
                 id="name"
                 v-model="form.name"
-                :disabled="loading || !isAdmin"
+                :disabled="loading || !isAdmin || project.disabled"
               />
             </div>
 
@@ -98,17 +112,45 @@ const hasChanges = computed(() => {
                 id="description"
                 v-model="form.description"
                 rows="3"
-                :disabled="loading || !isAdmin"
+                :disabled="loading || !isAdmin || project.disabled"
               />
             </div>
 
             <div v-if="isAdmin" class="flex justify-end">
-              <Button type="submit" :disabled="loading || !hasChanges">
+              <Button type="submit" :disabled="loading || !hasChanges || project.disabled">
                 <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
                 Save Changes
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Availability -->
+    <div v-if="isAdmin" class="space-y-4">
+      <div>
+        <h3 class="font-semibold">Availability</h3>
+        <p class="text-sm text-muted-foreground">
+          Disable the project to make it read-only
+        </p>
+      </div>
+
+      <Card>
+        <CardContent class="flex items-center justify-between gap-4 pt-6">
+          <div class="space-y-1">
+            <Label>Disable project</Label>
+            <p class="text-sm text-muted-foreground">
+              When disabled, the project becomes read-only: no tasks can be
+              created, edited, moved, or commented on until it is re-enabled.
+            </p>
+          </div>
+          <Switch
+            :checked="project.disabled"
+            :disabled="togglingDisabled"
+            aria-label="Disable project"
+            @update:checked="handleToggleDisabled"
+          />
         </CardContent>
       </Card>
     </div>

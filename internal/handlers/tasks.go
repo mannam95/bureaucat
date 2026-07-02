@@ -1437,6 +1437,9 @@ func (h *TaskHandler) resolveMoveTarget(ctx context.Context, c *echo.Context, ta
 	if c.Request().Header.Get(auth.HeaderProjectID) == dest.ID.String() {
 		return store.Project{}, echo.NewHTTPError(http.StatusBadRequest, "task is already in this project")
 	}
+	if dest.Disabled {
+		return store.Project{}, echo.NewHTTPError(http.StatusForbidden, "target project is disabled (read-only)")
+	}
 	if c.Request().Header.Get(auth.HeaderUserType) != "admin" {
 		isMember, err := h.store.IsProjectMember(ctx, store.IsProjectMemberParams{
 			ProjectID: dest.ID,

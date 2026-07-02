@@ -319,8 +319,21 @@ type CreateProjectParams struct {
 	CreatedBy   uuid.UUID   `json:"created_by"`
 }
 
+type CreateProjectRow struct {
+	ID          uuid.UUID          `json:"id"`
+	ProjectKey  string             `json:"project_key"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	IconID      pgtype.UUID        `json:"icon_id"`
+	CoverID     pgtype.UUID        `json:"cover_id"`
+	CreatedBy   uuid.UUID          `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
 // ==================== PROJECTS ====================
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
 	row := q.db.QueryRow(ctx, createProject,
 		arg.ProjectKey,
 		arg.Name,
@@ -329,7 +342,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.CoverID,
 		arg.CreatedBy,
 	)
-	var i Project
+	var i CreateProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.ProjectKey,
@@ -657,7 +670,7 @@ func (q *Queries) GetNextTaskNumber(ctx context.Context, projectID uuid.UUID) (i
 }
 
 const getProjectByID = `-- name: GetProjectByID :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -676,12 +689,13 @@ func (q *Queries) GetProjectByID(ctx context.Context, id uuid.UUID) (Project, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Disabled,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+SELECT id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
 FROM projects
 WHERE project_key = $1 AND deleted_at IS NULL
 `
@@ -700,6 +714,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, projectKey string) (Proje
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Disabled,
 	)
 	return i, err
 }
@@ -2509,6 +2524,37 @@ func (q *Queries) SearchUserTasks(ctx context.Context, arg SearchUserTasksParams
 	return items, nil
 }
 
+const setProjectDisabled = `-- name: SetProjectDisabled :one
+UPDATE projects
+SET disabled = $1, updated_at = NOW()
+WHERE id = $2 AND deleted_at IS NULL
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
+`
+
+type SetProjectDisabledParams struct {
+	Disabled bool      `json:"disabled"`
+	ID       uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetProjectDisabled(ctx context.Context, arg SetProjectDisabledParams) (Project, error) {
+	row := q.db.QueryRow(ctx, setProjectDisabled, arg.Disabled, arg.ID)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectKey,
+		&i.Name,
+		&i.Description,
+		&i.IconID,
+		&i.CoverID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Disabled,
+	)
+	return i, err
+}
+
 const softDeleteComment = `-- name: SoftDeleteComment :exec
 UPDATE comments
 SET deleted_at = NOW(), updated_at = NOW()
@@ -2580,7 +2626,7 @@ SET name = COALESCE($2, name),
     cover_id = COALESCE($5, cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at
+RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled
 `
 
 type UpdateProjectParams struct {
@@ -2611,6 +2657,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Disabled,
 	)
 	return i, err
 }
