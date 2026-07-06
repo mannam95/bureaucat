@@ -297,11 +297,11 @@ onMounted(async () => {
                 <Switch
                   id="all-workspaces"
                   :checked="showAllWorkspaces"
-                  aria-label="Show tasks from all workspaces"
+                  aria-label="Show projects and tasks from all workspaces"
                   @update:checked="showAllWorkspaces = $event"
                 />
                 <Label for="all-workspaces" class="cursor-pointer text-xs text-muted-foreground">
-                  All workspaces
+                  {{ showAllWorkspaces ? "Showing all workspaces" : "Current workspace only" }}
                 </Label>
               </div>
               <Button size="sm" :disabled="allProjects.length === 0" @click="showCreateTask = true">
