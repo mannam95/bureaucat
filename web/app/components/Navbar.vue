@@ -13,6 +13,11 @@ const searchOpen = ref(false);
 // In selector mode the dialog fetches its own workspace-scoped project list.
 const createTaskOpen = ref(false);
 
+// On a /projects/[key] page, pre-select that project in the picker.
+const currentProjectKey = computed(() =>
+  typeof route.params.key === "string" ? route.params.key : ""
+);
+
 function openCreateTask() {
   createTaskOpen.value = true;
 }
@@ -109,6 +114,7 @@ async function handleLogout() {
           v-if="isAuthenticated"
           v-model:open="createTaskOpen"
           project-selector
+          :initial-project-key="currentProjectKey"
         />
 
         <template v-if="!isAuthenticated">

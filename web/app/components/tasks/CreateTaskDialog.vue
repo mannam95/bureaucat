@@ -22,6 +22,9 @@ const props = withDefaults(
     // the workspace-scoped project list itself and shows a project picker. It
     // also fetches the chosen project's metadata on selection.
     projectSelector?: boolean;
+    // Selector mode only: a project key to pre-select when the dialog opens
+    // (e.g. the current project when Shift+C is pressed on /projects/[key]).
+    initialProjectKey?: string;
     // Subtask mode (opened from a parent task's detail page): the created task
     // becomes a child of this (project-local) parent number. The dialog stays on
     // the current page instead of navigating to the new task.
@@ -171,11 +174,22 @@ watch(open, async (isOpen) => {
       fetchedMembers.value = [];
       fetchedTemplates.value = [];
       await fetchProjects();
-      // Drop the cursor straight into the project picker so the user can start
-      // typing to search projects immediately. Deferred so the popover opens
-      // after the dialog's own open/focus handling has settled.
+      // If the caller supplied a project (e.g. Shift+C on /projects/[key]) and
+      // it's in the fetched list, pre-select it and skip the picker. Otherwise
+      // drop the cursor straight into the project picker so the user can start
+      // typing to search immediately. Deferred so it happens after the dialog's
+      // own open/focus handling has settled.
+      const preselect =
+        props.initialProjectKey &&
+        availableProjects.value.some((p) => p.project_key === props.initialProjectKey)
+          ? props.initialProjectKey
+          : "";
       nextTick(() => {
-        showProjectPopover.value = true;
+        if (preselect) {
+          selectProject(preselect);
+        } else {
+          showProjectPopover.value = true;
+        }
       });
     }
     resetForm();
