@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Plus, X, Loader2 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { TaskLabel, ProjectLabel } from "~/types";
 
@@ -18,13 +17,21 @@ const emit = defineEmits<{
 const { addLabel, removeLabel } = useTasks();
 
 const loading = ref<string | null>(null);
-const showPopover = ref(false);
 
-// Labels not already on the task
-const availableLabels = computed(() => {
+// TaskLabel (chips) and ProjectLabel (dropdown) share this shape, keyed by id.
+type TokenLabel = Pick<ProjectLabel, "id" | "name" | "color">;
+
+const selectedTokens = computed<TokenLabel[]>(() => props.taskLabels);
+
+// Labels not already on the task — the pool offered in the token dropdown.
+const availableTokens = computed<TokenLabel[]>(() => {
   const usedIds = new Set(props.taskLabels.map((l) => l.id));
   return props.projectLabels.filter((l) => !usedIds.has(l.id));
 });
+
+function labelChipStyle(l: TokenLabel) {
+  return { backgroundColor: l.color + "20", color: l.color };
+}
 
 async function handleAdd(labelId: string) {
   loading.value = labelId;
@@ -33,7 +40,6 @@ async function handleAdd(labelId: string) {
 
   if (result.success) {
     toast.success("Label added");
-    showPopover.value = false;
     emit("refresh");
   } else {
     toast.error(result.error || "Failed to add label");
@@ -58,63 +64,45 @@ async function handleRemove(labelId: string) {
   <div class="space-y-2">
     <p class="text-xs text-muted-foreground">Labels</p>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <div
+    <!-- Editable: Gmail-style token input -->
+    <TokenSelect
+      v-if="isMember"
+      :selected="selectedTokens"
+      :available="availableTokens"
+      :get-key="(l) => l.id"
+      :get-search-text="(l) => l.name"
+      :chip-style="labelChipStyle"
+      :chip-class="() => 'pl-2 pr-1 font-medium'"
+      :pending-key="loading"
+      placeholder="Add labels..."
+      empty-text="No labels found"
+      @add="(l) => handleAdd(l.id)"
+      @remove="(l) => handleRemove(l.id)"
+    >
+      <template #chip="{ item: label }">
+        <span class="truncate">{{ label.name }}</span>
+      </template>
+      <template #option="{ item: label }">
+        <div
+          class="size-3 shrink-0 rounded-full"
+          :style="{ backgroundColor: label.color }"
+        />
+        {{ label.name }}
+      </template>
+    </TokenSelect>
+
+    <!-- Read-only view -->
+    <div v-else class="flex flex-wrap items-center gap-2">
+      <span
         v-for="label in taskLabels"
         :key="label.id"
-        class="group relative rounded-md px-2.5 py-1"
-        :style="{
-          backgroundColor: label.color + '20',
-          color: label.color,
-        }"
+        class="rounded-md px-2.5 py-1 text-sm font-medium"
+        :style="{ backgroundColor: label.color + '20', color: label.color }"
       >
-        <span class="text-sm font-medium">{{ label.name }}</span>
-        <button
-          v-if="isMember"
-          type="button"
-          :aria-label="`Remove ${label.name}`"
-          class="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-foreground text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring outline-none"
-          :disabled="loading === label.id"
-          @click="handleRemove(label.id)"
-        >
-          <Loader2
-            v-if="loading === label.id"
-            class="size-2.5 animate-spin"
-          />
-          <X v-else class="size-2.5" />
-        </button>
-      </div>
-
-      <!-- Add button -->
-      <SearchableSelect
-        v-if="isMember && availableLabels.length > 0"
-        v-model:open="showPopover"
-        :items="availableLabels"
-        :get-search-text="(l) => l.name"
-        :get-key="(l) => l.id"
-        placeholder="Search labels..."
-        empty-text="No labels found"
-        content-class="w-48"
-        @select="(l) => handleAdd(l.id)"
-      >
-        <template #trigger>
-          <Button variant="outline" size="sm" class="h-7 gap-1.5">
-            <Plus class="size-3.5" />
-            Add
-          </Button>
-        </template>
-        <template #option="{ item: label }">
-          <div
-            class="size-3 shrink-0 rounded-full"
-            :style="{ backgroundColor: label.color }"
-          />
-          {{ label.name }}
-        </template>
-      </SearchableSelect>
-
-      <!-- Empty state -->
+        {{ label.name }}
+      </span>
       <span
-        v-if="taskLabels.length === 0 && !isMember"
+        v-if="taskLabels.length === 0"
         class="text-sm text-muted-foreground"
       >
         No labels

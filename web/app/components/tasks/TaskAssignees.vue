@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Plus, X, Loader2 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { TaskAssignee, ProjectMember } from "~/types";
 
@@ -18,15 +17,23 @@ const emit = defineEmits<{
 const { addAssignee, removeAssignee } = useTasks();
 
 const loading = ref<string | null>(null);
-const showPopover = ref(false);
 
-// Members not already assigned
-const availableMembers = computed(() => {
+// A common shape both TaskAssignee (chips) and ProjectMember (dropdown) satisfy,
+// so TokenSelect can treat them as one item type keyed by user_id.
+type TokenMember = Pick<
+  ProjectMember,
+  "user_id" | "username" | "first_name" | "last_name" | "avatar_url"
+>;
+
+const selectedTokens = computed<TokenMember[]>(() => props.assignees);
+
+// Members not already assigned — the pool offered in the token dropdown.
+const availableTokens = computed<TokenMember[]>(() => {
   const assignedIds = new Set(props.assignees.map((a) => a.user_id));
   return props.members.filter((m) => !assignedIds.has(m.user_id));
 });
 
-function memberSearchText(m: ProjectMember) {
+function memberSearchText(m: TokenMember) {
   return `${m.first_name} ${m.last_name} ${m.username}`;
 }
 
@@ -37,7 +44,6 @@ async function handleAdd(userId: string) {
 
   if (result.success) {
     toast.success("Assignee added");
-    showPopover.value = false;
     emit("refresh");
   } else {
     toast.error(result.error || "Failed to add assignee");
@@ -62,70 +68,59 @@ async function handleRemove(userId: string) {
   <div class="space-y-2">
     <p class="text-xs text-muted-foreground">Assignees</p>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <div
+    <!-- Editable: Gmail-style token input -->
+    <TokenSelect
+      v-if="isMember"
+      :selected="selectedTokens"
+      :available="availableTokens"
+      :get-key="(m) => m.user_id"
+      :get-search-text="memberSearchText"
+      :pending-key="loading"
+      placeholder="Add assignees..."
+      empty-text="No members found"
+      @add="(m) => handleAdd(m.user_id)"
+      @remove="(m) => handleRemove(m.user_id)"
+    >
+      <template #chip="{ item: member }">
+        <Avatar class="size-5">
+          <AvatarImage v-if="member.avatar_url" :src="member.avatar_url" />
+          <AvatarFallback class="text-[10px]" :seed="member.user_id">
+            {{ member.first_name[0] }}{{ member.last_name[0] }}
+          </AvatarFallback>
+        </Avatar>
+        <span class="truncate">{{ member.first_name }} {{ member.last_name }}</span>
+      </template>
+      <template #option="{ item: member }">
+        <Avatar class="size-6">
+          <AvatarImage v-if="member.avatar_url" :src="member.avatar_url" />
+          <AvatarFallback class="text-xs" :seed="member.user_id">
+            {{ member.first_name[0] }}{{ member.last_name[0] }}
+          </AvatarFallback>
+        </Avatar>
+        {{ member.first_name }} {{ member.last_name }}
+      </template>
+    </TokenSelect>
+
+    <!-- Read-only view -->
+    <div v-else class="flex flex-wrap items-center gap-2">
+      <NuxtLink
         v-for="assignee in assignees"
         :key="assignee.id"
-        class="group relative flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-2.5"
+        :to="`/profile/${assignee.user_id}`"
+        class="flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-2.5 transition-opacity hover:opacity-80"
       >
-        <NuxtLink :to="`/profile/${assignee.user_id}`" class="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
-          <Avatar class="size-6">
-            <AvatarImage v-if="assignee.avatar_url" :src="assignee.avatar_url" />
-            <AvatarFallback class="text-xs" :seed="assignee.user_id">
-              {{ assignee.first_name[0] }}{{ assignee.last_name[0] }}
-            </AvatarFallback>
-          </Avatar>
-          <span class="text-sm">
-            {{ assignee.first_name }} {{ assignee.last_name }}
-          </span>
-        </NuxtLink>
-        <button
-          v-if="isMember"
-          type="button"
-          :aria-label="`Remove ${assignee.first_name} ${assignee.last_name}`"
-          class="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-foreground text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring outline-none"
-          :disabled="loading === assignee.user_id"
-          @click="handleRemove(assignee.user_id)"
-        >
-          <Loader2
-            v-if="loading === assignee.user_id"
-            class="size-2.5 animate-spin"
-          />
-          <X v-else class="size-2.5" />
-        </button>
-      </div>
-
-      <!-- Add button -->
-      <SearchableSelect
-        v-if="isMember && availableMembers.length > 0"
-        v-model:open="showPopover"
-        :items="availableMembers"
-        :get-search-text="memberSearchText"
-        :get-key="(m) => m.user_id"
-        placeholder="Search members..."
-        empty-text="No members found"
-        @select="(m) => handleAdd(m.user_id)"
-      >
-        <template #trigger>
-          <Button variant="outline" size="sm" class="h-8 gap-1.5">
-            <Plus class="size-3.5" />
-            Add
-          </Button>
-        </template>
-        <template #option="{ item: member }">
-          <Avatar class="size-6">
-            <AvatarImage v-if="member.avatar_url" :src="member.avatar_url" />
-            <AvatarFallback class="text-xs" :seed="member.user_id">
-              {{ member.first_name[0] }}{{ member.last_name[0] }}
-            </AvatarFallback>
-          </Avatar>
-          {{ member.first_name }} {{ member.last_name }}
-        </template>
-      </SearchableSelect>
-
-      <!-- Empty state -->
+        <Avatar class="size-6">
+          <AvatarImage v-if="assignee.avatar_url" :src="assignee.avatar_url" />
+          <AvatarFallback class="text-xs" :seed="assignee.user_id">
+            {{ assignee.first_name[0] }}{{ assignee.last_name[0] }}
+          </AvatarFallback>
+        </Avatar>
+        <span class="text-sm">
+          {{ assignee.first_name }} {{ assignee.last_name }}
+        </span>
+      </NuxtLink>
       <span
-        v-if="assignees.length === 0 && !isMember"
+        v-if="assignees.length === 0"
         class="text-sm text-muted-foreground"
       >
         No assignees

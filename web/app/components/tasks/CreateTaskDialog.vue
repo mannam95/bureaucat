@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Plus, X, Check, ChevronsUpDown } from "lucide-vue-next";
+import { Loader2, Check, ChevronsUpDown } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type {
   Project,
@@ -265,9 +265,6 @@ const priorityValue = computed({
   },
 });
 
-const showAssigneePopover = ref(false);
-const showLabelPopover = ref(false);
-
 const selectedAssignees = computed(() =>
   effMembers.value.filter((m) => form.value.assignees.includes(m.user_id))
 );
@@ -459,103 +456,62 @@ function removeLabel(labelId: string) {
 
           <div v-if="effMembers.length > 0" class="space-y-2">
             <Label>Assignees</Label>
-            <div class="flex flex-wrap items-center gap-2">
-              <div
-                v-for="member in selectedAssignees"
-                :key="member.user_id"
-                class="flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-1"
-              >
+            <TokenSelect
+              :selected="selectedAssignees"
+              :available="availableAssignees"
+              :get-key="(m) => m.user_id"
+              :get-search-text="memberSearchText"
+              :disabled="loading"
+              placeholder="Add assignees..."
+              empty-text="No members found"
+              @add="(m) => addAssignee(m.user_id)"
+              @remove="(m) => removeAssignee(m.user_id)"
+            >
+              <template #chip="{ item: member }">
                 <Avatar class="size-5">
                   <AvatarFallback class="text-[10px]" :seed="member.user_id">
                     {{ member.first_name[0] }}{{ member.last_name[0] }}
                   </AvatarFallback>
                 </Avatar>
-                <span class="text-sm">{{ member.first_name }} {{ member.last_name }}</span>
-                <button
-                  type="button"
-                  :aria-label="`Remove ${member.first_name} ${member.last_name}`"
-                  class="ml-0.5 flex size-4 items-center justify-center rounded-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring outline-none"
-                  :disabled="loading"
-                  @click="removeAssignee(member.user_id)"
-                >
-                  <X class="size-3" />
-                </button>
-              </div>
-              <SearchableSelect
-                v-model:open="showAssigneePopover"
-                :items="availableAssignees"
-                :get-search-text="memberSearchText"
-                :get-key="(m) => m.user_id"
-                placeholder="Search members..."
-                empty-text="No members found"
-                @select="(m) => addAssignee(m.user_id)"
-              >
-                <template #trigger>
-                  <Button type="button" variant="outline" size="sm" class="h-7 gap-1.5" :disabled="loading || availableAssignees.length === 0">
-                    <Plus class="size-3.5" />
-                    Add
-                  </Button>
-                </template>
-                <template #option="{ item: member }">
-                  <Avatar class="size-6">
-                    <AvatarFallback class="text-xs" :seed="member.user_id">
-                      {{ member.first_name[0] }}{{ member.last_name[0] }}
-                    </AvatarFallback>
-                  </Avatar>
-                  {{ member.first_name }} {{ member.last_name }}
-                </template>
-              </SearchableSelect>
-            </div>
+                <span class="truncate">{{ member.first_name }} {{ member.last_name }}</span>
+              </template>
+              <template #option="{ item: member }">
+                <Avatar class="size-6">
+                  <AvatarFallback class="text-xs" :seed="member.user_id">
+                    {{ member.first_name[0] }}{{ member.last_name[0] }}
+                  </AvatarFallback>
+                </Avatar>
+                {{ member.first_name }} {{ member.last_name }}
+              </template>
+            </TokenSelect>
           </div>
 
           <div v-if="effLabels.length > 0" class="space-y-2">
             <Label>Labels</Label>
-            <div class="flex flex-wrap items-center gap-2">
-              <div
-                v-for="label in selectedLabels"
-                :key="label.id"
-                class="flex items-center gap-1.5 rounded-md px-2 py-1"
-                :style="{
-                  backgroundColor: label.color + '20',
-                  color: label.color,
-                }"
-              >
-                <span class="text-sm font-medium">{{ label.name }}</span>
-                <button
-                  type="button"
-                  :aria-label="`Remove ${label.name}`"
-                  class="flex size-4 items-center justify-center rounded-sm hover:opacity-70 focus-visible:ring-2 focus-visible:ring-ring outline-none"
-                  :disabled="loading"
-                  @click="removeLabel(label.id)"
-                >
-                  <X class="size-3" />
-                </button>
-              </div>
-              <SearchableSelect
-                v-model:open="showLabelPopover"
-                :items="availableLabels"
-                :get-search-text="(l) => l.name"
-                :get-key="(l) => l.id"
-                placeholder="Search labels..."
-                empty-text="No labels found"
-                content-class="w-48"
-                @select="(l) => addLabel(l.id)"
-              >
-                <template #trigger>
-                  <Button type="button" variant="outline" size="sm" class="h-7 gap-1.5" :disabled="loading || availableLabels.length === 0">
-                    <Plus class="size-3.5" />
-                    Add
-                  </Button>
-                </template>
-                <template #option="{ item: label }">
-                  <div
-                    class="size-3 shrink-0 rounded-full"
-                    :style="{ backgroundColor: label.color }"
-                  />
-                  {{ label.name }}
-                </template>
-              </SearchableSelect>
-            </div>
+            <TokenSelect
+              :selected="selectedLabels"
+              :available="availableLabels"
+              :get-key="(l) => l.id"
+              :get-search-text="(l) => l.name"
+              :chip-style="(l) => ({ backgroundColor: l.color + '20', color: l.color })"
+              :chip-class="() => 'pl-2 pr-1 font-medium'"
+              :disabled="loading"
+              placeholder="Add labels..."
+              empty-text="No labels found"
+              @add="(l) => addLabel(l.id)"
+              @remove="(l) => removeLabel(l.id)"
+            >
+              <template #chip="{ item: label }">
+                <span class="truncate">{{ label.name }}</span>
+              </template>
+              <template #option="{ item: label }">
+                <div
+                  class="size-3 shrink-0 rounded-full"
+                  :style="{ backgroundColor: label.color }"
+                />
+                {{ label.name }}
+              </template>
+            </TokenSelect>
           </div>
         </template>
 
