@@ -19,6 +19,11 @@ useSeoMeta({ title: "Dashboard" });
 const { user, getAuthHeader } = useAuth();
 const { projects, loading: projectsLoading, listProjects } = useProjects();
 const { currentWorkspace, workspaces } = useWorkspaces();
+// When off, "Your Projects" / "Assigned to You" (and the Create Task project
+// picker) are scoped to the active workspace; when on, they span every
+// workspace the user belongs to. Shared via a composable so the global Shift+C
+// dialog honors the same toggle. The choice is persisted across sessions.
+const { showAllWorkspaces } = useDashboardScope();
 
 const showCreateDialog = ref(false);
 const showCreateTask = ref(false);
@@ -26,7 +31,8 @@ const searchQuery = ref("");
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function fetchProjects() {
-  listProjects(1, 100, searchQuery.value);
+  // Scope to the active workspace unless the user opted into all workspaces.
+  listProjects(1, 100, searchQuery.value, !showAllWorkspaces.value);
 }
 
 watch(searchQuery, () => {
@@ -34,9 +40,9 @@ watch(searchQuery, () => {
   debounceTimer = setTimeout(fetchProjects, 300);
 });
 
-// Reload "Your Projects" when the active workspace changes (the list is scoped
-// to the current workspace via listProjects).
-watch(currentWorkspace, () => {
+// Reload "Your Projects" when the active workspace changes or the all-workspaces
+// toggle flips (both affect the workspace scope of listProjects).
+watch([currentWorkspace, showAllWorkspaces], () => {
   fetchProjects();
 });
 
@@ -105,11 +111,6 @@ interface MyTasksResponse {
 const myTasks = ref<MyTask[]>([]);
 const myTasksTotal = ref(0);
 const myTasksLoading = ref(false);
-// When off, "Assigned to You" (and the Create Task project picker) are scoped
-// to the active workspace; when on, they span every workspace. Shared via a
-// composable so the global Shift+C dialog honors the same toggle. The choice is
-// persisted across sessions.
-const { showAllWorkspaces } = useDashboardScope();
 
 // Adapt the dashboard's lightweight MyTask shape to the full Task shape so we
 // can render the shared TaskList/TaskCard component. Fields the dashboard API
