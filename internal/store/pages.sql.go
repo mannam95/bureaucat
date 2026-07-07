@@ -118,8 +118,18 @@ SELECT p.id, p.project_id, p.page_number, p.title, p.created_by, p.created_at, p
 FROM pages p
 JOIN users u ON p.created_by = u.id
 WHERE p.project_id = $1 AND p.deleted_at IS NULL
+  AND (
+    $2::text IS NULL
+    OR p.title ILIKE '%' || $2 || '%'
+    OR regexp_replace(p.content, '<[^>]*>', '', 'g') ILIKE '%' || $2 || '%'
+  )
 ORDER BY p.updated_at DESC
 `
+
+type ListProjectPagesParams struct {
+	ProjectID uuid.UUID   `json:"project_id"`
+	Search    pgtype.Text `json:"search"`
+}
 
 type ListProjectPagesRow struct {
 	ID               uuid.UUID          `json:"id"`
@@ -135,8 +145,10 @@ type ListProjectPagesRow struct {
 	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
 }
 
-func (q *Queries) ListProjectPages(ctx context.Context, projectID uuid.UUID) ([]ListProjectPagesRow, error) {
-	rows, err := q.db.Query(ctx, listProjectPages, projectID)
+// Optional case-insensitive search over the title and the page's visible text
+// (HTML tags stripped from content so markup/attributes don't produce matches).
+func (q *Queries) ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error) {
+	rows, err := q.db.Query(ctx, listProjectPages, arg.ProjectID, arg.Search)
 	if err != nil {
 		return nil, err
 	}

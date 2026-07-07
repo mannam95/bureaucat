@@ -21,11 +21,13 @@ export function usePages() {
   const { getAuthHeader } = useAuth();
 
   async function listPages(
-    projectKey: string
+    projectKey: string,
+    search = ""
   ): Promise<{ success: boolean; data?: PageListItem[]; error?: string }> {
     try {
       state.loading = true;
-      const response = await fetch(`/api/v1/projects/${projectKey}/pages`, {
+      const qs = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "";
+      const response = await fetch(`/api/v1/projects/${projectKey}/pages${qs}`, {
         headers: getAuthHeader(),
       });
       if (!response.ok) {

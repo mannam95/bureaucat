@@ -3,9 +3,11 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/auth"
@@ -71,6 +73,7 @@ type UpdatePageRequest struct {
 //	@Tags			Pages
 //	@Produce		json
 //	@Param			projectKey	path		string	true	"Project key"
+//	@Param			q			query		string	false	"Search over page title and content"
 //	@Success		200			{array}		PageListItem
 //	@Failure		500			{object}	ErrorResponse
 //	@Security		BearerAuth
@@ -83,7 +86,15 @@ func (h *PageHandler) ListPages(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	pages, err := h.store.ListProjectPages(ctx, projectID)
+	var search pgtype.Text
+	if q := strings.TrimSpace(c.QueryParam("q")); q != "" {
+		search = pgtype.Text{String: q, Valid: true}
+	}
+
+	pages, err := h.store.ListProjectPages(ctx, store.ListProjectPagesParams{
+		ProjectID: projectID,
+		Search:    search,
+	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list pages")
 	}

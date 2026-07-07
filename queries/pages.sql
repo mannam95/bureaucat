@@ -16,11 +16,18 @@ JOIN users u ON p.created_by = u.id
 WHERE p.project_id = $1 AND p.page_number = $2 AND p.deleted_at IS NULL;
 
 -- name: ListProjectPages :many
+-- Optional case-insensitive search over the title and the page's visible text
+-- (HTML tags stripped from content so markup/attributes don't produce matches).
 SELECT p.id, p.project_id, p.page_number, p.title, p.created_by, p.created_at, p.updated_at,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url
 FROM pages p
 JOIN users u ON p.created_by = u.id
 WHERE p.project_id = $1 AND p.deleted_at IS NULL
+  AND (
+    sqlc.narg('search')::text IS NULL
+    OR p.title ILIKE '%' || sqlc.narg('search') || '%'
+    OR regexp_replace(p.content, '<[^>]*>', '', 'g') ILIKE '%' || sqlc.narg('search') || '%'
+  )
 ORDER BY p.updated_at DESC;
 
 -- name: UpdatePage :one

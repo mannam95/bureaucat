@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, FileText, Loader2 } from "lucide-vue-next";
+import { Plus, FileText, Loader2, Search, X } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 
 const props = defineProps<{
@@ -13,9 +13,20 @@ const showCreate = ref(false);
 const creating = ref(false);
 const newTitle = ref("");
 
-function fetchPages() {
-  listPages(props.projectKey);
+const searchQuery = ref("");
+const firstLoad = ref(true);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function fetchPages() {
+  await listPages(props.projectKey, searchQuery.value);
+  firstLoad.value = false;
 }
+
+// Debounce search input so we don't fire a request per keystroke.
+watch(searchQuery, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(fetchPages, 300);
+});
 
 function openCreate() {
   newTitle.value = "";
@@ -45,7 +56,14 @@ function formatDate(dateStr: string): string {
 
 onMounted(fetchPages);
 
-watch(() => props.projectKey, fetchPages);
+watch(
+  () => props.projectKey,
+  () => {
+    searchQuery.value = "";
+    firstLoad.value = true;
+    fetchPages();
+  }
+);
 </script>
 
 <template>
@@ -63,12 +81,14 @@ watch(() => props.projectKey, fetchPages);
       </Button>
     </div>
 
-    <div v-if="loading" class="flex items-center justify-center py-12">
+    <!-- First load -->
+    <div v-if="firstLoad && loading" class="flex items-center justify-center py-12">
       <Loader2 class="size-6 animate-spin text-muted-foreground" />
     </div>
 
+    <!-- Project has no pages at all -->
     <div
-      v-else-if="pages.length === 0"
+      v-else-if="!loading && pages.length === 0 && !searchQuery"
       class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16"
     >
       <div class="flex size-16 items-center justify-center rounded-full bg-muted">
@@ -84,20 +104,53 @@ watch(() => props.projectKey, fetchPages);
       </Button>
     </div>
 
-    <div v-else class="divide-y rounded-lg border">
-      <NuxtLink
-        v-for="p in pages"
-        :key="p.id"
-        :to="`/projects/${projectKey}/pages/${p.page_number}`"
-        class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+    <template v-else>
+      <div class="relative">
+        <Search
+          class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          v-model="searchQuery"
+          placeholder="Search pages by title or content..."
+          class="pl-9 pr-9"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          aria-label="Clear search"
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          @click="searchQuery = ''"
+        >
+          <X class="size-4" />
+        </button>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-12">
+        <Loader2 class="size-6 animate-spin text-muted-foreground" />
+      </div>
+
+      <div
+        v-else-if="pages.length === 0"
+        class="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground"
       >
-        <FileText class="size-4 shrink-0 text-muted-foreground" />
-        <span class="flex-1 truncate font-medium">{{ p.title }}</span>
-        <span class="shrink-0 text-xs text-muted-foreground">
-          Updated {{ formatDate(p.updated_at) }}
-        </span>
-      </NuxtLink>
-    </div>
+        No pages match "{{ searchQuery }}".
+      </div>
+
+      <div v-else class="divide-y rounded-lg border">
+        <NuxtLink
+          v-for="p in pages"
+          :key="p.id"
+          :to="`/projects/${projectKey}/pages/${p.page_number}`"
+          class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+        >
+          <FileText class="size-4 shrink-0 text-muted-foreground" />
+          <span class="flex-1 truncate font-medium">{{ p.title }}</span>
+          <span class="shrink-0 text-xs text-muted-foreground">
+            Updated {{ formatDate(p.updated_at) }}
+          </span>
+        </NuxtLink>
+      </div>
+    </template>
 
     <Dialog v-model:open="showCreate">
       <DialogContent class="sm:max-w-md">

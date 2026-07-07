@@ -185,7 +185,9 @@ type Querier interface {
 	ListProjectLabels(ctx context.Context, projectID uuid.UUID) ([]ProjectLabel, error)
 	ListProjectMembers(ctx context.Context, projectID uuid.UUID) ([]ListProjectMembersRow, error)
 	ListProjectModules(ctx context.Context, arg ListProjectModulesParams) ([]ListProjectModulesRow, error)
-	ListProjectPages(ctx context.Context, projectID uuid.UUID) ([]ListProjectPagesRow, error)
+	// Optional case-insensitive search over the title and the page's visible text
+	// (HTML tags stripped from content so markup/attributes don't produce matches).
+	ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error)
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
 	// Picker source: project tasks that are NOT already in the given module. A task
