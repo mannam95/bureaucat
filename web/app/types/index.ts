@@ -1,5 +1,6 @@
 export * from "./workspace";
 export * from "./project";
+export * from "./page";
 export * from "./task";
 export * from "./view";
 export * from "./comment";

@@ -206,6 +206,15 @@ func (s *Server) registerRoutes() {
 			projectGroup.PATCH("/templates/:templateId", s.projectHandler.UpdateTemplate, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("/templates/:templateId", s.projectHandler.DeleteTemplate, auth.ProjectRoleMiddleware("admin"))
 
+			// Pages (project documentation). Reads open to members; writes gated to members.
+			if s.pageHandler != nil {
+				projectGroup.GET("/pages", s.pageHandler.ListPages)
+				projectGroup.POST("/pages", s.pageHandler.CreatePage, auth.ProjectRoleMiddleware("member"))
+				projectGroup.GET("/pages/:pageNum", s.pageHandler.GetPage)
+				projectGroup.PATCH("/pages/:pageNum", s.pageHandler.UpdatePage, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/pages/:pageNum", s.pageHandler.DeletePage, auth.ProjectRoleMiddleware("member"))
+			}
+
 			// Views (saved filter combinations)
 			if s.viewHandler != nil {
 				projectGroup.GET("/views", s.viewHandler.ListViews)

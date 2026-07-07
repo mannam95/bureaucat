@@ -383,6 +383,18 @@ type Notification struct {
 	CommentID    pgtype.UUID        `json:"comment_id"`
 }
 
+type Page struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	PageNumber int32              `json:"page_number"`
+	Title      string             `json:"title"`
+	Content    string             `json:"content"`
+	CreatedBy  uuid.UUID          `json:"created_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type PersonalAccessToken struct {
 	ID         uuid.UUID          `json:"id"`
 	UserID     uuid.UUID          `json:"user_id"`

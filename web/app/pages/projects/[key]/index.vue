@@ -2,6 +2,7 @@
 import {
   ListTodo,
   Kanban,
+  FileText,
   Repeat,
   Layers,
   Users,
@@ -29,7 +30,7 @@ const router = useRouter();
 const projectKey = computed(() => route.params.key as string);
 
 // Valid tab values
-const validTabs = ["tasks", "board", "cycles", "modules", "views", "members", "settings"] as const;
+const validTabs = ["tasks", "board", "pages", "cycles", "modules", "views", "members", "settings"] as const;
 type TabValue = (typeof validTabs)[number];
 
 const activeTab = computed({
@@ -381,6 +382,10 @@ onMounted(async () => {
                   <Kanban class="size-4" />
                   Board
                 </TabsTrigger>
+                <TabsTrigger value="pages" class="gap-2">
+                  <FileText class="size-4" />
+                  Pages
+                </TabsTrigger>
                 <TabsTrigger value="cycles" class="gap-2">
                   <Repeat class="size-4" />
                   Cycles
@@ -569,6 +574,11 @@ onMounted(async () => {
                 :current-user-id="currentUserId"
                 @refresh="() => loadTasks(tasksPage)"
               />
+            </TabsContent>
+
+            <!-- Pages Tab -->
+            <TabsContent value="pages" class="mt-6">
+              <ProjectPagesTab :project-key="projectKey" :can-write="canWrite" />
             </TabsContent>
 
             <!-- Cycles Tab -->

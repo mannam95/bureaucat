@@ -67,6 +67,7 @@ type Querier interface {
 	// sidesteps sqlc's handling of nullable enum args under a string override.
 	CreateModule(ctx context.Context, arg CreateModuleParams) (Module, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error)
+	CreatePage(ctx context.Context, arg CreatePageParams) (Page, error)
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
 	// ==================== PROJECTS ====================
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
@@ -109,12 +110,14 @@ type Querier interface {
 	GetModuleByID(ctx context.Context, id uuid.UUID) (GetModuleByIDRow, error)
 	GetModuleMetrics(ctx context.Context, moduleID uuid.UUID) (GetModuleMetricsRow, error)
 	GetModuleStateBreakdown(ctx context.Context, moduleID uuid.UUID) ([]GetModuleStateBreakdownRow, error)
+	GetNextPageNumber(ctx context.Context, projectID uuid.UUID) (int32, error)
 	GetNextTaskNumber(ctx context.Context, projectID uuid.UUID) (int32, error)
 	// ==================== NOTIFICATIONS ====================
 	// Most recent notification for a (recipient, task) pair still within the
 	// coalescing window. Used to merge new activity into an existing notification
 	// instead of creating a new one (max 1 notification per task per window).
 	GetOpenNotification(ctx context.Context, arg GetOpenNotificationParams) (GetOpenNotificationRow, error)
+	GetPageByProjectAndNumber(ctx context.Context, arg GetPageByProjectAndNumberParams) (GetPageByProjectAndNumberRow, error)
 	GetPersonalAccessTokenByHash(ctx context.Context, tokenHash string) (GetPersonalAccessTokenByHashRow, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
 	GetProjectByKey(ctx context.Context, projectKey string) (Project, error)
@@ -182,6 +185,7 @@ type Querier interface {
 	ListProjectLabels(ctx context.Context, projectID uuid.UUID) ([]ProjectLabel, error)
 	ListProjectMembers(ctx context.Context, projectID uuid.UUID) ([]ListProjectMembersRow, error)
 	ListProjectModules(ctx context.Context, arg ListProjectModulesParams) ([]ListProjectModulesRow, error)
+	ListProjectPages(ctx context.Context, projectID uuid.UUID) ([]ListProjectPagesRow, error)
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
 	// Picker source: project tasks that are NOT already in the given module. A task
@@ -255,6 +259,7 @@ type Querier interface {
 	SoftDeleteModule(ctx context.Context, id uuid.UUID) error
 	// When a member leaves a project, their private views are soft-deleted.
 	SoftDeleteOwnedPrivateViews(ctx context.Context, arg SoftDeleteOwnedPrivateViewsParams) error
+	SoftDeletePage(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProjectView(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTask(ctx context.Context, id uuid.UUID) error
@@ -266,6 +271,7 @@ type Querier interface {
 	// `status` is passed as plain text; when empty string, no change. Avoids narg
 	// around the enum type under the string override.
 	UpdateModule(ctx context.Context, arg UpdateModuleParams) (Module, error)
+	UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, error)
 	UpdatePersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdatePersonalAccessTokenScope(ctx context.Context, arg UpdatePersonalAccessTokenScopeParams) (UpdatePersonalAccessTokenScopeRow, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)

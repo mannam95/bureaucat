@@ -28,6 +28,9 @@ const props = defineProps<{
   disabled?: boolean;
   uploading?: boolean;
   compact?: boolean;
+  // Removes the box border/background and left padding so the editor reads as a
+  // seamless document surface (used by full-page docs like project Pages).
+  borderless?: boolean;
   members?: ProjectMember[];
 }>();
 
@@ -178,7 +181,7 @@ const editor = useEditor({
   ],
   editorProps: {
     attributes: {
-      class: `prose prose-sm max-w-none dark:prose-invert focus:outline-none px-3 py-2 ${props.compact ? "min-h-[72px]" : "min-h-[200px]"}`,
+      class: `prose prose-sm max-w-none dark:prose-invert focus:outline-none py-2 ${props.borderless ? "px-0" : "px-3"} ${props.compact ? "min-h-[72px]" : "min-h-[200px]"}`,
     },
     handleKeyDown: (_view, event) => {
       return handleMentionKeydown(event);
@@ -259,11 +262,16 @@ function handleFileInput(e: Event) {
 </script>
 
 <template>
-  <div ref="wrapperRef" class="tiptap-editor relative rounded-md border border-input bg-background">
+  <div
+    ref="wrapperRef"
+    class="tiptap-editor relative"
+    :class="borderless ? '' : 'rounded-md border border-input bg-background'"
+  >
     <!-- Toolbar -->
     <div
       v-if="editor"
-      class="flex flex-wrap items-center gap-0.5 border-b border-input px-1.5 py-1"
+      class="flex flex-wrap items-center gap-0.5 py-1"
+      :class="borderless ? 'justify-center px-0' : 'border-b border-input px-1.5'"
     >
       <button
         type="button"

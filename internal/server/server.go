@@ -43,6 +43,7 @@ type Server struct {
 	uploadHandler    *handlers.UploadHandler
 	workspaceHandler *handlers.WorkspaceHandler
 	projectHandler   *handlers.ProjectHandler
+	pageHandler      *handlers.PageHandler
 	taskHandler     *handlers.TaskHandler
 	viewHandler     *handlers.ViewHandler
 	commentHandler    *handlers.CommentHandler
@@ -143,6 +144,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		// Initialize workspace, project and task handlers
 		srv.workspaceHandler = handlers.NewWorkspaceHandler(srv.store)
 		srv.projectHandler = handlers.NewProjectHandler(srv.store)
+		srv.pageHandler = handlers.NewPageHandler(srv.store)
 		srv.taskHandler = handlers.NewTaskHandler(srv.store, srv.pool, store.NewFilterRunner(srv.pool), srv.activityService, srv.notificationService)
 		srv.viewHandler = handlers.NewViewHandler(srv.store)
 		srv.commentHandler = handlers.NewCommentHandler(srv.store, srv.activityService, srv.notificationService)
