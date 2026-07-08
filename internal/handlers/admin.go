@@ -576,3 +576,176 @@ func (h *AdminHandler) CleanupExpiredTokens(c *echo.Context) error {
 		"deleted": deleted,
 	})
 }
+
+// StatCount is a generic labelled count used in stat breakdowns.
+type StatCount struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+// ProjectStat represents a project with its task count.
+type ProjectStat struct {
+	ProjectKey string `json:"project_key"`
+	Name       string `json:"name"`
+	TaskCount  int    `json:"task_count"`
+}
+
+// WorkspaceStat represents a workspace with its project count.
+type WorkspaceStat struct {
+	WorkspaceKey string `json:"workspace_key"`
+	Name         string `json:"name"`
+	ProjectCount int    `json:"project_count"`
+}
+
+// DayCount is a single day bucket in a per-day time series.
+type DayCount struct {
+	Day   string `json:"day"`
+	Count int    `json:"count"`
+}
+
+// AdminStatsResponse is the aggregate stats payload for the admin stats page.
+type AdminStatsResponse struct {
+	Totals struct {
+		Workspaces int64 `json:"workspaces"`
+		Projects   int64 `json:"projects"`
+		Tasks      int64 `json:"tasks"`
+		Subtasks   int64 `json:"subtasks"`
+		Pages      int64 `json:"pages"`
+		Users      int64 `json:"users"`
+	} `json:"totals"`
+	TasksByState         []StatCount     `json:"tasks_by_state"`
+	TasksByPriority      []StatCount     `json:"tasks_by_priority"`
+	TopProjects          []ProjectStat   `json:"top_projects"`
+	ProjectsPerWorkspace []WorkspaceStat `json:"projects_per_workspace"`
+	Series               struct {
+		Days     int        `json:"days"`
+		Tasks    []DayCount `json:"tasks"`
+		Subtasks []DayCount `json:"subtasks"`
+		Pages    []DayCount `json:"pages"`
+	} `json:"series"`
+}
+
+// priorityLabels maps task priority integers to human-readable labels.
+var priorityLabels = map[int]string{
+	0: "No priority",
+	1: "Low",
+	2: "Medium",
+	3: "High",
+	4: "Urgent",
+}
+
+// GetStats returns aggregate metrics for the admin stats dashboard.
+//
+//	@Summary		Get admin stats
+//	@Description	Returns system-wide totals, breakdowns, and per-day activity series.
+//	@Tags			Admin - Stats
+//	@Produce		json
+//	@Param			days	query		int	false	"Number of days for per-day series"	default(30)
+//	@Success		200		{object}	AdminStatsResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/stats [get]
+func (h *AdminHandler) GetStats(c *echo.Context) error {
+	ctx := c.Request().Context()
+
+	days, _ := strconv.Atoi(c.QueryParam("days"))
+	if days < 1 {
+		days = 30
+	}
+	if days > 365 {
+		days = 365
+	}
+
+	var resp AdminStatsResponse
+	var err error
+
+	if resp.Totals.Workspaces, err = h.store.CountWorkspaces(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count workspaces")
+	}
+	if resp.Totals.Projects, err = h.store.CountProjects(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count projects")
+	}
+	if resp.Totals.Tasks, err = h.store.CountTopLevelTasks(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tasks")
+	}
+	if resp.Totals.Subtasks, err = h.store.CountSubtasks(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count subtasks")
+	}
+	if resp.Totals.Pages, err = h.store.CountPages(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count pages")
+	}
+	if resp.Totals.Users, err = h.store.CountUsers(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
+	}
+
+	states, err := h.store.TasksByStateType(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task states")
+	}
+	resp.TasksByState = make([]StatCount, len(states))
+	for i, s := range states {
+		resp.TasksByState[i] = StatCount{Label: s.StateType, Count: int(s.Count)}
+	}
+
+	priorities, err := h.store.TasksByPriority(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task priorities")
+	}
+	resp.TasksByPriority = make([]StatCount, len(priorities))
+	for i, p := range priorities {
+		label, ok := priorityLabels[int(p.Priority)]
+		if !ok {
+			label = "Unknown"
+		}
+		resp.TasksByPriority[i] = StatCount{Label: label, Count: int(p.Count)}
+	}
+
+	topProjects, err := h.store.TopProjectsByTaskCount(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load top projects")
+	}
+	resp.TopProjects = make([]ProjectStat, len(topProjects))
+	for i, p := range topProjects {
+		resp.TopProjects[i] = ProjectStat{ProjectKey: p.ProjectKey, Name: p.Name, TaskCount: int(p.TaskCount)}
+	}
+
+	perWorkspace, err := h.store.ProjectsPerWorkspace(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load projects per workspace")
+	}
+	resp.ProjectsPerWorkspace = make([]WorkspaceStat, len(perWorkspace))
+	for i, w := range perWorkspace {
+		resp.ProjectsPerWorkspace[i] = WorkspaceStat{WorkspaceKey: w.WorkspaceKey, Name: w.Name, ProjectCount: int(w.ProjectCount)}
+	}
+
+	resp.Series.Days = days
+
+	tasksSeries, err := h.store.TasksCreatedPerDay(ctx, int32(days))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load tasks series")
+	}
+	resp.Series.Tasks = make([]DayCount, len(tasksSeries))
+	for i, d := range tasksSeries {
+		resp.Series.Tasks[i] = DayCount{Day: d.Day.Time.Format("2006-01-02"), Count: int(d.Count)}
+	}
+
+	subtasksSeries, err := h.store.SubtasksCreatedPerDay(ctx, int32(days))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load subtasks series")
+	}
+	resp.Series.Subtasks = make([]DayCount, len(subtasksSeries))
+	for i, d := range subtasksSeries {
+		resp.Series.Subtasks[i] = DayCount{Day: d.Day.Time.Format("2006-01-02"), Count: int(d.Count)}
+	}
+
+	pagesSeries, err := h.store.PagesCreatedPerDay(ctx, int32(days))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load pages series")
+	}
+	resp.Series.Pages = make([]DayCount, len(pagesSeries))
+	for i, d := range pagesSeries {
+		resp.Series.Pages[i] = DayCount{Day: d.Day.Time.Format("2006-01-02"), Count: int(d.Count)}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}

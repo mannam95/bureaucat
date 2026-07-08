@@ -314,6 +314,7 @@ func (s *Server) registerRoutes() {
 		admin.GET("/tokens", s.adminHandler.ListTokens)
 		admin.DELETE("/tokens/:id", s.adminHandler.RevokeToken)
 		admin.DELETE("/tokens/expired", s.adminHandler.CleanupExpiredTokens)
+		admin.GET("/stats", s.adminHandler.GetStats)
 
 		// Admin settings
 		if s.settingsHandler != nil {

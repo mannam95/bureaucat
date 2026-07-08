@@ -33,6 +33,49 @@ interface PaginatedTokensResponse {
   total_pages: number;
 }
 
+interface StatCount {
+  label: string;
+  count: number;
+}
+
+interface ProjectStat {
+  project_key: string;
+  name: string;
+  task_count: number;
+}
+
+interface WorkspaceStat {
+  workspace_key: string;
+  name: string;
+  project_count: number;
+}
+
+interface DayCount {
+  day: string;
+  count: number;
+}
+
+export interface AdminStats {
+  totals: {
+    workspaces: number;
+    projects: number;
+    tasks: number;
+    subtasks: number;
+    pages: number;
+    users: number;
+  };
+  tasks_by_state: StatCount[];
+  tasks_by_priority: StatCount[];
+  top_projects: ProjectStat[];
+  projects_per_workspace: WorkspaceStat[];
+  series: {
+    days: number;
+    tasks: DayCount[];
+    subtasks: DayCount[];
+    pages: DayCount[];
+  };
+}
+
 interface CreateUserData {
   username: string;
   email: string;
@@ -244,7 +287,30 @@ export function useAdmin() {
     }
   }
 
+  async function getStats(days = 30): Promise<{
+    success: boolean;
+    data?: AdminStats;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/stats?days=${days}`, {
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to fetch stats" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   return {
+    getStats,
     listUsers,
     createUser,
     deleteUser,

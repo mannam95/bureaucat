@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, UserPlus } from "lucide-vue-next";
+import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, UserPlus, BarChart3 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { SSOSettings, MattermostSettings } from "~/composables/useSettings";
 
@@ -265,6 +265,14 @@ const adminModels = [
     href: "/admin/model/tokens",
     color: "text-amber-500",
     bgColor: "bg-amber-500/10",
+  },
+  {
+    title: "Stats",
+    description: "View system-wide metrics and activity trends across workspaces",
+    icon: BarChart3,
+    href: "/admin/stats",
+    color: "text-green-500",
+    bgColor: "bg-green-500/10",
   },
 ];
 </script>

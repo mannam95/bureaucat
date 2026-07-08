@@ -39,14 +39,18 @@ type Querier interface {
 	CountAllWorkspaces(ctx context.Context) (int64, error)
 	CountAllWorkspacesFiltered(ctx context.Context, search pgtype.Text) (int64, error)
 	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
+	CountPages(ctx context.Context) (int64, error)
 	CountProjectCycles(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectMembers(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error)
 	CountProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)
+	CountProjects(ctx context.Context) (int64, error)
 	CountSearchUsers(ctx context.Context, dollar_1 pgtype.Text) (int64, error)
+	CountSubtasks(ctx context.Context) (int64, error)
 	CountTaskComments(ctx context.Context, taskID uuid.UUID) (int64, error)
 	CountTasksByAssignee(ctx context.Context, arg CountTasksByAssigneeParams) (int64, error)
 	CountTasksInState(ctx context.Context, stateID uuid.UUID) (int64, error)
+	CountTopLevelTasks(ctx context.Context) (int64, error)
 	CountUnreadNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountUserActivity(ctx context.Context, actorID uuid.UUID) (int64, error)
 	CountUserProjects(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -54,6 +58,7 @@ type Querier interface {
 	CountUserWorkspaces(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUserWorkspacesFiltered(ctx context.Context, arg CountUserWorkspacesFilteredParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CountWorkspaces(ctx context.Context) (int64, error)
 	// ==================== ACTIVITY LOG ====================
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
@@ -226,8 +231,10 @@ type Querier interface {
 	// Move a task to a different project, assigning a new project-local task number
 	// and state. Cycle/module links and labels are handled separately by the caller.
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
+	PagesCreatedPerDay(ctx context.Context, days int32) ([]PagesCreatedPerDayRow, error)
 	ProjectKeyExists(ctx context.Context, projectKey string) (bool, error)
 	ProjectViewSlugExists(ctx context.Context, arg ProjectViewSlugExistsParams) (bool, error)
+	ProjectsPerWorkspace(ctx context.Context) ([]ProjectsPerWorkspaceRow, error)
 	RemoveModuleMember(ctx context.Context, arg RemoveModuleMemberParams) error
 	RemoveModuleTask(ctx context.Context, arg RemoveModuleTaskParams) error
 	RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error
@@ -266,6 +273,11 @@ type Querier interface {
 	SoftDeleteProjectView(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTask(ctx context.Context, id uuid.UUID) error
 	SoftDeleteWorkspace(ctx context.Context, id uuid.UUID) error
+	SubtasksCreatedPerDay(ctx context.Context, days int32) ([]SubtasksCreatedPerDayRow, error)
+	TasksByPriority(ctx context.Context) ([]TasksByPriorityRow, error)
+	TasksByStateType(ctx context.Context) ([]TasksByStateTypeRow, error)
+	TasksCreatedPerDay(ctx context.Context, days int32) ([]TasksCreatedPerDayRow, error)
+	TopProjectsByTaskCount(ctx context.Context) ([]TopProjectsByTaskCountRow, error)
 	// When a member leaves a project, keep their shared views alive by reassigning ownership.
 	TransferOwnedSharedViews(ctx context.Context, arg TransferOwnedSharedViewsParams) error
 	UpdateComment(ctx context.Context, arg UpdateCommentParams) (Comment, error)
