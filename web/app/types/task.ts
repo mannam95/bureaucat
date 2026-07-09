@@ -46,6 +46,24 @@ export interface Subtask {
   assignees?: TaskAssignee[];
 }
 
+// A task offered in the "attach existing task as a subtask" picker. Shaped to
+// satisfy the shared AddTasksDialog picker contract (id/title/task_id/state_*).
+export interface SubtaskCandidate {
+  id: string;
+  project_key: string;
+  task_number: number;
+  task_id: string; // e.g., "DEVOP-123"
+  title: string;
+  state_id: string;
+  state_name: string;
+  state_type: string;
+  state_color: string;
+  priority: number;
+  // Set when the task is already a subtask elsewhere; attaching re-parents it.
+  parent_task_id?: string; // e.g. "DEVOP-816"
+  parent_title?: string;
+}
+
 export interface PaginatedTasksResponse {
   tasks: Task[];
   total: number;

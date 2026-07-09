@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1170,6 +1171,170 @@ func (h *TaskHandler) ListSubtasks(c *echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, out)
+}
+
+// SubtaskCandidateResponse is a task offered in the "attach existing subtask"
+// picker.
+type SubtaskCandidateResponse struct {
+	ID         uuid.UUID `json:"id"`
+	ProjectKey string    `json:"project_key"`
+	TaskNumber int       `json:"task_number"`
+	TaskID     string    `json:"task_id"`
+	Title      string    `json:"title"`
+	StateID    uuid.UUID `json:"state_id"`
+	StateName  string    `json:"state_name"`
+	StateType  string    `json:"state_type"`
+	StateColor string    `json:"state_color"`
+	Priority   int       `json:"priority"`
+	// ParentTaskID/ParentTitle are set when the task is already a subtask
+	// elsewhere; attaching it re-parents it under this task. The UI surfaces the
+	// current parent so the move is explicit.
+	ParentTaskID *string `json:"parent_task_id,omitempty"`
+	ParentTitle  *string `json:"parent_title,omitempty"`
+}
+
+// ListSubtaskCandidates serves the "Existing" tab of the Add Subtask dialog:
+// project tasks that can be attached as children of the given parent.
+func (h *TaskHandler) ListSubtaskCandidates(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	ctx := c.Request().Context()
+
+	parent, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	searchParam := pgtype.Text{}
+	if s := strings.TrimSpace(c.QueryParam("search")); s != "" {
+		searchParam = pgtype.Text{String: s, Valid: true}
+	}
+
+	rows, err := h.store.ListSubtaskCandidates(ctx, store.ListSubtaskCandidatesParams{
+		ProjectID: projectID,
+		ParentID:  parent.ID,
+		Limit:     int32(limit),
+		Search:    searchParam,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list candidate tasks")
+	}
+
+	out := make([]SubtaskCandidateResponse, len(rows))
+	for i, t := range rows {
+		resp := SubtaskCandidateResponse{
+			ID:         t.ID,
+			ProjectKey: t.ProjectKey,
+			TaskNumber: int(t.TaskNumber),
+			TaskID:     t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:      t.Title,
+			StateID:    t.StateID,
+			StateName:  t.StateName,
+			StateType:  t.StateType,
+			StateColor: textToString(t.StateColor, "#6B7280"),
+			Priority:   int(t.Priority),
+		}
+		// Candidate is already a subtask elsewhere (same project) — surface it.
+		if t.ParentTaskNumber.Valid {
+			parentID := t.ProjectKey + "-" + strconv.Itoa(int(t.ParentTaskNumber.Int32))
+			resp.ParentTaskID = &parentID
+			if t.ParentTitle.Valid {
+				title := t.ParentTitle.String
+				resp.ParentTitle = &title
+			}
+		}
+		out[i] = resp
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// AttachSubtasksRequest carries the ids of existing tasks to attach as subtasks.
+type AttachSubtasksRequest struct {
+	TaskIDs []string `json:"task_ids"`
+}
+
+// AttachSubtasks attaches existing tasks as children of the given parent,
+// re-parenting any that already belong to another parent. Enforces the
+// one-level rule: the parent must be top-level and no candidate may itself have
+// children. All candidates are validated before any change is applied.
+func (h *TaskHandler) AttachSubtasks(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	var req AttachSubtasksRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if len(req.TaskIDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "task_ids is required")
+	}
+
+	ctx := c.Request().Context()
+
+	parent, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	if parent.ParentTaskID.Valid {
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot attach a subtask under a subtask (only one level of nesting is allowed)")
+	}
+
+	// Validate every candidate before mutating anything.
+	childIDs := make([]uuid.UUID, 0, len(req.TaskIDs))
+	for _, idStr := range req.TaskIDs {
+		childID, err := uuid.Parse(idStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid task id: "+idStr)
+		}
+		if childID == parent.ID {
+			return echo.NewHTTPError(http.StatusBadRequest, "a task cannot be its own subtask")
+		}
+		info, err := h.store.GetTaskAttachEligibility(ctx, childID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusNotFound, "task not found: "+idStr)
+		}
+		if info.ProjectID != projectID {
+			return echo.NewHTTPError(http.StatusBadRequest, "task does not belong to this project: "+idStr)
+		}
+		if info.SubtaskCount > 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "a task that already has subtasks cannot become a subtask")
+		}
+		childIDs = append(childIDs, childID)
+	}
+
+	for _, childID := range childIDs {
+		if err := h.store.SetTaskParent(ctx, store.SetTaskParentParams{
+			ID:           childID,
+			ParentTaskID: pgtype.UUID{Bytes: parent.ID, Valid: true},
+		}); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to attach subtask")
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]int{"attached": len(childIDs)})
 }
 
 // AddAssigneeRequest represents the request to add an assignee.

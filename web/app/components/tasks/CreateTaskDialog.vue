@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Check, ChevronsUpDown } from "lucide-vue-next";
+import { Loader2, Check, ChevronsUpDown, Search } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type {
   Project,
@@ -7,6 +7,7 @@ import type {
   ProjectLabel,
   ProjectMember,
   TaskTemplate,
+  SubtaskCandidate,
 } from "~/types";
 import { mdToHtml } from "~/utils/markdown";
 
@@ -51,7 +52,7 @@ const emit = defineEmits<{
 
 const { getAuthHeader } = useAuth();
 const { currentWorkspace } = useWorkspaces();
-const { createTask } = useTasks();
+const { createTask, listSubtaskCandidates, attachSubtasks } = useTasks();
 const { listStates, listLabels, listMembers, listTemplates } = useProjects();
 
 // --- Project selection ---
@@ -292,6 +293,72 @@ async function handleSubmit() {
 
 const isSubtaskMode = computed(() => props.parentTaskNumber != null);
 
+// --- Subtask mode: "New" vs "Existing" (attach an existing task) ---
+const subtaskTab = ref<"new" | "existing">("new");
+const pickerSearch = ref("");
+const candidates = ref<SubtaskCandidate[]>([]);
+const candidatesLoading = ref(false);
+const selectedIds = ref<Set<string>>(new Set());
+const attaching = ref(false);
+let pickerDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function loadCandidates() {
+  if (!isSubtaskMode.value || !props.projectKey || props.parentTaskNumber == null) return;
+  candidatesLoading.value = true;
+  const result = await listSubtaskCandidates(
+    props.projectKey,
+    props.parentTaskNumber,
+    pickerSearch.value,
+    100
+  );
+  candidatesLoading.value = false;
+  candidates.value = result.success ? result.data ?? [] : [];
+}
+
+function toggleCandidate(id: string) {
+  if (selectedIds.value.has(id)) selectedIds.value.delete(id);
+  else selectedIds.value.add(id);
+  selectedIds.value = new Set(selectedIds.value);
+}
+
+// Load candidates when the user first switches to the Existing tab.
+watch(subtaskTab, (tab) => {
+  if (tab === "existing" && candidates.value.length === 0 && !candidatesLoading.value) {
+    loadCandidates();
+  }
+});
+
+watch(pickerSearch, () => {
+  if (pickerDebounce) clearTimeout(pickerDebounce);
+  pickerDebounce = setTimeout(loadCandidates, 250);
+});
+
+// Reset the picker whenever the dialog opens in subtask mode.
+watch(open, (isOpen) => {
+  if (isOpen && isSubtaskMode.value) {
+    subtaskTab.value = "new";
+    pickerSearch.value = "";
+    candidates.value = [];
+    selectedIds.value = new Set();
+  }
+});
+
+async function handleAttach() {
+  if (selectedIds.value.size === 0 || props.parentTaskNumber == null || !props.projectKey) return;
+  attaching.value = true;
+  error.value = null;
+  const ids = Array.from(selectedIds.value);
+  const result = await attachSubtasks(props.projectKey, props.parentTaskNumber, ids);
+  attaching.value = false;
+  if (result.success) {
+    open.value = false;
+    emit("created");
+    toast.success(`Added ${ids.length} subtask${ids.length === 1 ? "" : "s"}`);
+  } else {
+    error.value = result.error || "Failed to attach subtasks";
+  }
+}
+
 const priorities = [
   { value: 0, label: "No priority" },
   { value: 1, label: "Low" },
@@ -368,10 +435,10 @@ function removeLabel(labelId: string) {
       @open-auto-focus="handleOpenAutoFocus"
     >
       <DialogHeader>
-        <DialogTitle>{{ isSubtaskMode ? "Create Subtask" : "Create New Task" }}</DialogTitle>
+        <DialogTitle>{{ isSubtaskMode ? "Add Subtask" : "Create New Task" }}</DialogTitle>
         <DialogDescription>
           <template v-if="isSubtaskMode">
-            Add a subtask under {{ projectKey }}-{{ parentTaskNumber }}
+            Create a new subtask under {{ projectKey }}-{{ parentTaskNumber }}, or attach an existing task.
           </template>
           <template v-else-if="selectable">
             {{ selectedProject ? `Add a new task to ${selectedProject.name}` : "Select a project to add a task to" }}
@@ -381,7 +448,95 @@ function removeLabel(labelId: string) {
           </template>
         </DialogDescription>
       </DialogHeader>
-      <form class="space-y-4" @submit.prevent="handleSubmit">
+
+      <!-- Subtask mode: choose between creating a new task or attaching one. -->
+      <Tabs v-if="isSubtaskMode" v-model="subtaskTab" class="w-full">
+        <TabsList class="grid w-full grid-cols-2">
+          <TabsTrigger value="new">New</TabsTrigger>
+          <TabsTrigger value="existing">Existing</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <!-- Attach-existing picker (subtask mode, Existing tab). -->
+      <div v-if="isSubtaskMode && subtaskTab === 'existing'" class="space-y-3">
+        <div
+          v-if="error"
+          class="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {{ error }}
+        </div>
+
+        <div class="relative">
+          <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input v-model="pickerSearch" placeholder="Search tasks..." class="pl-9" />
+        </div>
+
+        <div class="overflow-hidden rounded-md border">
+          <div
+            class="grid items-center gap-3 border-b bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            style="grid-template-columns: 20px 90px minmax(0, 1fr);"
+          >
+            <span></span>
+            <span>Task ID</span>
+            <span>Title</span>
+          </div>
+          <div class="max-h-96 overflow-y-auto [scrollbar-gutter:stable]">
+            <div
+              v-if="candidatesLoading"
+              class="flex items-center justify-center py-10 text-sm text-muted-foreground"
+            >
+              <Loader2 class="mr-2 size-4 animate-spin" /> Loading…
+            </div>
+            <div
+              v-else-if="candidates.length === 0"
+              class="py-10 text-center text-sm text-muted-foreground"
+            >
+              No eligible tasks found.
+            </div>
+            <label
+              v-for="task in candidates"
+              v-else
+              :key="task.id"
+              class="grid cursor-pointer items-center gap-3 border-b border-border/40 px-3 py-2 last:border-0 hover:bg-muted/40"
+              style="grid-template-columns: 20px 90px minmax(0, 1fr);"
+            >
+              <Checkbox
+                :model-value="selectedIds.has(task.id)"
+                @update:model-value="toggleCandidate(task.id)"
+              />
+              <span class="shrink-0 font-mono text-[11px] text-muted-foreground">
+                {{ task.task_id }}
+              </span>
+              <span class="min-w-0">
+                <span class="block truncate text-sm">{{ task.title }}</span>
+                <span
+                  v-if="task.parent_task_id"
+                  class="block truncate text-[11px] text-amber-600 dark:text-amber-400"
+                  :title="`Attaching moves it here from ${task.parent_task_id}`"
+                >
+                  already subtask of {{ task.parent_task_id }} {{ task.parent_title }}
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" :disabled="attaching" @click="open = false">
+            Cancel
+          </Button>
+          <Button :disabled="attaching || selectedIds.size === 0" @click="handleAttach">
+            <Loader2 v-if="attaching" class="mr-2 size-4 animate-spin" />
+            Attach {{ selectedIds.size || "" }} task{{ selectedIds.size === 1 ? "" : "s" }}
+          </Button>
+        </DialogFooter>
+      </div>
+
+      <form
+        v-show="!isSubtaskMode || subtaskTab === 'new'"
+        class="space-y-4"
+        @submit.prevent="handleSubmit"
+      >
         <div
           v-if="error"
           class="rounded-md bg-destructive/10 p-3 text-sm text-destructive"

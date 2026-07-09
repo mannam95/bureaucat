@@ -144,6 +144,9 @@ type Querier interface {
 	// Given a set of task IDs, return the distinct user IDs of their assignees.
 	// Used to auto-seed module members when tasks are linked to a module.
 	GetTaskAssigneesForSeeding(ctx context.Context, taskIds []uuid.UUID) ([]uuid.UUID, error)
+	// Validates a candidate before attaching it as a subtask: its project and
+	// whether it already has children (which would break the one-level rule).
+	GetTaskAttachEligibility(ctx context.Context, id uuid.UUID) (GetTaskAttachEligibilityRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow, error)
 	GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByProjectAndNumberParams) (GetTaskByProjectAndNumberRow, error)
 	GetTaskCycleID(ctx context.Context, taskID uuid.UUID) (uuid.UUID, error)
@@ -207,6 +210,13 @@ type Querier interface {
 	// Returns every shared view in the project plus private views owned by the caller.
 	ListProjectViews(ctx context.Context, arg ListProjectViewsParams) ([]ListProjectViewsRow, error)
 	ListSettings(ctx context.Context) ([]Setting, error)
+	// Picker source for "attach an existing task as a subtask". Returns project
+	// tasks eligible to become a child of the given parent. Excludes: the parent
+	// itself, tasks already parented to this same parent, and tasks that already
+	// have their own children (attaching one would break the one-level rule).
+	// Tasks parented elsewhere ARE included (they can be re-parented) and flagged
+	// via has_parent so the UI can warn.
+	ListSubtaskCandidates(ctx context.Context, arg ListSubtaskCandidatesParams) ([]ListSubtaskCandidatesRow, error)
 	// Child ids + state name of a task, used to cascade a cross-project move.
 	ListSubtaskIDsForMove(ctx context.Context, parentID uuid.UUID) ([]ListSubtaskIDsForMoveRow, error)
 	// Direct children of a task, in task-number order. Used on the parent's detail page.
@@ -269,6 +279,9 @@ type Querier interface {
 	SearchUserTasks(ctx context.Context, arg SearchUserTasksParams) ([]SearchUserTasksRow, error)
 	SearchUsersPaginated(ctx context.Context, arg SearchUsersPaginatedParams) ([]SearchUsersPaginatedRow, error)
 	SetProjectDisabled(ctx context.Context, arg SetProjectDisabledParams) (Project, error)
+	// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
+	// as a subtask.
+	SetTaskParent(ctx context.Context, arg SetTaskParentParams) error
 	SoftDeleteComment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteCycle(ctx context.Context, id uuid.UUID) error
 	SoftDeleteModule(ctx context.Context, id uuid.UUID) error

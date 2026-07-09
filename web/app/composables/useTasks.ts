@@ -1,6 +1,7 @@
 import type {
   Task,
   Subtask,
+  SubtaskCandidate,
   PaginatedTasksResponse,
   CreateTaskRequest,
   UpdateTaskRequest,
@@ -405,6 +406,57 @@ export function useTasks() {
     }
   }
 
+  // Candidate tasks for the "attach existing task as a subtask" picker.
+  async function listSubtaskCandidates(
+    projectKey: string,
+    parentTaskNum: number,
+    search = "",
+    limit = 100
+  ): Promise<{ success: boolean; data?: SubtaskCandidate[]; error?: string }> {
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (search) params.set("search", search);
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${parentTaskNum}/subtasks/candidates?${params}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch tasks" };
+      }
+      const data: SubtaskCandidate[] = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  // Attach existing tasks (by UUID) as subtasks of a parent, re-parenting any
+  // that already belong to another parent.
+  async function attachSubtasks(
+    projectKey: string,
+    parentTaskNum: number,
+    taskIds: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${parentTaskNum}/subtasks`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({ task_ids: taskIds }),
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to attach subtasks" };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   function clearCurrentTask() {
     state.currentTask = null;
   }
@@ -440,6 +492,8 @@ export function useTasks() {
 
     // Subtasks
     listSubtasks,
+    listSubtaskCandidates,
+    attachSubtasks,
 
     // Utils
     clearCurrentTask,

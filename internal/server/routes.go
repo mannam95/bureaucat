@@ -271,6 +271,10 @@ func (s *Server) registerRoutes() {
 
 				// Subtasks (children created via POST /tasks with parent_task_number)
 				projectGroup.GET("/tasks/:taskNum/subtasks", s.taskHandler.ListSubtasks)
+				// Candidate tasks for attaching an existing task as a subtask.
+				projectGroup.GET("/tasks/:taskNum/subtasks/candidates", s.taskHandler.ListSubtaskCandidates)
+				// Attach existing tasks as subtasks (re-parenting allowed).
+				projectGroup.POST("/tasks/:taskNum/subtasks", s.taskHandler.AttachSubtasks, auth.ProjectRoleMiddleware("member"))
 
 				// Task assignees
 				projectGroup.POST("/tasks/:taskNum/assignees", s.taskHandler.AddAssignee, auth.ProjectRoleMiddleware("member"))

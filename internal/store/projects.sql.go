@@ -919,6 +919,28 @@ func (q *Queries) GetProjectStateByProjectAndName(ctx context.Context, arg GetPr
 	return i, err
 }
 
+const getTaskAttachEligibility = `-- name: GetTaskAttachEligibility :one
+SELECT t.id, t.project_id,
+       (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.deleted_at IS NULL)::int AS subtask_count
+FROM tasks t
+WHERE t.id = $1 AND t.deleted_at IS NULL
+`
+
+type GetTaskAttachEligibilityRow struct {
+	ID           uuid.UUID `json:"id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	SubtaskCount int32     `json:"subtask_count"`
+}
+
+// Validates a candidate before attaching it as a subtask: its project and
+// whether it already has children (which would break the one-level rule).
+func (q *Queries) GetTaskAttachEligibility(ctx context.Context, id uuid.UUID) (GetTaskAttachEligibilityRow, error) {
+	row := q.db.QueryRow(ctx, getTaskAttachEligibility, id)
+	var i GetTaskAttachEligibilityRow
+	err := row.Scan(&i.ID, &i.ProjectID, &i.SubtaskCount)
+	return i, err
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
@@ -1623,6 +1645,93 @@ func (q *Queries) ListProjectTasks(ctx context.Context, arg ListProjectTasksPara
 			&i.StateType,
 			&i.StateColor,
 			&i.CreatorUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubtaskCandidates = `-- name: ListSubtaskCandidates :many
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color,
+       pt.task_number AS parent_task_number, pt.title AS parent_title
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
+WHERE t.project_id = $1 AND t.deleted_at IS NULL
+  AND t.id <> $3::uuid
+  AND (t.parent_task_id IS DISTINCT FROM $3::uuid)
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks c
+      WHERE c.parent_task_id = t.id AND c.deleted_at IS NULL
+  )
+  AND ($4::text IS NULL
+       OR t.title ILIKE '%' || $4 || '%')
+ORDER BY t.created_at DESC
+LIMIT $2
+`
+
+type ListSubtaskCandidatesParams struct {
+	ProjectID uuid.UUID   `json:"project_id"`
+	Limit     int32       `json:"limit"`
+	ParentID  uuid.UUID   `json:"parent_id"`
+	Search    pgtype.Text `json:"search"`
+}
+
+type ListSubtaskCandidatesRow struct {
+	ID               uuid.UUID   `json:"id"`
+	ProjectID        uuid.UUID   `json:"project_id"`
+	TaskNumber       int32       `json:"task_number"`
+	Title            string      `json:"title"`
+	StateID          uuid.UUID   `json:"state_id"`
+	Priority         int32       `json:"priority"`
+	ProjectKey       string      `json:"project_key"`
+	StateName        string      `json:"state_name"`
+	StateType        string      `json:"state_type"`
+	StateColor       pgtype.Text `json:"state_color"`
+	ParentTaskNumber pgtype.Int4 `json:"parent_task_number"`
+	ParentTitle      pgtype.Text `json:"parent_title"`
+}
+
+// Picker source for "attach an existing task as a subtask". Returns project
+// tasks eligible to become a child of the given parent. Excludes: the parent
+// itself, tasks already parented to this same parent, and tasks that already
+// have their own children (attaching one would break the one-level rule).
+// Tasks parented elsewhere ARE included (they can be re-parented) and flagged
+// via has_parent so the UI can warn.
+func (q *Queries) ListSubtaskCandidates(ctx context.Context, arg ListSubtaskCandidatesParams) ([]ListSubtaskCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listSubtaskCandidates,
+		arg.ProjectID,
+		arg.Limit,
+		arg.ParentID,
+		arg.Search,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubtaskCandidatesRow{}
+	for rows.Next() {
+		var i ListSubtaskCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.TaskNumber,
+			&i.Title,
+			&i.StateID,
+			&i.Priority,
+			&i.ProjectKey,
+			&i.StateName,
+			&i.StateType,
+			&i.StateColor,
+			&i.ParentTaskNumber,
+			&i.ParentTitle,
 		); err != nil {
 			return nil, err
 		}
@@ -2800,6 +2909,24 @@ func (q *Queries) SetProjectDisabled(ctx context.Context, arg SetProjectDisabled
 		&i.WorkspaceID,
 	)
 	return i, err
+}
+
+const setTaskParent = `-- name: SetTaskParent :exec
+UPDATE tasks
+SET parent_task_id = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type SetTaskParentParams struct {
+	ID           uuid.UUID   `json:"id"`
+	ParentTaskID pgtype.UUID `json:"parent_task_id"`
+}
+
+// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
+// as a subtask.
+func (q *Queries) SetTaskParent(ctx context.Context, arg SetTaskParentParams) error {
+	_, err := q.db.Exec(ctx, setTaskParent, arg.ID, arg.ParentTaskID)
+	return err
 }
 
 const softDeleteComment = `-- name: SoftDeleteComment :exec

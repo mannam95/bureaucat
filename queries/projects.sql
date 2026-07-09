@@ -340,6 +340,47 @@ UPDATE tasks
 SET deleted_at = NOW(), updated_at = NOW()
 WHERE parent_task_id = sqlc.arg('parent_id')::uuid AND deleted_at IS NULL;
 
+-- name: ListSubtaskCandidates :many
+-- Picker source for "attach an existing task as a subtask". Returns project
+-- tasks eligible to become a child of the given parent. Excludes: the parent
+-- itself, tasks already parented to this same parent, and tasks that already
+-- have their own children (attaching one would break the one-level rule).
+-- Tasks parented elsewhere ARE included (they can be re-parented) and flagged
+-- via has_parent so the UI can warn.
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color,
+       pt.task_number AS parent_task_number, pt.title AS parent_title
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
+WHERE t.project_id = $1 AND t.deleted_at IS NULL
+  AND t.id <> sqlc.arg('parent_id')::uuid
+  AND (t.parent_task_id IS DISTINCT FROM sqlc.arg('parent_id')::uuid)
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks c
+      WHERE c.parent_task_id = t.id AND c.deleted_at IS NULL
+  )
+  AND (sqlc.narg('search')::text IS NULL
+       OR t.title ILIKE '%' || sqlc.narg('search') || '%')
+ORDER BY t.created_at DESC
+LIMIT $2;
+
+-- name: GetTaskAttachEligibility :one
+-- Validates a candidate before attaching it as a subtask: its project and
+-- whether it already has children (which would break the one-level rule).
+SELECT t.id, t.project_id,
+       (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.deleted_at IS NULL)::int AS subtask_count
+FROM tasks t
+WHERE t.id = $1 AND t.deleted_at IS NULL;
+
+-- name: SetTaskParent :exec
+-- Sets (or clears) a task's parent. Used to attach/re-parent an existing task
+-- as a subtask.
+UPDATE tasks
+SET parent_task_id = sqlc.narg('parent_task_id'), updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL;
+
 -- name: ListProjectTasks :many
 SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
