@@ -16,6 +16,7 @@ export interface EditorUpload {
   mimeType: string;
 }
 import type { ProjectMember } from "~/types";
+import { mdToHtml } from "~/utils/markdown";
 import {
   Bold,
   Italic,
@@ -251,6 +252,22 @@ async function handleFiles(files: File[]) {
   }
 }
 
+// Heuristic: does this pasted plain text contain markdown block/inline syntax
+// worth parsing? Kept intentionally conservative so ordinary prose pastes fall
+// through to ProseMirror's default handling and only real markdown is converted.
+function looksLikeMarkdown(text: string): boolean {
+  return (
+    /(^|\n)\s*```/.test(text) || // fenced code block
+    /(^|\n)\s*~~~/.test(text) || // fenced code block (tildes)
+    /(^|\n)#{1,6}\s/.test(text) || // heading
+    /(^|\n)\s*([-*+]|\d+\.)\s/.test(text) || // list item
+    /(^|\n)\s*>\s/.test(text) || // blockquote
+    /\[[^\]]+\]\([^)]+\)/.test(text) || // link
+    /(\*\*|__)[^*_]+(\*\*|__)/.test(text) || // bold
+    /`[^`\n]+`/.test(text) // inline code
+  );
+}
+
 const editor = useEditor({
   content: props.modelValue,
   editable: !props.disabled,
@@ -280,7 +297,20 @@ const editor = useEditor({
         handleFiles(files);
         return true;
       }
-      return false;
+      // ProseMirror's input rules (``` -> code block, # -> heading, etc.) only
+      // fire on typing, never on paste, so pasted markdown otherwise stays
+      // literal. When the pasted plain text looks like markdown we parse it and
+      // insert the resulting rich content. We check the plain-text flavour even
+      // if the clipboard also carries text/html (browsers usually provide both),
+      // but only take over when markdown markers are actually present — plain
+      // rich-HTML pastes still fall through to ProseMirror's default handling.
+      const text = event.clipboardData?.getData("text/plain");
+      if (!text || !looksLikeMarkdown(text)) return false;
+      const ed = editor.value;
+      if (!ed) return false;
+      event.preventDefault();
+      ed.chain().focus().insertContent(mdToHtml(text)).run();
+      return true;
     },
   },
   onUpdate: ({ editor }) => {
