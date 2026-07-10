@@ -87,6 +87,28 @@ interface CreateUserData {
   user_type: string;
 }
 
+export interface DeletedProject {
+  id: string;
+  project_key: string;
+  name: string;
+  description?: string;
+  workspace_id: string;
+  workspace_name: string;
+  created_by: string;
+  creator_name: string;
+  creator_username: string;
+  created_at: string;
+  deleted_at: string;
+}
+
+interface PaginatedDeletedProjectsResponse {
+  projects: DeletedProject[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
 export function useAdmin() {
   const { getAuthHeader } = useAuth();
 
@@ -312,6 +334,53 @@ export function useAdmin() {
     }
   }
 
+  async function listDeletedProjects(
+    page = 1,
+    perPage = 20
+  ): Promise<{
+    success: boolean;
+    data?: PaginatedDeletedProjectsResponse;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(
+        `/api/v1/admin/projects/deleted?page=${page}&per_page=${perPage}`,
+        { headers: getAuthHeader() }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to fetch deleted projects" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function restoreProject(projectId: string): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/projects/${projectId}/restore`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to restore project" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   return {
     getStats,
     listUsers,
@@ -322,5 +391,7 @@ export function useAdmin() {
     listTokens,
     revokeToken,
     cleanupExpiredTokens,
+    listDeletedProjects,
+    restoreProject,
   };
 }

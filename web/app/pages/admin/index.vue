@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, UserPlus, BarChart3 } from "lucide-vue-next";
+import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, UserPlus, BarChart3, Trash2 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { SSOSettings, MattermostSettings } from "~/composables/useSettings";
 
@@ -273,6 +273,14 @@ const adminModels = [
     href: "/admin/stats",
     color: "text-green-500",
     bgColor: "bg-green-500/10",
+  },
+  {
+    title: "Deleted Projects",
+    description: "Review soft-deleted projects and restore them if needed",
+    icon: Trash2,
+    href: "/admin/model/deleted-projects",
+    color: "text-red-500",
+    bgColor: "bg-red-500/10",
   },
 ];
 </script>

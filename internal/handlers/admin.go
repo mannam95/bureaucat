@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -776,4 +777,122 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+// DeletedProjectResponse represents a soft-deleted project in admin responses.
+type DeletedProjectResponse struct {
+	ID              uuid.UUID `json:"id"`
+	ProjectKey      string    `json:"project_key"`
+	Name            string    `json:"name"`
+	Description     *string   `json:"description,omitempty"`
+	WorkspaceID     uuid.UUID `json:"workspace_id"`
+	WorkspaceName   string    `json:"workspace_name"`
+	CreatedBy       uuid.UUID `json:"created_by"`
+	CreatorName     string    `json:"creator_name"`
+	CreatorUsername string    `json:"creator_username"`
+	CreatedAt       time.Time `json:"created_at"`
+	DeletedAt       time.Time `json:"deleted_at"`
+}
+
+// PaginatedDeletedProjectsResponse represents a paginated list of deleted projects.
+type PaginatedDeletedProjectsResponse struct {
+	Projects   []DeletedProjectResponse `json:"projects"`
+	Total      int64                    `json:"total"`
+	Page       int                      `json:"page"`
+	PerPage    int                      `json:"per_page"`
+	TotalPages int                      `json:"total_pages"`
+}
+
+// ListDeletedProjects returns a paginated list of soft-deleted projects so an
+// admin can review and restore them.
+//
+//	@Summary		List deleted projects
+//	@Description	Returns a paginated list of soft-deleted projects across all workspaces.
+//	@Tags			Admin - Projects
+//	@Produce		json
+//	@Param			page		query		int	false	"Page number"		default(1)
+//	@Param			per_page	query		int	false	"Items per page"	default(20)
+//	@Success		200			{object}	PaginatedDeletedProjectsResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/projects/deleted [get]
+func (h *AdminHandler) ListDeletedProjects(c *echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
+	if perPage < 1 || perPage > 100 {
+		perPage = 20
+	}
+	offset := (page - 1) * perPage
+
+	ctx := c.Request().Context()
+
+	total, err := h.store.CountDeletedProjects(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count deleted projects")
+	}
+
+	rows, err := h.store.ListDeletedProjects(ctx, store.ListDeletedProjectsParams{
+		Limit:  int32(perPage),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list deleted projects")
+	}
+
+	projects := make([]DeletedProjectResponse, len(rows))
+	for i, p := range rows {
+		projects[i] = DeletedProjectResponse{
+			ID:              p.ID,
+			ProjectKey:      p.ProjectKey,
+			Name:            p.Name,
+			Description:     textToStringPtr(p.Description),
+			WorkspaceID:     p.WorkspaceID,
+			WorkspaceName:   p.WorkspaceName,
+			CreatedBy:       p.CreatedBy,
+			CreatorName:     strings.TrimSpace(p.CreatorFirstName + " " + p.CreatorLastName),
+			CreatorUsername: p.CreatorUsername,
+			CreatedAt:       p.CreatedAt.Time,
+			DeletedAt:       p.DeletedAt.Time,
+		}
+	}
+
+	totalPages := int((total + int64(perPage) - 1) / int64(perPage))
+
+	return c.JSON(http.StatusOK, PaginatedDeletedProjectsResponse{
+		Projects:   projects,
+		Total:      total,
+		Page:       page,
+		PerPage:    perPage,
+		TotalPages: totalPages,
+	})
+}
+
+// RestoreProject restores a soft-deleted project.
+//
+//	@Summary		Restore deleted project
+//	@Description	Clears the soft-delete flag on a project, making it accessible again.
+//	@Tags			Admin - Projects
+//	@Produce		json
+//	@Param			id	path		string	true	"Project ID"
+//	@Success		200	{object}	MessageResponse
+//	@Failure		400	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/projects/{id}/restore [post]
+func (h *AdminHandler) RestoreProject(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid project ID")
+	}
+
+	ctx := c.Request().Context()
+
+	if err := h.store.RestoreProject(ctx, projectID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to restore project")
+	}
+
+	return c.JSON(http.StatusOK, MessageResponse{Message: "project restored"})
 }

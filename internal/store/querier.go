@@ -41,6 +41,7 @@ type Querier interface {
 	CountAllProjectsFiltered(ctx context.Context, arg CountAllProjectsFilteredParams) (int64, error)
 	CountAllWorkspaces(ctx context.Context) (int64, error)
 	CountAllWorkspacesFiltered(ctx context.Context, search pgtype.Text) (int64, error)
+	CountDeletedProjects(ctx context.Context) (int64, error)
 	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountPages(ctx context.Context) (int64, error)
 	CountProjectCycles(ctx context.Context, projectID uuid.UUID) (int64, error)
@@ -180,6 +181,7 @@ type Querier interface {
 	ListAttachmentsByEntity(ctx context.Context, arg ListAttachmentsByEntityParams) ([]ListAttachmentsByEntityRow, error)
 	ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]ListCycleAssigneesRow, error)
 	ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) ([]ListCycleTasksRow, error)
+	ListDeletedProjects(ctx context.Context, arg ListDeletedProjectsParams) ([]ListDeletedProjectsRow, error)
 	ListLabelsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListLabelsForTasksRow, error)
 	ListModuleMembers(ctx context.Context, moduleID uuid.UUID) ([]ListModuleMembersRow, error)
 	// Used for hydrating the list view with member avatars. Returns up to 4 members
@@ -260,6 +262,7 @@ type Querier interface {
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
+	RestoreProject(ctx context.Context, id uuid.UUID) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
 	// Admin variant: matches across all projects.

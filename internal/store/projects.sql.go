@@ -149,6 +149,17 @@ func (q *Queries) CountAllProjectsFiltered(ctx context.Context, arg CountAllProj
 	return count, err
 }
 
+const countDeletedProjects = `-- name: CountDeletedProjects :one
+SELECT COUNT(*) FROM projects WHERE deleted_at IS NOT NULL
+`
+
+func (q *Queries) CountDeletedProjects(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countDeletedProjects)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countProjectMembers = `-- name: CountProjectMembers :one
 SELECT COUNT(*) FROM project_members WHERE project_id = $1
 `
@@ -1349,6 +1360,73 @@ func (q *Queries) ListAssigneesForTasks(ctx context.Context, taskIds []uuid.UUID
 			&i.FirstName,
 			&i.LastName,
 			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeletedProjects = `-- name: ListDeletedProjects :many
+SELECT p.id, p.project_key, p.name, p.description, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id,
+       w.name AS workspace_name,
+       u.first_name AS creator_first_name, u.last_name AS creator_last_name, u.username AS creator_username
+FROM projects p
+JOIN workspaces w ON w.id = p.workspace_id
+JOIN users u ON u.id = p.created_by
+WHERE p.deleted_at IS NOT NULL
+ORDER BY p.deleted_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListDeletedProjectsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListDeletedProjectsRow struct {
+	ID               uuid.UUID          `json:"id"`
+	ProjectKey       string             `json:"project_key"`
+	Name             string             `json:"name"`
+	Description      pgtype.Text        `json:"description"`
+	CreatedBy        uuid.UUID          `json:"created_by"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WorkspaceName    string             `json:"workspace_name"`
+	CreatorFirstName string             `json:"creator_first_name"`
+	CreatorLastName  string             `json:"creator_last_name"`
+	CreatorUsername  string             `json:"creator_username"`
+}
+
+func (q *Queries) ListDeletedProjects(ctx context.Context, arg ListDeletedProjectsParams) ([]ListDeletedProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listDeletedProjects, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDeletedProjectsRow{}
+	for rows.Next() {
+		var i ListDeletedProjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectKey,
+			&i.Name,
+			&i.Description,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.WorkspaceID,
+			&i.WorkspaceName,
+			&i.CreatorFirstName,
+			&i.CreatorLastName,
+			&i.CreatorUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -2607,6 +2685,17 @@ type RemoveTaskLabelParams struct {
 
 func (q *Queries) RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error {
 	_, err := q.db.Exec(ctx, removeTaskLabel, arg.TaskID, arg.LabelID)
+	return err
+}
+
+const restoreProject = `-- name: RestoreProject :exec
+UPDATE projects
+SET deleted_at = NULL, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NOT NULL
+`
+
+func (q *Queries) RestoreProject(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, restoreProject, id)
 	return err
 }
 

@@ -320,6 +320,8 @@ func (s *Server) registerRoutes() {
 		admin.DELETE("/tokens/:id", s.adminHandler.RevokeToken)
 		admin.DELETE("/tokens/expired", s.adminHandler.CleanupExpiredTokens)
 		admin.GET("/stats", s.adminHandler.GetStats)
+		admin.GET("/projects/deleted", s.adminHandler.ListDeletedProjects)
+		admin.POST("/projects/:id/restore", s.adminHandler.RestoreProject)
 
 		// Admin settings
 		if s.settingsHandler != nil {

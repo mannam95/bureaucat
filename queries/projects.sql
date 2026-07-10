@@ -64,6 +64,25 @@ UPDATE projects
 SET deleted_at = NOW(), updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL;
 
+-- name: RestoreProject :exec
+UPDATE projects
+SET deleted_at = NULL, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NOT NULL;
+
+-- name: ListDeletedProjects :many
+SELECT p.id, p.project_key, p.name, p.description, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id,
+       w.name AS workspace_name,
+       u.first_name AS creator_first_name, u.last_name AS creator_last_name, u.username AS creator_username
+FROM projects p
+JOIN workspaces w ON w.id = p.workspace_id
+JOIN users u ON u.id = p.created_by
+WHERE p.deleted_at IS NOT NULL
+ORDER BY p.deleted_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountDeletedProjects :one
+SELECT COUNT(*) FROM projects WHERE deleted_at IS NOT NULL;
+
 -- name: ListUserProjects :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
