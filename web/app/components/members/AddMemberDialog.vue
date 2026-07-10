@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Search, UserPlus } from "lucide-vue-next";
+import { Loader2, UserPlus } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 
 const props = defineProps<{
@@ -15,18 +15,20 @@ const emit = defineEmits<{
 
 const { addMember, searchUsers: searchUsersApi } = useProjects();
 
-const loading = ref(false);
-const searchLoading = ref(false);
-const error = ref<string | null>(null);
-const searchQuery = ref("");
-const searchResults = ref<Array<{
+type DirectoryUser = {
   id: string;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
-}>>([]);
-const selectedUser = ref<string | null>(null);
+};
+
+const loading = ref(false);
+const searchLoading = ref(false);
+const error = ref<string | null>(null);
+const searchResults = ref<DirectoryUser[]>([]);
+// Users queued to be added; each renders as a chip in the token input.
+const selectedUsers = ref<DirectoryUser[]>([]);
 const selectedRole = ref("member");
 
 const roles = [
@@ -35,78 +37,105 @@ const roles = [
   { value: "admin", label: "Admin", description: "Full project control" },
 ];
 
-async function searchUsers() {
-  if (searchQuery.value.length < 2) {
+// The dropdown pool: search hits minus existing members and already-queued users.
+const availableUsers = computed(() => {
+  const excluded = new Set([
+    ...props.existingMemberIds,
+    ...selectedUsers.value.map((u) => u.id),
+  ]);
+  return searchResults.value.filter((u) => !excluded.has(u.id));
+});
+
+function userSearchText(u: DirectoryUser) {
+  return `${u.first_name} ${u.last_name} ${u.username} ${u.email}`;
+}
+
+let searchTimeout: ReturnType<typeof setTimeout>;
+function onSearch(query: string) {
+  clearTimeout(searchTimeout);
+  const q = query.trim();
+  if (q.length < 2) {
     searchResults.value = [];
+    searchLoading.value = false;
     return;
   }
-
   searchLoading.value = true;
-  const result = await searchUsersApi(props.projectKey, searchQuery.value);
-  searchLoading.value = false;
+  searchTimeout = setTimeout(async () => {
+    const result = await searchUsersApi(props.projectKey, q);
+    searchLoading.value = false;
+    searchResults.value = result.success && result.data ? result.data : [];
+  }, 300);
+}
 
-  if (result.success && result.data) {
-    // Filter out existing members
-    searchResults.value = result.data.filter(
-      (u) => !props.existingMemberIds.includes(u.id)
-    );
+function addToken(u: DirectoryUser) {
+  if (!selectedUsers.value.some((s) => s.id === u.id)) {
+    selectedUsers.value = [...selectedUsers.value, u];
   }
+}
+
+function removeToken(u: DirectoryUser) {
+  selectedUsers.value = selectedUsers.value.filter((s) => s.id !== u.id);
 }
 
 function resetForm() {
-  searchQuery.value = "";
   searchResults.value = [];
-  selectedUser.value = null;
+  selectedUsers.value = [];
   selectedRole.value = "member";
   error.value = null;
+  searchLoading.value = false;
 }
 
 watch(open, (isOpen) => {
-  if (isOpen) {
-    resetForm();
-  }
-});
-
-let searchTimeout: ReturnType<typeof setTimeout>;
-watch(searchQuery, () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(searchUsers, 300);
+  if (isOpen) resetForm();
 });
 
 async function handleSubmit() {
-  if (!selectedUser.value) return;
+  if (selectedUsers.value.length === 0) return;
 
   loading.value = true;
   error.value = null;
 
-  const result = await addMember(props.projectKey, {
-    user_id: selectedUser.value,
-    role: selectedRole.value,
-  });
+  const results = await Promise.all(
+    selectedUsers.value.map((u) =>
+      addMember(props.projectKey, { user_id: u.id, role: selectedRole.value })
+    )
+  );
 
   loading.value = false;
 
-  if (result.success) {
-    toast.success("Member added successfully");
-    open.value = false;
+  const added = results.filter((r) => r.success).length;
+  const failed = results.length - added;
+
+  if (added > 0) {
+    toast.success(
+      added === 1 ? "Member added" : `${added} members added`
+    );
     emit("added");
+  }
+
+  if (failed > 0) {
+    error.value =
+      results.find((r) => !r.success)?.error ||
+      `Failed to add ${failed} member${failed === 1 ? "" : "s"}`;
+    // Keep only the users that failed so the admin can retry them.
+    const failedIds = new Set(
+      selectedUsers.value.filter((_, i) => !results[i]?.success).map((u) => u.id)
+    );
+    selectedUsers.value = selectedUsers.value.filter((u) => failedIds.has(u.id));
   } else {
-    error.value = result.error || "Failed to add member";
+    open.value = false;
   }
 }
-
-const selectedUserInfo = computed(() =>
-  searchResults.value.find((u) => u.id === selectedUser.value)
-);
 </script>
 
 <template>
   <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>Add Member</DialogTitle>
+        <DialogTitle>Add Members</DialogTitle>
         <DialogDescription>
-          Search for a user to add to this project.
+          Search for users to add to this project. Select as many as you like,
+          then add them all at once.
         </DialogDescription>
       </DialogHeader>
       <form class="space-y-4" @submit.prevent="handleSubmit">
@@ -118,77 +147,57 @@ const selectedUserInfo = computed(() =>
         </div>
 
         <div class="space-y-2">
-          <Label for="search">Search Users</Label>
-          <div class="relative">
-            <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="search"
-              v-model="searchQuery"
-              placeholder="Search by name or email..."
-              class="pl-9"
+          <Label>Users</Label>
+          <div class="rounded-md border px-3 py-2">
+            <TokenSelect
+              :selected="selectedUsers"
+              :available="availableUsers"
+              :get-key="(u) => u.id"
+              :get-search-text="userSearchText"
+              server-search
+              :loading="searchLoading"
+              placeholder="Search by name, username or email..."
+              empty-text="No users found"
               :disabled="loading"
-            />
+              @search="onSearch"
+              @add="addToken"
+              @remove="removeToken"
+            >
+              <template #chip="{ item: u }">
+                <Avatar class="size-5">
+                  <AvatarFallback class="text-[10px]" :seed="u.id">
+                    {{ u.first_name[0] }}{{ u.last_name[0] }}
+                  </AvatarFallback>
+                </Avatar>
+                <span class="truncate">{{ u.first_name }} {{ u.last_name }}</span>
+              </template>
+              <template #option="{ item: u }">
+                <Avatar class="size-8">
+                  <AvatarFallback class="text-xs" :seed="u.id">
+                    {{ u.first_name[0] }}{{ u.last_name[0] }}
+                  </AvatarFallback>
+                </Avatar>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium">
+                    {{ u.first_name }} {{ u.last_name }}
+                  </p>
+                  <p class="truncate text-xs text-muted-foreground">
+                    @{{ u.username }} · {{ u.email }}
+                  </p>
+                </div>
+              </template>
+            </TokenSelect>
           </div>
-        </div>
-
-        <!-- Search results -->
-        <div
-          v-if="searchResults.length > 0 || searchLoading"
-          class="max-h-48 space-y-1 overflow-auto rounded-lg border p-2"
-        >
-          <div
-            v-if="searchLoading"
-            class="flex items-center justify-center py-4"
-          >
-            <Loader2 class="size-4 animate-spin text-muted-foreground" />
-          </div>
-          <button
-            v-for="u in searchResults"
-            v-else
-            :key="u.id"
-            type="button"
-            class="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-muted"
-            :class="{ 'bg-muted': selectedUser === u.id }"
-            @click="selectedUser = u.id"
-          >
-            <Avatar class="size-8">
-              <AvatarFallback class="text-xs" :seed="u.id">
-                {{ u.first_name[0] }}{{ u.last_name[0] }}
-              </AvatarFallback>
-            </Avatar>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium">
-                {{ u.first_name }} {{ u.last_name }}
-              </p>
-              <p class="truncate text-xs text-muted-foreground">
-                @{{ u.username }} · {{ u.email }}
-              </p>
-            </div>
-          </button>
-        </div>
-
-        <!-- Selected user -->
-        <div
-          v-if="selectedUserInfo"
-          class="flex items-center gap-3 rounded-lg border bg-muted/50 p-3"
-        >
-          <Avatar>
-            <AvatarFallback :seed="selectedUserInfo.id">
-              {{ selectedUserInfo.first_name[0] }}{{ selectedUserInfo.last_name[0] }}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <p class="font-medium">
-              {{ selectedUserInfo.first_name }} {{ selectedUserInfo.last_name }}
-            </p>
-            <p class="text-sm text-muted-foreground">
-              @{{ selectedUserInfo.username }}
-            </p>
-          </div>
+          <p class="text-xs text-muted-foreground">
+            Press Enter to add the highlighted user.
+          </p>
         </div>
 
         <div class="space-y-2">
           <Label>Role</Label>
+          <p class="text-xs text-muted-foreground">
+            Applied to everyone added in this batch.
+          </p>
           <div class="space-y-2">
             <label
               v-for="role in roles"
@@ -227,10 +236,14 @@ const selectedUserInfo = computed(() =>
           >
             Cancel
           </Button>
-          <Button type="submit" :disabled="loading || !selectedUser">
+          <Button type="submit" :disabled="loading || selectedUsers.length === 0">
             <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
             <UserPlus v-else class="mr-2 size-4" />
-            Add Member
+            {{
+              selectedUsers.length > 1
+                ? `Add ${selectedUsers.length} Members`
+                : "Add Member"
+            }}
           </Button>
         </DialogFooter>
       </form>

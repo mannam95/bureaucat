@@ -30,6 +30,14 @@ const props = withDefaults(
     chipClass?: (item: T) => string;
     chipStyle?: (item: T) => Record<string, string>;
     contentClass?: string;
+    // When true, `available` is treated as the ready-to-show result set and is
+    // NOT filtered locally; instead the current query is emitted via `search`
+    // so the caller can fetch matches (e.g. a directory API). Useful when the
+    // pool is too large to hold client-side.
+    serverSearch?: boolean;
+    // Shows a spinner in the dropdown; pair with `serverSearch` while a fetch
+    // is in flight.
+    loading?: boolean;
   }>(),
   {
     placeholder: "Type to search...",
@@ -37,12 +45,15 @@ const props = withDefaults(
     disabled: false,
     pendingKey: null,
     contentClass: "",
+    serverSearch: false,
+    loading: false,
   }
 );
 
 const emit = defineEmits<{
   add: [item: T];
   remove: [item: T];
+  search: [query: string];
 }>();
 
 const query = ref("");
@@ -53,11 +64,18 @@ const listRef = ref<HTMLElement | null>(null);
 let blurTimer: ReturnType<typeof setTimeout> | null = null;
 
 const filtered = computed(() => {
+  // In server-search mode the caller has already resolved the matches.
+  if (props.serverSearch) return props.available;
   const q = query.value.toLowerCase().trim();
   if (!q) return props.available;
   return props.available.filter((it) =>
     props.getSearchText(it).toLowerCase().includes(q)
   );
+});
+
+// Let the caller run the search when it owns the data source.
+watch(query, (q) => {
+  if (props.serverSearch) emit("search", q);
 });
 
 // Keep the highlight in range as the filtered list shrinks while typing.
@@ -71,7 +89,9 @@ watch(filtered, (list) => {
 // user has typed a query (so a "no matches" hint can appear). An empty box with
 // nothing left to add stays quiet.
 const showDropdown = computed(
-  () => open.value && (filtered.value.length > 0 || query.value.trim() !== "")
+  () =>
+    open.value &&
+    (filtered.value.length > 0 || query.value.trim() !== "" || props.loading)
 );
 
 function focusInput() {
@@ -215,8 +235,14 @@ function onKeydown(event: KeyboardEvent) {
         >
           <slot name="option" :item="item" :active="idx === highlighted" />
         </button>
+        <div
+          v-if="loading"
+          class="flex items-center justify-center px-2 py-6 text-muted-foreground"
+        >
+          <Loader2 class="size-4 animate-spin" />
+        </div>
         <p
-          v-if="filtered.length === 0"
+          v-else-if="filtered.length === 0"
           class="px-2 py-6 text-center text-sm text-muted-foreground"
         >
           {{ emptyText }}
