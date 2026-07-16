@@ -22,13 +22,17 @@ import type {
   ViewGroupBy,
 } from "~/types";
 
+// Old ?state_id=…&priority=… style params that get migrated to a ?f= tree on
+// mount. NOTE: ?q= is deliberately NOT listed here — free-text search is a live,
+// first-class param (read directly by the searchQuery computed), not a legacy
+// one. Listing it caused hydrateFromUrl to treat it as legacy and strip it,
+// which lost the search on browser back.
 const LEGACY_PARAMS = [
   "state_id",
   "state_type",
   "created_by",
   "assigned_to",
   "priority",
-  "q",
   "from_date",
   "to_date",
 ] as const;
