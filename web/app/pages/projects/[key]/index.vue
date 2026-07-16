@@ -15,11 +15,13 @@ import {
   Eye,
   Save,
   FolderInput,
+  Download,
   X,
   Lock,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { FilterTree, ProjectView, MoveTasksResponse } from "~/types";
+import { PRIORITY_LABELS } from "~/types";
 
 definePageMeta({
   middleware: ["auth"],
@@ -69,6 +71,7 @@ const {
   page: tasksPage,
   totalPages: tasksTotalPages,
   listTasks,
+  fetchAllTasks,
 } = useTasks();
 
 const { user } = useAuth();
@@ -172,6 +175,103 @@ async function handleBulkMoved(payload: { targetKey: string; result?: MoveTasksR
   }
   selectedTasks.value = new Set();
   await loadTasks(tasksPage.value);
+}
+
+// ---- CSV export of the tasks matching the current filters ----
+const exporting = ref(false);
+
+function csvCell(value: unknown): string {
+  const s = value == null ? "" : String(value);
+  // Quote when the cell contains a delimiter, quote, or newline; escape quotes.
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function exportTasks() {
+  if (exporting.value) return;
+  exporting.value = true;
+  try {
+    const hasFilter = effectiveTree.value.children.length > 0;
+    const result = await fetchAllTasks(projectKey.value, {
+      tree: effectiveTree.value,
+      sortBy: sortBy.value,
+      sortDir: sortDir.value,
+      viewSlug: hasFilter ? activeViewSlug.value ?? undefined : undefined,
+    });
+
+    if (!result.success || !result.data) {
+      toast.error(result.error || "Failed to export tasks");
+      return;
+    }
+
+    const rows = result.data;
+    if (rows.length === 0) {
+      toast.info("No tasks to export");
+      return;
+    }
+
+    const headers = [
+      "Task ID",
+      "Title",
+      "State",
+      "Priority",
+      "Assignees",
+      "Labels",
+      "Start Date",
+      "Due Date",
+      "Created By",
+      "Created At",
+      "Updated At",
+      "Comments",
+      "Parent",
+    ];
+
+    const lines = [headers.map(csvCell).join(",")];
+    for (const t of rows) {
+      const assignees = (t.assignees ?? [])
+        .map((a) => `${a.first_name} ${a.last_name}`.trim() || a.username)
+        .join("; ");
+      const labels = (t.labels ?? []).map((l) => l.name).join("; ");
+      const priority = PRIORITY_LABELS[t.priority]?.label ?? String(t.priority);
+      const creator = `${t.creator_first_name} ${t.creator_last_name}`.trim() || t.creator_username;
+      const parent = t.parent_task_id ? `${t.parent_task_id} ${t.parent_task_title ?? ""}`.trim() : "";
+      lines.push(
+        [
+          t.task_id,
+          t.title,
+          t.state_name,
+          priority,
+          assignees,
+          labels,
+          t.start_date ?? "",
+          t.due_date ?? "",
+          creator,
+          t.created_at,
+          t.updated_at,
+          t.comment_count,
+          parent,
+        ]
+          .map(csvCell)
+          .join(",")
+      );
+    }
+
+    // Prepend a BOM so Excel opens UTF-8 correctly.
+    const blob = new Blob(["﻿" + lines.join("\r\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${projectKey.value}-tasks.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${rows.length} task${rows.length === 1 ? "" : "s"}`);
+  } finally {
+    exporting.value = false;
+  }
 }
 
 const currentPageFromUrl = computed(() => {
@@ -516,25 +616,36 @@ onMounted(async () => {
 
               <template v-else>
                 <div
-                  v-if="canWrite"
                   class="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2"
                 >
                   <div class="flex items-center gap-3">
-                    <Button variant="outline" size="sm" @click="toggleSelectAll">
+                    <Button v-if="canWrite" variant="outline" size="sm" @click="toggleSelectAll">
                       {{ allSelected ? "Deselect all" : "Select all" }}
                     </Button>
                     <span v-if="selectedTasks.size > 0" class="text-sm font-medium">
                       {{ selectedTasks.size }} selected
                     </span>
                   </div>
-                  <div v-if="selectedTasks.size > 0" class="flex items-center gap-2">
-                    <Button size="sm" @click="showBulkMove = true">
-                      <FolderInput class="mr-2 size-4" />
-                      Move
-                    </Button>
-                    <Button variant="ghost" size="sm" @click="clearSelection">
-                      <X class="mr-1 size-4" />
-                      Clear
+                  <div class="flex items-center gap-2">
+                    <template v-if="selectedTasks.size > 0">
+                      <Button size="sm" @click="showBulkMove = true">
+                        <FolderInput class="mr-2 size-4" />
+                        Move
+                      </Button>
+                      <Button variant="ghost" size="sm" @click="clearSelection">
+                        <X class="mr-1 size-4" />
+                        Clear
+                      </Button>
+                    </template>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      :disabled="exporting"
+                      @click="exportTasks"
+                    >
+                      <Loader2 v-if="exporting" class="mr-2 size-4 animate-spin" />
+                      <Download v-else class="mr-2 size-4" />
+                      Export CSV
                     </Button>
                   </div>
                 </div>

@@ -102,6 +102,39 @@ export function useTasks() {
     }
   }
 
+  // Fetch every task matching the given filter/sort by walking all pages.
+  // Does NOT touch the shared reactive state, so it is safe to call while a
+  // paginated view is on screen (e.g. for an export).
+  async function fetchAllTasks(
+    projectKey: string,
+    opts: ListTasksOptions = {}
+  ): Promise<{ success: boolean; data?: Task[]; error?: string }> {
+    const perPage = 100;
+    const all: Task[] = [];
+    try {
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const queryString = buildQueryString(page, perPage, opts);
+        const response = await fetch(
+          `/api/v1/projects/${projectKey}/tasks?${queryString}`,
+          { headers: getAuthHeader() }
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          return { success: false, error: error.message || "Failed to fetch tasks" };
+        }
+        const data: PaginatedTasksResponse = await response.json();
+        all.push(...(data.tasks || []));
+        totalPages = data.total_pages;
+        page++;
+      } while (page <= totalPages);
+      return { success: true, data: all };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function createTask(
     projectKey: string,
     data: CreateTaskRequest
@@ -473,6 +506,7 @@ export function useTasks() {
 
     // Tasks CRUD
     listTasks,
+    fetchAllTasks,
     createTask,
     getTask,
     updateTask,
