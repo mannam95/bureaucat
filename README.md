@@ -140,6 +140,16 @@ To regenerate docs:
 swag init -g cmd/bureaucat/main.go -o docs
 ```
 
+## Known Limitations
+
+**Reusing a soft-deleted project or workspace key.** Projects and workspaces are soft-deleted (the row is kept with a `deleted_at` timestamp), and the uniqueness of `project_key` / `workspace_key` still counts the deleted row. So after deleting a project whose key is `WEB`, creating a new project with the key `WEB` is rejected as a duplicate. This only affects admins and is rare. To free the key, hard-delete the leftover row directly in the database (this cascades to its tasks, cycles, pages, etc.):
+
+```sql
+DELETE FROM projects WHERE project_key = 'WEB' AND deleted_at IS NOT NULL;
+```
+
+Use the same shape for workspaces (`workspace_key`). If you would rather keep the old project restorable, rename its key instead of deleting it: `UPDATE projects SET project_key = 'WEB_old' WHERE project_key = 'WEB' AND deleted_at IS NOT NULL;`
+
 ## Contributing
 
 This repo is very open to contributions, especially prompt requests! If you
