@@ -180,7 +180,7 @@ LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
     FROM module_tasks mt
-    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
     WHERE mt.module_id = m.id
 ) stats ON TRUE
@@ -251,7 +251,7 @@ SELECT
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
     COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled
 FROM module_tasks mt
-JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id
 WHERE mt.module_id = $1
 `
@@ -282,7 +282,7 @@ SELECT ps.id AS state_id, ps.name AS state_name, ps.color AS state_color,
        ps.state_type, ps.position,
        COUNT(t.id)::int AS task_count
 FROM module_tasks mt
-JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id
 WHERE mt.module_id = $1
 GROUP BY ps.id, ps.name, ps.color, ps.state_type, ps.position
@@ -373,7 +373,7 @@ LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
     FROM module_tasks mt
-    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
     WHERE mt.module_id = m.id
 ) stats ON TRUE
@@ -573,7 +573,7 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        p.project_key,
        ps.name AS state_name, ps.state_type, ps.color AS state_color
 FROM module_tasks mt
-JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 WHERE mt.module_id = $1
@@ -662,7 +662,7 @@ LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
     FROM module_tasks mt
-    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL
+    JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
     WHERE mt.module_id = m.id
 ) stats ON TRUE
@@ -776,7 +776,7 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
-WHERE t.project_id = $1 AND t.deleted_at IS NULL
+WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
   AND NOT EXISTS (
       SELECT 1 FROM module_tasks mt
       WHERE mt.task_id = t.id AND mt.module_id = $3::uuid
