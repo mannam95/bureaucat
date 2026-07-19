@@ -199,7 +199,8 @@ def main():
                           "assignees": random.sample(user_ids, k=random.choice([0, 1])),
                           "parent_task_number": t["task_number"]})
                 total["subtasks"] += 1
-                cycle_task_ids[cyc].append(sub["id"])
+                # Sub-tasks inherit their parent's cycle/epic, so they are never
+                # placed in a cycle on their own.
 
         for cid, ids in cycle_task_ids.items():
             if ids:
