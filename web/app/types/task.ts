@@ -1,3 +1,8 @@
+export interface TaskLinkRef {
+  id: string;
+  title: string;
+}
+
 export interface Task {
   id: string;
   project_key: string;
@@ -24,6 +29,8 @@ export interface Task {
   parent_task_number?: number;
   parent_task_title?: string;
   subtask_count?: number;
+  cycle?: TaskLinkRef;
+  module?: TaskLinkRef;
   created_at: string;
   updated_at: string;
 }
