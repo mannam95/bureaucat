@@ -212,9 +212,16 @@ func (h *CommentHandler) CreateComment(c *echo.Context) error {
 		},
 	})
 
-	// Notify participants: anyone @mentioned in the comment, plus the task's
-	// assignees. Each person is notified at most once (mention wins), and never
-	// the commenter themselves.
+	// In-app bell: @mentioned users may not be participants of the task, so they
+	// aren't reached by the comment's activity fan-out above. Notify them
+	// directly (NotifyUser skips the commenter and is a no-op if unconfigured).
+	for _, mentionedID := range notifier.ParseMentions(req.Content) {
+		h.activityService.NotifyUser(ctx, mentionedID, task.ID, "mentioned", userID, &comment.ID)
+	}
+
+	// External channels (email/Mattermost): anyone @mentioned in the comment,
+	// plus the task's assignees. Each person is notified at most once (mention
+	// wins), and never the commenter themselves.
 	if h.notificationService != nil {
 		actorUser, _ := h.store.GetUserByID(ctx, userID)
 		actorName := actorUser.FirstName + " " + actorUser.LastName

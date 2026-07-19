@@ -11,6 +11,7 @@ import {
   MessageSquarePlus,
   MessageSquareDiff,
   MessageSquareX,
+  AtSign,
   Circle,
 } from "lucide-vue-next";
 import type { ActivityLogEntry, ActivityType } from "~/types";
@@ -33,6 +34,7 @@ const iconMap: Record<ActivityType, typeof Plus> = {
   comment_created: MessageSquarePlus,
   comment_updated: MessageSquareDiff,
   comment_deleted: MessageSquareX,
+  mentioned: AtSign,
 };
 
 const Icon = computed(() => iconMap[props.activity.activity_type] || Circle);

@@ -42,6 +42,9 @@ const (
 // notification to the highlighted comment.
 type Notifier interface {
 	EnqueueForActivity(ctx context.Context, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentID *uuid.UUID)
+	// EnqueueForUser notifies a single explicit recipient, bypassing the task's
+	// participant list (for @mentions).
+	EnqueueForUser(ctx context.Context, recipientID, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentID *uuid.UUID)
 }
 
 // Service handles tamper-proof activity logging
@@ -54,6 +57,17 @@ type Service struct {
 // no notifications are generated.
 func NewService(queryer store.Querier, notifier Notifier) *Service {
 	return &Service{store: queryer, notifier: notifier}
+}
+
+// NotifyUser enqueues an in-app notification for a single explicit recipient,
+// bypassing the task's participant list. Used for @mentions, where the mentioned
+// user may not be a participant. Best-effort and off the request path; a nil
+// notifier is a no-op.
+func (s *Service) NotifyUser(ctx context.Context, recipientID, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentID *uuid.UUID) {
+	if s.notifier == nil {
+		return
+	}
+	go s.notifier.EnqueueForUser(context.Background(), recipientID, taskID, activityType, actorID, commentID)
 }
 
 // LogActivityParams contains parameters for logging an activity

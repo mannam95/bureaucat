@@ -1,0 +1,3 @@
+-- PostgreSQL cannot drop a single enum value without recreating the type and
+-- rewriting every dependent column, so this down migration is intentionally a
+-- no-op. The unused 'mentioned' value is harmless if left in place.

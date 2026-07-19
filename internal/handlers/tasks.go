@@ -631,6 +631,14 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		}
 	}
 
+	// In-app bell: notify @mentioned users in the description directly, since a
+	// mentioned user may not be a participant of the new task.
+	if req.Description != nil {
+		for _, mentionedID := range notifier.ParseMentions(*req.Description) {
+			h.activityService.NotifyUser(ctx, mentionedID, task.ID, "mentioned", userID, nil)
+		}
+	}
+
 	// Get full task with state info
 	fullTask, err := h.store.GetTaskByID(ctx, task.ID)
 	if err != nil {
@@ -980,6 +988,17 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 					BaseURL:     baseURL,
 				})
 			}
+		}
+	}
+
+	// In-app bell: notify users newly @mentioned in the description.
+	if req.Description != nil {
+		oldDescStr := ""
+		if oldDesc != nil {
+			oldDescStr = *oldDesc
+		}
+		for _, mentionedID := range notifier.DiffMentions(oldDescStr, *req.Description) {
+			h.activityService.NotifyUser(ctx, mentionedID, task.ID, "mentioned", userID, nil)
 		}
 	}
 

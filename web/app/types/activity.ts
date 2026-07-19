@@ -24,7 +24,8 @@ export type ActivityType =
   | "state_changed"
   | "comment_created"
   | "comment_updated"
-  | "comment_deleted";
+  | "comment_deleted"
+  | "mentioned";
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   task_created: "created the task",
@@ -38,6 +39,7 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   comment_created: "added a comment",
   comment_updated: "edited a comment",
   comment_deleted: "deleted a comment",
+  mentioned: "mentioned you",
 };
 
 export interface VerifyActivityResponse {

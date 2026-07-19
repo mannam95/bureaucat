@@ -13,6 +13,7 @@ import {
   MessageSquarePlus,
   MessageSquareDiff,
   MessageSquareX,
+  AtSign,
   Circle,
   CheckCheck,
 } from "lucide-vue-next";
@@ -44,6 +45,7 @@ const iconMap: Record<ActivityType, typeof Plus> = {
   comment_created: MessageSquarePlus,
   comment_updated: MessageSquareDiff,
   comment_deleted: MessageSquareX,
+  mentioned: AtSign,
 };
 
 function formatRelativeDate(dateStr: string): string {

@@ -41,45 +41,58 @@ func (s *Service) EnqueueForActivity(ctx context.Context, taskID uuid.UUID, acti
 		return
 	}
 
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.window), Valid: true}
+	for _, recipientID := range participants {
+		s.enqueue(ctx, recipientID, taskID, activityType, actorID, commentID)
+	}
+}
 
+// EnqueueForUser creates (or coalesces into) a notification for a single explicit
+// recipient, bypassing the participant list. Used for @mentions, where the
+// mentioned user may not be a participant of the task.
+func (s *Service) EnqueueForUser(ctx context.Context, recipientID, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentID *uuid.UUID) {
+	s.enqueue(ctx, recipientID, taskID, activityType, actorID, commentID)
+}
+
+// enqueue creates or coalesces one recipient's notification, using the same
+// write-time coalescing window as the activity fan-out. The actor is never
+// notified of their own action.
+func (s *Service) enqueue(ctx context.Context, recipientID, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentID *uuid.UUID) {
+	if recipientID == actorID {
+		return
+	}
+
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.window), Valid: true}
 	commentRef := pgtype.UUID{Valid: false}
 	if commentID != nil {
 		commentRef = pgtype.UUID{Bytes: *commentID, Valid: true}
 	}
 
-	for _, recipientID := range participants {
-		if recipientID == actorID {
-			continue
-		}
-
-		open, err := s.store.GetOpenNotification(ctx, store.GetOpenNotificationParams{
-			RecipientID: recipientID,
-			TaskID:      taskID,
-			Cutoff:      cutoff,
-		})
-		if err == nil {
-			// An open notification exists within the window: merge into it.
-			if err := s.store.CoalesceNotification(ctx, store.CoalesceNotificationParams{
-				ID:           open.ID,
-				ActivityType: activityType,
-				ActorID:      actorID,
-				CommentID:    commentRef,
-			}); err != nil {
-				log.Printf("notifications: failed to coalesce notification %s: %v", open.ID, err)
-			}
-			continue
-		}
-
-		// No open notification (or lookup miss): create a fresh one.
-		if _, err := s.store.CreateNotification(ctx, store.CreateNotificationParams{
-			RecipientID:  recipientID,
-			TaskID:       taskID,
+	open, err := s.store.GetOpenNotification(ctx, store.GetOpenNotificationParams{
+		RecipientID: recipientID,
+		TaskID:      taskID,
+		Cutoff:      cutoff,
+	})
+	if err == nil {
+		// An open notification exists within the window: merge into it.
+		if err := s.store.CoalesceNotification(ctx, store.CoalesceNotificationParams{
+			ID:           open.ID,
 			ActivityType: activityType,
 			ActorID:      actorID,
 			CommentID:    commentRef,
 		}); err != nil {
-			log.Printf("notifications: failed to create notification for user %s on task %s: %v", recipientID, taskID, err)
+			log.Printf("notifications: failed to coalesce notification %s: %v", open.ID, err)
 		}
+		return
+	}
+
+	// No open notification (or lookup miss): create a fresh one.
+	if _, err := s.store.CreateNotification(ctx, store.CreateNotificationParams{
+		RecipientID:  recipientID,
+		TaskID:       taskID,
+		ActivityType: activityType,
+		ActorID:      actorID,
+		CommentID:    commentRef,
+	}); err != nil {
+		log.Printf("notifications: failed to create notification for user %s on task %s: %v", recipientID, taskID, err)
 	}
 }
