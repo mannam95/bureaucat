@@ -287,6 +287,7 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 			Assignees:        assigneesByTask[t.ID],
 			Labels:           labelsByTask[t.ID],
 			CommentCount:     int(t.CommentCount),
+			SubtaskCount:     int(t.SubtaskCount),
 			CreatedAt:        t.CreatedAt.Time,
 			UpdatedAt:        t.UpdatedAt.Time,
 		}

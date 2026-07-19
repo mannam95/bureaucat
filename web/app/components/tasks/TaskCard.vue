@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CheckCircle2, XCircle, Clock, MessageSquare, Building2 } from "lucide-vue-next";
+import { Circle, CircleDot, CheckCircle2, XCircle, Clock, MessageSquare, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
 import type { Task, ProjectState } from "~/types";
 import { PRIORITY_LABELS } from "~/types";
 
@@ -17,6 +17,13 @@ const props = withDefaults(
     // column. Redundant inside a single project, so off by default.
     showWorkspace?: boolean;
     workspaceName?: string;
+    // When expandable and the task has sub-tasks, a leading chevron toggles the
+    // parent's sub-tasks inline (expansion is managed by the parent TaskList).
+    expandable?: boolean;
+    expanded?: boolean;
+    // Renders this row as a nested sub-task: light background, indented ID with a
+    // corner marker, and no expand chevron / comment badge.
+    indented?: boolean;
   }>(),
   {
     states: () => [],
@@ -25,12 +32,16 @@ const props = withDefaults(
     selected: false,
     showWorkspace: false,
     workspaceName: "",
+    expandable: false,
+    expanded: false,
+    indented: false,
   }
 );
 
 const emit = defineEmits<{
   updated: [];
   toggleSelect: [];
+  toggleExpand: [];
 }>();
 
 // Fall back to the task's own project_key (e.g. on the dashboard, where tasks
@@ -107,16 +118,17 @@ const involvedPeople = computed(() => {
   <NuxtLink :to="`/projects/${resolvedKey}/tasks/${task.task_number}`" class="block">
     <div
       class="task-row group grid items-center bg-background/50 px-3 py-2.5 transition-colors hover:bg-muted/50"
-      :class="{ selectable, 'has-workspace': showWorkspace, 'bg-accent/40': selectable && selected }"
+      :class="{ selectable, 'has-workspace': showWorkspace, 'bg-accent/40': selectable && selected, 'bg-muted/40 hover:bg-muted/60': indented }"
     >
-      <!-- Col 0: Selection checkbox -->
+      <!-- Col 0: Selection checkbox (column reserved but empty for nested sub-tasks) -->
       <div v-if="selectable" class="justify-self-center" @click.stop.prevent>
-        <Checkbox :model-value="selected" @update:model-value="emit('toggleSelect')" />
+        <Checkbox v-if="!indented" :model-value="selected" @update:model-value="emit('toggleSelect')" />
       </div>
 
-      <!-- Col: Workspace (multi-project lists only) -->
+      <!-- Col: Workspace (multi-project lists only; hidden for nested sub-tasks) -->
       <div v-if="showWorkspace" class="min-w-0">
         <span
+          v-if="!indented"
           class="inline-flex max-w-full items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5"
           :title="workspaceName"
         >
@@ -125,8 +137,23 @@ const involvedPeople = computed(() => {
         </span>
       </div>
 
-      <!-- Col 1: Task ID -->
-      <span class="font-mono text-sm text-muted-foreground truncate">{{ task.task_id }}</span>
+      <!-- Col 1: Task ID (chevron for parents with sub-tasks; corner marker for sub-tasks) -->
+      <span
+        class="flex min-w-0 items-center gap-1 font-mono text-sm text-muted-foreground"
+        :class="{ 'pl-5': indented }"
+      >
+        <CornerDownRight v-if="indented" class="size-3.5 shrink-0 text-muted-foreground/50" />
+        <button
+          v-else-if="expandable && (task.subtask_count ?? 0) > 0"
+          type="button"
+          class="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          :aria-label="expanded ? 'Collapse sub-tasks' : 'Expand sub-tasks'"
+          @click.stop.prevent="emit('toggleExpand')"
+        >
+          <ChevronRight class="size-3.5 transition-transform" :class="{ 'rotate-90': expanded }" />
+        </button>
+        <span class="truncate">{{ task.task_id }}</span>
+      </span>
 
       <!-- Col 2: Title -->
       <span class="truncate text-sm font-medium min-w-0">{{ task.title }}</span>
@@ -201,9 +228,10 @@ const involvedPeople = computed(() => {
         </div>
       </div>
 
-      <!-- Col 6: Comment count -->
+      <!-- Col 6: Comment count (hidden for nested sub-task rows) -->
       <div class="flex items-center justify-end">
         <div
+          v-if="!indented"
           class="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5"
           :title="`${task.comment_count} comment${task.comment_count !== 1 ? 's' : ''}`"
         >
