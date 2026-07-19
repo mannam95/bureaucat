@@ -6,9 +6,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// mentionPattern matches [@Display Name](/profile/<uuid>) markdown links
-// produced by the MentionTextarea component.
-var mentionPattern = regexp.MustCompile(`\[@[^\]]+\]\(/profile/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)`)
+// mentionPattern matches a mention's profile link in either form the editors
+// produce: a markdown link "[@Name](/profile/<uuid>)" or an HTML anchor
+// `<a ... href="/profile/<uuid>">`. Only the uuid is captured (group 1).
+var mentionPattern = regexp.MustCompile(`(?:\]\(|href=["'])/profile/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})`)
 
 // ParseMentions extracts unique user IDs from markdown mention links in the given text.
 func ParseMentions(text string) []uuid.UUID {
