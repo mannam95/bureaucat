@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"strconv"
 
@@ -138,8 +139,23 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		// Initialize activity service
 		srv.activityService = activity.NewService(srv.store, srv.notificationsService)
 
-		// Initialize notification service (loads providers dynamically from settings)
-		srv.notificationService = notifier.NewService(srv.store)
+		// Initialize notification service (loads providers dynamically from
+		// settings). An env-configured SMTP email provider is added as an
+		// always-on provider when the core SMTP variables are set; otherwise
+		// email notifications are simply a no-op.
+		var staticNotifiers []notifier.Notifier
+		smtpCfg := notifier.SMTPConfig{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     os.Getenv("SMTP_PORT"),
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("SMTP_FROM_ADDRESS"),
+		}
+		if smtpCfg.Enabled() {
+			staticNotifiers = append(staticNotifiers, notifier.NewEmailNotifier(smtpCfg))
+			log.Printf("notifier: email (SMTP) enabled via %s:%s", smtpCfg.Host, smtpCfg.Port)
+		}
+		srv.notificationService = notifier.NewService(srv.store, staticNotifiers...)
 
 		// Initialize workspace, project and task handlers
 		srv.workspaceHandler = handlers.NewWorkspaceHandler(srv.store)

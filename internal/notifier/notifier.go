@@ -13,6 +13,7 @@ type EventType string
 const (
 	EventTaskAssigned EventType = "task_assigned"
 	EventMentioned    EventType = "mentioned"
+	EventCommented    EventType = "commented"
 )
 
 // Notification represents a single notification to deliver.

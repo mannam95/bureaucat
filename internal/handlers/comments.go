@@ -212,30 +212,41 @@ func (h *CommentHandler) CreateComment(c *echo.Context) error {
 		},
 	})
 
-	// Send mention notifications
+	// Notify participants: anyone @mentioned in the comment, plus the task's
+	// assignees. Each person is notified at most once (mention wins), and never
+	// the commenter themselves.
 	if h.notificationService != nil {
-		mentionedIDs := notifier.ParseMentions(req.Content)
-		if len(mentionedIDs) > 0 {
-			actorUser, _ := h.store.GetUserByID(ctx, userID)
-			actorName := actorUser.FirstName + " " + actorUser.LastName
-			if actorName == " " {
-				actorName = actorUser.Username
+		actorUser, _ := h.store.GetUserByID(ctx, userID)
+		actorName := actorUser.FirstName + " " + actorUser.LastName
+		if actorName == " " {
+			actorName = actorUser.Username
+		}
+		projectKey := c.Request().Header.Get(auth.HeaderProjectKey)
+		baseURL := requestBaseURL(c)
+		notified := map[uuid.UUID]bool{userID: true}
+
+		notify := func(event notifier.EventType, recipient uuid.UUID) {
+			if notified[recipient] {
+				return
 			}
-			projectKey := c.Request().Header.Get(auth.HeaderProjectKey)
-			baseURL := requestBaseURL(c)
-			for _, mentionedID := range mentionedIDs {
-				if mentionedID == userID {
-					continue
-				}
-				h.notificationService.Notify(ctx, notifier.Notification{
-					Event:       notifier.EventMentioned,
-					RecipientID: mentionedID,
-					ActorName:   actorName,
-					ProjectKey:  projectKey,
-					TaskNumber:  taskNum,
-					TaskTitle:   task.Title,
-					BaseURL:     baseURL,
-				})
+			notified[recipient] = true
+			h.notificationService.Notify(ctx, notifier.Notification{
+				Event:       event,
+				RecipientID: recipient,
+				ActorName:   actorName,
+				ProjectKey:  projectKey,
+				TaskNumber:  taskNum,
+				TaskTitle:   task.Title,
+				BaseURL:     baseURL,
+			})
+		}
+
+		for _, mentionedID := range notifier.ParseMentions(req.Content) {
+			notify(notifier.EventMentioned, mentionedID)
+		}
+		if assignees, err := h.store.ListTaskAssignees(ctx, task.ID); err == nil {
+			for _, a := range assignees {
+				notify(notifier.EventCommented, a.UserID)
 			}
 		}
 	}

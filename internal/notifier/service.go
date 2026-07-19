@@ -18,17 +18,23 @@ import (
 type Service struct {
 	store store.Querier
 
-	mu           sync.RWMutex
-	cachedAt     time.Time
-	cachedProvs  []Notifier
-	cacheTTL     time.Duration
+	// staticProviders are always active (e.g. an env-configured email provider),
+	// alongside the providers loaded dynamically from settings.
+	staticProviders []Notifier
+
+	mu          sync.RWMutex
+	cachedAt    time.Time
+	cachedProvs []Notifier
+	cacheTTL    time.Duration
 }
 
-// NewService creates a notification service that dynamically loads providers from settings.
-func NewService(s store.Querier) *Service {
+// NewService creates a notification service that dynamically loads providers from
+// settings. Any static providers passed here are always included as well.
+func NewService(s store.Querier, static ...Notifier) *Service {
 	return &Service{
-		store:    s,
-		cacheTTL: 30 * time.Second,
+		store:           s,
+		cacheTTL:        30 * time.Second,
+		staticProviders: static,
 	}
 }
 
@@ -96,7 +102,8 @@ func (s *Service) getProviders() []Notifier {
 		return s.cachedProvs
 	}
 
-	var providers []Notifier
+	// Start with the always-on static providers (e.g. env-configured email).
+	providers := append([]Notifier{}, s.staticProviders...)
 
 	// Load Mattermost
 	setting, err := s.store.GetSetting(context.Background(), "mattermost")
