@@ -102,6 +102,7 @@ func (s *Server) registerRoutes() {
 			protected.GET("/me/notifications/unread_count", s.notificationsHandler.GetUnreadCount)
 			protected.POST("/me/notifications/:id/read", s.notificationsHandler.MarkRead)
 			protected.POST("/me/notifications/read_all", s.notificationsHandler.MarkAllRead)
+			protected.DELETE("/me/notifications", s.notificationsHandler.ClearAll)
 		}
 
 		// Local mirror of outbound feedback. Authenticated — the sidebar

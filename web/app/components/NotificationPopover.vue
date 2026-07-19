@@ -20,7 +20,7 @@ import type { ActivityType, NotificationEntry } from "~/types";
 import { ACTIVITY_TYPE_LABELS } from "~/types";
 
 const { user } = useAuth();
-const { unreadCount, listNotifications, refreshUnreadCount, markRead, markAllRead } =
+const { unreadCount, listNotifications, refreshUnreadCount, markRead, markAllRead, clearAll } =
   useNotifications();
 
 const open = ref(false);
@@ -123,6 +123,14 @@ async function onMarkAllRead() {
   activities.value = activities.value.map((a) => ({ ...a, is_read: true }));
 }
 
+async function onClearAll() {
+  const ok = await clearAll();
+  if (ok) {
+    activities.value = [];
+    hasMore.value = false;
+  }
+}
+
 const hasUnread = computed(() => activities.value.some((a) => !a.is_read));
 
 watch(open, (isOpen) => {
@@ -165,15 +173,26 @@ onUnmounted(() => {
     <PopoverContent align="end" class="w-80 p-0">
       <div class="flex items-center justify-between border-b px-4 py-3">
         <h3 class="text-sm font-semibold">Notifications</h3>
-        <button
-          v-if="hasUnread"
-          type="button"
-          class="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          @click="onMarkAllRead"
-        >
-          <CheckCheck class="size-3.5" />
-          Mark all read
-        </button>
+        <div class="flex items-center gap-3">
+          <button
+            v-if="hasUnread"
+            type="button"
+            class="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            @click="onMarkAllRead"
+          >
+            <CheckCheck class="size-3.5" />
+            Mark all read
+          </button>
+          <button
+            v-if="activities.length > 0"
+            type="button"
+            class="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
+            @click="onClearAll"
+          >
+            <Trash2 class="size-3.5" />
+            Clear all
+          </button>
+        </div>
       </div>
 
       <!-- Loading -->

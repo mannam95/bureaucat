@@ -73,11 +73,28 @@ export function useNotifications() {
     }
   }
 
+  async function clearAll(): Promise<boolean> {
+    try {
+      const response = await fetch("/api/v1/me/notifications", {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      });
+      if (response.ok) {
+        unreadCount.value = 0;
+        return true;
+      }
+    } catch {
+      // silently fail
+    }
+    return false;
+  }
+
   return {
     unreadCount,
     listNotifications,
     refreshUnreadCount,
     markRead,
     markAllRead,
+    clearAll,
   };
 }

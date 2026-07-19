@@ -176,3 +176,17 @@ func (h *NotificationHandler) MarkAllRead(c *echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+// ClearAll deletes all of the signed-in user's notifications.
+func (h *NotificationHandler) ClearAll(c *echo.Context) error {
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user")
+	}
+
+	if err := h.store.DeleteAllNotifications(c.Request().Context(), userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to clear notifications")
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}

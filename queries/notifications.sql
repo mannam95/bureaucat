@@ -70,3 +70,7 @@ UPDATE notifications
 SET read_at = NOW()
 WHERE recipient_id = sqlc.arg('recipient_id')
   AND read_at IS NULL;
+
+-- name: DeleteAllNotifications :exec
+DELETE FROM notifications
+WHERE recipient_id = sqlc.arg('recipient_id');

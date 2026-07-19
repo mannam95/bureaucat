@@ -122,6 +122,16 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	return i, err
 }
 
+const deleteAllNotifications = `-- name: DeleteAllNotifications :exec
+DELETE FROM notifications
+WHERE recipient_id = $1
+`
+
+func (q *Queries) DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAllNotifications, recipientID)
+	return err
+}
+
 const getOpenNotification = `-- name: GetOpenNotification :one
 
 SELECT id, recipient_id, task_id, activity_type, actor_id, event_count, read_at, created_at, updated_at

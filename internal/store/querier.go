@@ -96,6 +96,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// ==================== WORKSPACES ====================
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
+	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
 	DeleteAttachment(ctx context.Context, id uuid.UUID) error
 	DeleteAttachmentsByEntity(ctx context.Context, arg DeleteAttachmentsByEntityParams) error
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
