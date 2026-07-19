@@ -301,6 +301,26 @@ export function useCycles() {
     }
   }
 
+  // listAllCycles returns every cycle in the project (for pickers/filters),
+  // without touching the paginated `cycles` or the `siblings` state.
+  async function listAllCycles(
+    projectKey: string
+  ): Promise<{ success: boolean; data?: CycleSibling[]; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/cycles/all`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch cycles" };
+      }
+      const data: CycleSibling[] = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   function clearCurrent() {
     state.currentCycle = null;
     state.tasks = [];
@@ -333,6 +353,7 @@ export function useCycles() {
     listUnassignedTasks,
     listActiveCycles,
     listSiblings,
+    listAllCycles,
     clearCurrent,
   };
 }

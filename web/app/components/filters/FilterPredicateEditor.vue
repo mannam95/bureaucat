@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronLeft, Check } from "lucide-vue-next";
-import type { FilterField, FilterOp, Predicate, ProjectState, ProjectMember, ProjectLabel, FilterValue } from "~/types";
+import type { FilterField, FilterOp, Predicate, ProjectState, ProjectMember, ProjectLabel, CycleSibling, FilterValue } from "~/types";
 import { FILTER_CATALOG, findFieldDef, findOpDef } from "./filterCatalog";
 import FilterValuePicker from "./FilterValuePicker.vue";
 
@@ -11,6 +11,7 @@ const props = withDefaults(
     states: ProjectState[];
     labels: ProjectLabel[];
     members: ProjectMember[];
+    cycles: CycleSibling[];
     /** Lock the field so only op/value can change. */
     lockField?: boolean;
   }>(),
@@ -170,6 +171,7 @@ const canConfirm = computed(() => {
         :states="states"
         :labels="labels"
         :members="members"
+        :cycles="cycles"
         @update:value="(v) => (value = v)"
       />
       <div class="flex items-center justify-end gap-2 border-t px-3 py-2.5">

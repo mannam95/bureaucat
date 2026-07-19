@@ -14,6 +14,7 @@ import {
   Flame,
   Users,
   User,
+  Repeat,
   Calendar as CalendarIcon,
   MessageSquare,
   Clock,
@@ -30,7 +31,7 @@ export type ValueKind =
   | "number"
   | "none";
 
-export type EntityKind = "state" | "state_type" | "priority" | "member" | "label";
+export type EntityKind = "state" | "state_type" | "priority" | "member" | "label" | "cycle";
 
 export interface OpDef {
   op: FilterOp;
@@ -139,6 +140,18 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
       { op: "is_empty", label: "has no labels", valueKind: "none" },
       { op: "is_set", label: "has any label", valueKind: "none" },
+    ],
+  },
+  {
+    field: "cycle",
+    label: "Cycle",
+    icon: Repeat,
+    entityKind: "cycle",
+    ops: [
+      { op: "in", label: "is any of", valueKind: "uuid-array" },
+      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "has no cycle", valueKind: "none" },
+      { op: "is_set", label: "in a cycle", valueKind: "none" },
     ],
   },
   {

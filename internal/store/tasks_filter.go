@@ -195,6 +195,12 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"labels", "is_empty"}: labelsPresence(false),
 	{"labels", "is_set"}:   labelsPresence(true),
 
+	// ---- cycle (sprint; join via cycle_tasks, one cycle per task) ----
+	{"cycle", "in"}:        cycleExists(false),
+	{"cycle", "not_in"}:    cycleExists(true),
+	{"cycle", "is_empty"}:  cyclePresence(false),
+	{"cycle", "is_set"}:    cyclePresence(true),
+
 	// ---- dates ----
 	{"start_date", "before"}:  dateOp("t.start_date", "before"),
 	{"start_date", "after"}:   dateOp("t.start_date", "after"),
@@ -510,6 +516,39 @@ func labelsPresence(set bool) predicateHandler {
 			prefix = ""
 		}
 		return prefix + "EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)", nil
+	}
+}
+
+// -------- cycle handlers (join via cycle_tasks; a task belongs to one cycle) --------
+
+func cycleExists(negate bool) predicateHandler {
+	return func(a *argBuffer, _ uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		ids, err := decodeUUIDArray(v, uuid.Nil)
+		if err != nil {
+			return "", err
+		}
+		if len(ids) == 0 {
+			if negate {
+				return "TRUE", nil
+			}
+			return "FALSE", nil
+		}
+		p := a.push(ids)
+		prefix := ""
+		if negate {
+			prefix = "NOT "
+		}
+		return prefix + "EXISTS (SELECT 1 FROM cycle_tasks ct WHERE ct.task_id = t.id AND ct.cycle_id = ANY(" + p + "::uuid[]))", nil
+	}
+}
+
+func cyclePresence(set bool) predicateHandler {
+	return func(*argBuffer, uuid.UUID, time.Time, json.RawMessage) (string, error) {
+		prefix := "NOT "
+		if set {
+			prefix = ""
+		}
+		return prefix + "EXISTS (SELECT 1 FROM cycle_tasks ct WHERE ct.task_id = t.id)", nil
 	}
 }
 

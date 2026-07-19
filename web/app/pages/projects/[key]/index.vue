@@ -20,7 +20,7 @@ import {
   Lock,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { FilterTree, ProjectView, MoveTasksResponse } from "~/types";
+import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling } from "~/types";
 import { PRIORITY_LABELS } from "~/types";
 
 definePageMeta({
@@ -82,6 +82,9 @@ const {
   listViews,
   getView,
 } = useViews();
+
+const { listAllCycles } = useCycles();
+const projectCycles = ref<CycleSibling[]>([]);
 
 const {
   tree,
@@ -302,6 +305,9 @@ async function loadProject() {
     listLabels(projectKey.value),
     listTemplates(projectKey.value),
     listViews(projectKey.value),
+    listAllCycles(projectKey.value).then((r) => {
+      if (r.success && r.data) projectCycles.value = r.data;
+    }),
   ]);
 
   // If the URL referenced a saved view but carried no ?f=, hydrate the filters
@@ -565,6 +571,7 @@ onMounted(async () => {
                   :states="states"
                   :labels="labels"
                   :members="members"
+                  :cycles="projectCycles"
                   :show-group-by="activeTab === 'board'"
                   @update:tree="handleTreeUpdate"
                   @update:search-query="(v) => (searchQuery = v)"

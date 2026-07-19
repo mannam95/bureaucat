@@ -5,6 +5,7 @@ import type {
   ProjectState,
   ProjectMember,
   ProjectLabel,
+  CycleSibling,
   FilterValue,
 } from "~/types";
 import { findFieldDef, findOpDef, stateTypeLabel } from "./filterCatalog";
@@ -15,6 +16,7 @@ const props = defineProps<{
   states: ProjectState[];
   labels: ProjectLabel[];
   members: ProjectMember[];
+  cycles: CycleSibling[];
   currentUserId?: string;
 }>();
 
@@ -60,6 +62,10 @@ function formatSingle(field: string, item: string | number): string {
   if (field === "labels") {
     const l = props.labels.find((x) => x.id === item);
     return l?.name ?? String(item).slice(0, 6);
+  }
+  if (field === "cycle") {
+    const c = props.cycles.find((x) => x.id === item);
+    return c?.title ?? String(item).slice(0, 6);
   }
   if (field === "assignees" || field === "created_by") {
     const m = props.members.find((x) => x.user_id === item);
@@ -120,6 +126,7 @@ void handleValueUpdate;
         :states="states"
         :labels="labels"
         :members="members"
+        :cycles="cycles"
         lock-field
         @confirm="onConfirm"
         @cancel="onCancel"

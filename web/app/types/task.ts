@@ -153,6 +153,7 @@ export type FilterField =
   | "assignees"
   | "created_by"
   | "labels"
+  | "cycle"
   | "start_date"
   | "due_date"
   | "created_at"

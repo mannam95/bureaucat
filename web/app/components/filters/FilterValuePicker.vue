@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DateValue } from "reka-ui";
 import { CalendarDate } from "@internationalized/date";
-import type { FilterField, FilterOp, FilterValue, ProjectState, ProjectMember, ProjectLabel } from "~/types";
+import type { FilterField, FilterOp, FilterValue, ProjectState, ProjectMember, ProjectLabel, CycleSibling } from "~/types";
 import type { ValueKind } from "./filterCatalog";
 import {
   findOpDef,
@@ -18,6 +18,7 @@ const props = defineProps<{
   states: ProjectState[];
   labels: ProjectLabel[];
   members: ProjectMember[];
+  cycles: CycleSibling[];
 }>();
 
 const emit = defineEmits<{
@@ -238,6 +239,20 @@ function updateIntArray(next: string[]) {
           :style="{ backgroundColor: (item as ProjectLabel).color || '#3B82F6' }"
         />
         <span class="truncate">{{ (item as ProjectLabel).name }}</span>
+      </template>
+    </EntityMultiSelect>
+
+    <!-- cycle (uuid-array of cycles) -->
+    <EntityMultiSelect
+      v-else-if="valueKind === 'uuid-array' && field === 'cycle'"
+      :items="cycles"
+      :model-value="asStringArray"
+      placeholder="Find cycle…"
+      empty-message="No cycles"
+      @update:model-value="updateStringArray"
+    >
+      <template #option="{ item }">
+        <span class="truncate">{{ (item as CycleSibling).title }}</span>
       </template>
     </EntityMultiSelect>
 
