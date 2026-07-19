@@ -11,20 +11,41 @@ interface TaskRow {
   state_color: string;
 }
 
-const props = defineProps<{
-  tasks: T[];
-  projectKey: string;
-  isAdmin: boolean;
-  removeLabel?: string;
+const props = withDefaults(
+  defineProps<{
+    tasks: T[];
+    projectKey: string;
+    isAdmin: boolean;
+    removeLabel?: string;
+    // Optional multi-select mode: adds a leading checkbox column. Off by default,
+    // so callers that don't need it (e.g. the module page) are unaffected.
+    selectable?: boolean;
+    selected?: Set<string>;
+  }>(),
+  { selectable: false }
+);
+
+const emit = defineEmits<{
+  remove: [taskId: string];
+  toggleSelect: [taskId: string];
+  toggleSelectAll: [];
 }>();
 
-const emit = defineEmits<{ remove: [taskId: string] }>();
-
-const gridStyle = computed(() =>
-  props.isAdmin
-    ? "grid-template-columns: 140px minmax(0, 1fr) 90px 28px;"
-    : "grid-template-columns: 140px minmax(0, 1fr) 90px;"
+const allSelected = computed(
+  () => props.tasks.length > 0 && props.tasks.every((t) => props.selected?.has(t.id))
 );
+// reka-ui accepts the string "indeterminate" for the partial state.
+const selectAllModel = computed<boolean | "indeterminate">(() =>
+  allSelected.value ? true : (props.selected?.size ?? 0) > 0 ? "indeterminate" : false
+);
+
+const gridStyle = computed(() => {
+  const cols: string[] = [];
+  if (props.selectable) cols.push("28px");
+  cols.push("140px", "minmax(0, 1fr)", "90px");
+  if (props.isAdmin) cols.push("28px");
+  return `grid-template-columns: ${cols.join(" ")};`;
+});
 </script>
 
 <template>
@@ -33,6 +54,13 @@ const gridStyle = computed(() =>
       class="grid items-center gap-3 border-b bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
       :style="gridStyle"
     >
+      <span v-if="selectable" class="flex items-center">
+        <Checkbox
+          :model-value="selectAllModel"
+          aria-label="Select all tasks"
+          @update:model-value="emit('toggleSelectAll')"
+        />
+      </span>
       <span>State</span>
       <span>Title</span>
       <span>ID</span>
@@ -44,8 +72,17 @@ const gridStyle = computed(() =>
         v-for="task in tasks"
         :key="task.id"
         class="group grid items-center gap-3 border-b border-border/40 px-4 py-2.5 text-sm transition-colors last:border-0 hover:bg-muted/40"
+        :class="{ 'bg-amber-500/5': selectable && selected?.has(task.id) }"
         :style="gridStyle"
       >
+        <span v-if="selectable" class="flex items-center">
+          <Checkbox
+            :model-value="selected?.has(task.id) ?? false"
+            :aria-label="`Select ${task.title}`"
+            @update:model-value="emit('toggleSelect', task.id)"
+          />
+        </span>
+
         <span
           class="inline-flex w-fit max-w-full items-center truncate rounded px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider"
           :style="{

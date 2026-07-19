@@ -7,10 +7,11 @@ import {
   Repeat,
   Trash2,
   CalendarDays,
+  ArrowRight,
   X,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { CycleAssigneeSummary } from "~/types";
+import type { CycleAssigneeSummary, CycleSibling, CycleStateBucket } from "~/types";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -31,6 +32,7 @@ const {
   removeTaskFromCycle,
   listUnassignedTasks,
   addTasksToCycle,
+  listAllCycles,
   clearCurrent,
 } = useCycles();
 
@@ -51,6 +53,13 @@ const showEdit = ref(false);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
 const assigneeFilter = ref<string | null>(null);
+// Client-side filter on top of the (server-side) assignee filter: narrow the
+// already-loaded cycle tasks to a single state.
+const stateFilter = ref<string | null>(null);
+// Bulk selection of task ids, for moving tasks to the next cycle.
+const selectedIds = ref<Set<string>>(new Set());
+const siblings = ref<CycleSibling[]>([]);
+const moving = ref(false);
 
 useHead({
   title: computed(
@@ -78,17 +87,87 @@ const filteredAssigneeName = computed(() => {
   return a ? `${a.first_name} ${a.last_name}`.trim() || a.username : null;
 });
 
+// The tasks actually shown: the loaded list narrowed by the active state filter.
+const visibleTasks = computed(() =>
+  stateFilter.value
+    ? tasks.value.filter((t) => t.state_id === stateFilter.value)
+    : tasks.value
+);
+
+const filteredStateName = computed(() => {
+  if (!stateFilter.value || !metrics.value) return null;
+  const b = metrics.value.state_breakdown.find(
+    (s: CycleStateBucket) => s.state_id === stateFilter.value
+  );
+  return b?.state_name ?? null;
+});
+
+// "Next cycle" is the sibling that starts right after this one.
+const nextCycle = computed<CycleSibling | null>(() => {
+  const sorted = [...siblings.value].sort((a, b) =>
+    a.start_date.localeCompare(b.start_date)
+  );
+  const idx = sorted.findIndex((s) => s.id === cycleId.value);
+  if (idx < 0) return null;
+  return sorted[idx + 1] ?? null;
+});
+
+function setStateFilter(stateId: string | null) {
+  stateFilter.value = stateFilter.value === stateId ? null : stateId;
+  // Selection may point at rows that are now hidden, so reset it.
+  selectedIds.value = new Set();
+}
+
+function toggleSelect(taskId: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(taskId)) next.delete(taskId);
+  else next.add(taskId);
+  selectedIds.value = next;
+}
+
+function toggleSelectAll() {
+  const visibleIds = visibleTasks.value.map((t) => t.id);
+  const allChosen =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.value.has(id));
+  selectedIds.value = allChosen ? new Set() : new Set(visibleIds);
+}
+
+async function moveSelectedToNextCycle() {
+  const target = nextCycle.value;
+  if (!target || selectedIds.value.size === 0) return;
+  moving.value = true;
+  const ids = [...selectedIds.value];
+  // A task can belong to only one cycle (unique task_id), so detach from the
+  // current cycle first, then attach all to the next one.
+  await Promise.all(
+    ids.map((id) => removeTaskFromCycle(projectKey.value, cycleId.value, id))
+  );
+  const res = await addTasksToCycle(projectKey.value, target.id, ids);
+  moving.value = false;
+  selectedIds.value = new Set();
+  await reloadTasksAndMetrics();
+  if (res.success) {
+    toast.success(
+      `Moved ${ids.length} task${ids.length > 1 ? "s" : ""} to ${target.title}`
+    );
+  } else {
+    toast.error(res.error || "Failed to move tasks");
+  }
+}
+
 async function loadAll() {
   loading.value = true;
   error.value = null;
-  const [c, m, t] = await Promise.all([
+  const [c, m, t, s] = await Promise.all([
     getCycle(projectKey.value, cycleId.value),
     getCycleMetrics(projectKey.value, cycleId.value),
     listCycleTasks(projectKey.value, cycleId.value, assigneeFilter.value),
+    listAllCycles(projectKey.value),
   ]);
   if (!c.success) error.value = c.error || "Failed to load cycle";
   if (!m.success && !error.value) error.value = m.error || "Failed to load metrics";
   if (!t.success && !error.value) error.value = t.error || "Failed to load tasks";
+  if (s.success && s.data) siblings.value = s.data;
   loading.value = false;
 }
 
@@ -101,6 +180,8 @@ async function reloadTasksAndMetrics() {
 
 function setAssigneeFilter(userId: string | null) {
   assigneeFilter.value = userId;
+  // The visible rows change, so drop any selection that referenced the old set.
+  selectedIds.value = new Set();
   listCycleTasks(projectKey.value, cycleId.value, userId);
 }
 
@@ -119,6 +200,11 @@ async function handleDelete() {
 async function handleRemoveTask(taskId: string) {
   const result = await removeTaskFromCycle(projectKey.value, cycleId.value, taskId);
   if (result.success) {
+    if (selectedIds.value.has(taskId)) {
+      const next = new Set(selectedIds.value);
+      next.delete(taskId);
+      selectedIds.value = next;
+    }
     toast.success("Task removed from cycle");
     reloadTasksAndMetrics();
   } else {
@@ -139,6 +225,8 @@ onBeforeUnmount(() => {
 
 watch(cycleId, async () => {
   assigneeFilter.value = null;
+  stateFilter.value = null;
+  selectedIds.value = new Set();
   await loadAll();
 });
 </script>
@@ -251,41 +339,99 @@ watch(cycleId, async () => {
                 </Button>
               </div>
 
+              <!-- Active filters -->
               <div
-                v-if="assigneeFilter"
-                class="mb-3 inline-flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1 text-xs"
+                v-if="assigneeFilter || stateFilter"
+                class="mb-3 flex flex-wrap items-center gap-2 text-xs"
               >
-                Filtering by
-                <span class="font-medium">{{ filteredAssigneeName }}</span>
-                <button
-                  class="rounded p-0.5 hover:bg-muted"
-                  aria-label="Clear filter"
-                  @click="setAssigneeFilter(null)"
+                <div
+                  v-if="assigneeFilter"
+                  class="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1"
                 >
-                  <X class="size-3" />
-                </button>
+                  <span class="text-muted-foreground">Assignee:</span>
+                  <span class="font-medium">{{ filteredAssigneeName }}</span>
+                  <button
+                    class="rounded p-0.5 hover:bg-muted"
+                    aria-label="Clear assignee filter"
+                    @click="setAssigneeFilter(null)"
+                  >
+                    <X class="size-3" />
+                  </button>
+                </div>
+                <div
+                  v-if="stateFilter"
+                  class="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1"
+                >
+                  <span class="text-muted-foreground">State:</span>
+                  <span class="font-medium">{{ filteredStateName }}</span>
+                  <button
+                    class="rounded p-0.5 hover:bg-muted"
+                    aria-label="Clear state filter"
+                    @click="setStateFilter(null)"
+                  >
+                    <X class="size-3" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Bulk selection actions -->
+              <div
+                v-if="isAdmin && selectedIds.size > 0"
+                class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
+              >
+                <span class="font-medium">{{ selectedIds.size }} selected</span>
+                <div class="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" @click="selectedIds = new Set()">
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    :disabled="!nextCycle || moving"
+                    :title="nextCycle ? `Move to ${nextCycle.title}` : 'This is the last cycle'"
+                    @click="moveSelectedToNextCycle"
+                  >
+                    <Loader2 v-if="moving" class="mr-1.5 size-4 animate-spin" />
+                    <ArrowRight v-else class="mr-1.5 size-4" />
+                    <span class="max-w-[12rem] truncate">
+                      {{ nextCycle ? `Move to ${nextCycle.title}` : "No next cycle" }}
+                    </span>
+                  </Button>
+                </div>
               </div>
 
               <div
-                v-if="tasks.length === 0"
+                v-if="visibleTasks.length === 0"
                 class="flex flex-col items-center rounded-lg border border-dashed py-12 text-center"
               >
                 <Repeat class="size-6 text-muted-foreground" />
                 <p class="mt-3 text-sm text-muted-foreground">
-                  {{ assigneeFilter ? "No tasks for this assignee." : "No tasks in this cycle yet." }}
+                  {{
+                    assigneeFilter || stateFilter
+                      ? "No tasks match the current filter."
+                      : "No tasks in this cycle yet."
+                  }}
                 </p>
-                <Button v-if="isAdmin && !assigneeFilter" class="mt-4" size="sm" @click="showAddTask = true">
+                <Button
+                  v-if="isAdmin && !assigneeFilter && !stateFilter"
+                  class="mt-4"
+                  size="sm"
+                  @click="showAddTask = true"
+                >
                   <Plus class="mr-1.5 size-4" /> Add Task
                 </Button>
               </div>
 
               <CollectionTaskTable
                 v-else
-                :tasks="tasks"
+                :tasks="visibleTasks"
                 :project-key="projectKey"
                 :is-admin="isAdmin"
+                :selectable="isAdmin"
+                :selected="selectedIds"
                 remove-label="Remove from cycle:"
                 @remove="handleRemoveTask"
+                @toggle-select="toggleSelect"
+                @toggle-select-all="toggleSelectAll"
               />
             </section>
 
@@ -296,6 +442,9 @@ watch(cycleId, async () => {
               <StateBreakdownCard
                 v-if="metrics"
                 :buckets="metrics.state_breakdown"
+                interactive
+                :active-state-id="stateFilter"
+                @select="setStateFilter"
               />
 
               <!-- Assignees -->
