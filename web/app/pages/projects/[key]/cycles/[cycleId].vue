@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ChevronLeft,
+  ChevronsUpDown,
   Loader2,
   Plus,
   Pencil,
@@ -8,10 +9,12 @@ import {
   Trash2,
   CalendarDays,
   ArrowRight,
+  Search,
   X,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { CycleAssigneeSummary, CycleSibling, CycleStateBucket } from "~/types";
+import EntityMultiSelect from "~/components/shared/EntityMultiSelect.vue";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -52,10 +55,13 @@ const showAddTask = ref(false);
 const showEdit = ref(false);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
-const assigneeFilter = ref<string | null>(null);
-// Client-side filter on top of the (server-side) assignee filter: narrow the
-// already-loaded cycle tasks to a single state.
-const stateFilter = ref<string | null>(null);
+// All filtering is client-side over the already-loaded cycle tasks. State and
+// assignee are multi-select (sets of ids); search matches the task title.
+const stateFilter = ref<Set<string>>(new Set());
+const assigneeFilter = ref<Set<string>>(new Set());
+const searchQuery = ref("");
+const stateOpen = ref(false);
+const assigneeOpen = ref(false);
 // Bulk selection of task ids, for moving tasks to the next cycle.
 const selectedIds = ref<Set<string>>(new Set());
 const siblings = ref<CycleSibling[]>([]);
@@ -79,28 +85,55 @@ function formatDate(d: string): string {
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const filteredAssigneeName = computed(() => {
-  if (!assigneeFilter.value || !metrics.value) return null;
-  const a = metrics.value.assignees.find(
-    (a: CycleAssigneeSummary) => a.user_id === assigneeFilter.value
-  );
-  return a ? `${a.first_name} ${a.last_name}`.trim() || a.username : null;
-});
+// Filter options come from the whole-cycle metrics, so they stay stable while
+// the task list is narrowed. The sidebar cards show the same data with counts.
+const stateOptions = computed<CycleStateBucket[]>(() => metrics.value?.state_breakdown ?? []);
+const assigneeOptions = computed<CycleAssigneeSummary[]>(() => metrics.value?.assignees ?? []);
 
-// The tasks actually shown: the loaded list narrowed by the active state filter.
-const visibleTasks = computed(() =>
-  stateFilter.value
-    ? tasks.value.filter((t) => t.state_id === stateFilter.value)
-    : tasks.value
+const anyFilterActive = computed(
+  () =>
+    stateFilter.value.size > 0 ||
+    assigneeFilter.value.size > 0 ||
+    searchQuery.value.trim() !== ""
 );
 
-const filteredStateName = computed(() => {
-  if (!stateFilter.value || !metrics.value) return null;
-  const b = metrics.value.state_breakdown.find(
-    (s: CycleStateBucket) => s.state_id === stateFilter.value
-  );
-  return b?.state_name ?? null;
+// The tasks actually shown: the loaded list narrowed by the active filters.
+const visibleTasks = computed(() => {
+  let list = tasks.value;
+  if (stateFilter.value.size > 0) {
+    list = list.filter((t) => stateFilter.value.has(t.state_id));
+  }
+  if (assigneeFilter.value.size > 0) {
+    list = list.filter((t) =>
+      (t.assignees ?? []).some((a) => assigneeFilter.value.has(a.user_id))
+    );
+  }
+  const q = searchQuery.value.trim().toLowerCase();
+  if (q) {
+    list = list.filter((t) => t.title.toLowerCase().includes(q));
+  }
+  return list;
 });
+
+// Changing a filter can hide rows, so any bulk selection is reset alongside it.
+function setStateFilter(ids: string[]) {
+  stateFilter.value = new Set(ids);
+  selectedIds.value = new Set();
+}
+function setAssigneeFilter(ids: string[]) {
+  assigneeFilter.value = new Set(ids);
+  selectedIds.value = new Set();
+}
+function onSearch(v: string) {
+  searchQuery.value = v;
+  selectedIds.value = new Set();
+}
+function clearFilters() {
+  stateFilter.value = new Set();
+  assigneeFilter.value = new Set();
+  searchQuery.value = "";
+  selectedIds.value = new Set();
+}
 
 // "Next cycle" is the sibling that starts right after this one.
 const nextCycle = computed<CycleSibling | null>(() => {
@@ -111,12 +144,6 @@ const nextCycle = computed<CycleSibling | null>(() => {
   if (idx < 0) return null;
   return sorted[idx + 1] ?? null;
 });
-
-function setStateFilter(stateId: string | null) {
-  stateFilter.value = stateFilter.value === stateId ? null : stateId;
-  // Selection may point at rows that are now hidden, so reset it.
-  selectedIds.value = new Set();
-}
 
 function toggleSelect(taskId: string) {
   const next = new Set(selectedIds.value);
@@ -161,7 +188,7 @@ async function loadAll() {
   const [c, m, t, s] = await Promise.all([
     getCycle(projectKey.value, cycleId.value),
     getCycleMetrics(projectKey.value, cycleId.value),
-    listCycleTasks(projectKey.value, cycleId.value, assigneeFilter.value),
+    listCycleTasks(projectKey.value, cycleId.value, null),
     listAllCycles(projectKey.value),
   ]);
   if (!c.success) error.value = c.error || "Failed to load cycle";
@@ -173,16 +200,9 @@ async function loadAll() {
 
 async function reloadTasksAndMetrics() {
   await Promise.all([
-    listCycleTasks(projectKey.value, cycleId.value, assigneeFilter.value),
+    listCycleTasks(projectKey.value, cycleId.value, null),
     getCycleMetrics(projectKey.value, cycleId.value),
   ]);
-}
-
-function setAssigneeFilter(userId: string | null) {
-  assigneeFilter.value = userId;
-  // The visible rows change, so drop any selection that referenced the old set.
-  selectedIds.value = new Set();
-  listCycleTasks(projectKey.value, cycleId.value, userId);
 }
 
 async function handleDelete() {
@@ -224,9 +244,7 @@ onBeforeUnmount(() => {
 });
 
 watch(cycleId, async () => {
-  assigneeFilter.value = null;
-  stateFilter.value = null;
-  selectedIds.value = new Set();
+  clearFilters();
   await loadAll();
 });
 </script>
@@ -331,47 +349,110 @@ watch(cycleId, async () => {
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <!-- LEFT: Task list -->
             <section class="min-w-0">
-              <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-lg font-semibold">Tasks</h2>
-                <Button v-if="isAdmin" size="sm" @click="showAddTask = true">
+              <!-- Toolbar: title, filters, search, add -->
+              <div class="mb-4 flex flex-wrap items-center gap-2">
+                <h2 class="mr-1 text-lg font-semibold">Tasks</h2>
+
+                <!-- State (multi-select) -->
+                <Popover v-model:open="stateOpen">
+                  <PopoverTrigger as-child>
+                    <Button variant="outline" size="sm" class="h-9 gap-1.5">
+                      State
+                      <span
+                        v-if="stateFilter.size"
+                        class="rounded bg-primary/10 px-1 text-xs font-medium text-primary"
+                      >
+                        {{ stateFilter.size }}
+                      </span>
+                      <ChevronsUpDown class="size-3.5 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-56 p-0" align="start">
+                    <EntityMultiSelect
+                      :items="stateOptions"
+                      item-key="state_id"
+                      :model-value="[...stateFilter]"
+                      placeholder="Find state…"
+                      empty-message="No states"
+                      @update:model-value="setStateFilter"
+                    >
+                      <template #option="{ item }">
+                        <span
+                          class="size-2 shrink-0 rounded-full"
+                          :style="{ backgroundColor: (item as CycleStateBucket).state_color || '#6B7280' }"
+                        />
+                        <span class="truncate">{{ (item as CycleStateBucket).state_name }}</span>
+                      </template>
+                    </EntityMultiSelect>
+                  </PopoverContent>
+                </Popover>
+
+                <!-- Assignee (multi-select) -->
+                <Popover v-model:open="assigneeOpen">
+                  <PopoverTrigger as-child>
+                    <Button variant="outline" size="sm" class="h-9 gap-1.5">
+                      Assignee
+                      <span
+                        v-if="assigneeFilter.size"
+                        class="rounded bg-primary/10 px-1 text-xs font-medium text-primary"
+                      >
+                        {{ assigneeFilter.size }}
+                      </span>
+                      <ChevronsUpDown class="size-3.5 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-60 p-0" align="start">
+                    <EntityMultiSelect
+                      :items="assigneeOptions"
+                      item-key="user_id"
+                      :model-value="[...assigneeFilter]"
+                      placeholder="Find member…"
+                      empty-message="No assignees"
+                      @update:model-value="setAssigneeFilter"
+                    >
+                      <template #option="{ item }">
+                        <Avatar class="size-5">
+                          <AvatarImage
+                            v-if="(item as CycleAssigneeSummary).avatar_url"
+                            :src="(item as CycleAssigneeSummary).avatar_url"
+                          />
+                          <AvatarFallback class="text-[9px]" :seed="(item as CycleAssigneeSummary).user_id">
+                            {{ ((item as CycleAssigneeSummary).first_name[0] || "") + ((item as CycleAssigneeSummary).last_name[0] || "") }}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span class="truncate">
+                          {{ `${(item as CycleAssigneeSummary).first_name} ${(item as CycleAssigneeSummary).last_name}`.trim() || (item as CycleAssigneeSummary).username }}
+                        </span>
+                      </template>
+                    </EntityMultiSelect>
+                  </PopoverContent>
+                </Popover>
+
+                <!-- Search -->
+                <div class="relative min-w-[9rem] flex-1 sm:max-w-[16rem]">
+                  <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    :model-value="searchQuery"
+                    placeholder="Search tasks…"
+                    class="h-9 pl-8"
+                    @update:model-value="(v) => onSearch(String(v ?? ''))"
+                  />
+                </div>
+
+                <Button
+                  v-if="anyFilterActive"
+                  variant="ghost"
+                  size="sm"
+                  class="h-9 text-muted-foreground"
+                  @click="clearFilters"
+                >
+                  <X class="mr-1 size-3.5" /> Clear
+                </Button>
+
+                <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />
                   Add Task
                 </Button>
-              </div>
-
-              <!-- Active filters -->
-              <div
-                v-if="assigneeFilter || stateFilter"
-                class="mb-3 flex flex-wrap items-center gap-2 text-xs"
-              >
-                <div
-                  v-if="assigneeFilter"
-                  class="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1"
-                >
-                  <span class="text-muted-foreground">Assignee:</span>
-                  <span class="font-medium">{{ filteredAssigneeName }}</span>
-                  <button
-                    class="rounded p-0.5 hover:bg-muted"
-                    aria-label="Clear assignee filter"
-                    @click="setAssigneeFilter(null)"
-                  >
-                    <X class="size-3" />
-                  </button>
-                </div>
-                <div
-                  v-if="stateFilter"
-                  class="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1"
-                >
-                  <span class="text-muted-foreground">State:</span>
-                  <span class="font-medium">{{ filteredStateName }}</span>
-                  <button
-                    class="rounded p-0.5 hover:bg-muted"
-                    aria-label="Clear state filter"
-                    @click="setStateFilter(null)"
-                  >
-                    <X class="size-3" />
-                  </button>
-                </div>
               </div>
 
               <!-- Bulk selection actions -->
@@ -406,13 +487,13 @@ watch(cycleId, async () => {
                 <Repeat class="size-6 text-muted-foreground" />
                 <p class="mt-3 text-sm text-muted-foreground">
                   {{
-                    assigneeFilter || stateFilter
+                    anyFilterActive
                       ? "No tasks match the current filter."
                       : "No tasks in this cycle yet."
                   }}
                 </p>
                 <Button
-                  v-if="isAdmin && !assigneeFilter && !stateFilter"
+                  v-if="isAdmin && !anyFilterActive"
                   class="mt-4"
                   size="sm"
                   @click="showAddTask = true"
@@ -442,9 +523,6 @@ watch(cycleId, async () => {
               <StateBreakdownCard
                 v-if="metrics"
                 :buckets="metrics.state_breakdown"
-                interactive
-                :active-state-id="stateFilter"
-                @select="setStateFilter"
               />
 
               <!-- Assignees -->
@@ -456,38 +534,27 @@ watch(cycleId, async () => {
                   Assignees
                 </h3>
                 <ul class="space-y-1">
-                  <li v-for="a in metrics.assignees" :key="a.user_id">
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors"
-                      :class="
-                        assigneeFilter === a.user_id
-                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                          : 'hover:bg-muted'
-                      "
-                      @click="
-                        setAssigneeFilter(
-                          assigneeFilter === a.user_id ? null : a.user_id
-                        )
-                      "
-                    >
-                      <Avatar class="size-6">
-                        <AvatarImage
-                          v-if="a.avatar_url"
-                          :src="a.avatar_url"
-                          :alt="a.first_name"
-                        />
-                        <AvatarFallback class="text-[9px]" :seed="a.user_id">
-                          {{ (a.first_name[0] || "") + (a.last_name[0] || "") }}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span class="min-w-0 flex-1 truncate">
-                        {{ `${a.first_name} ${a.last_name}`.trim() || a.username }}
-                      </span>
-                      <span class="font-medium tabular-nums text-muted-foreground">
-                        {{ a.task_count }}
-                      </span>
-                    </button>
+                  <li
+                    v-for="a in metrics.assignees"
+                    :key="a.user_id"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                  >
+                    <Avatar class="size-6">
+                      <AvatarImage
+                        v-if="a.avatar_url"
+                        :src="a.avatar_url"
+                        :alt="a.first_name"
+                      />
+                      <AvatarFallback class="text-[9px]" :seed="a.user_id">
+                        {{ (a.first_name[0] || "") + (a.last_name[0] || "") }}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span class="min-w-0 flex-1 truncate">
+                      {{ `${a.first_name} ${a.last_name}`.trim() || a.username }}
+                    </span>
+                    <span class="font-medium tabular-nums text-muted-foreground">
+                      {{ a.task_count }}
+                    </span>
                   </li>
                 </ul>
               </section>
