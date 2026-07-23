@@ -12,5 +12,6 @@ include make/15-prod.mk
 include make/20-setup.mk
 include make/30-database.mk
 include make/40-quality.mk
+include make/45-release.mk
 include make/50-clean.mk
 include make/99-help.mk
