@@ -28,11 +28,13 @@ GARAGE_TOML := garage/garage.toml
 PYTHON := python3
 
 # Published image on Docker Hub. Every value is overridable ad-hoc, e.g.
-# `make release VERSION=1.1.0`. VERSION is also baked into the binary via
+# `make release VERSION=1.2.0`. VERSION is also baked into the binary via
 # ldflags, so `bureaucat --version` matches the image tag.
+# Bump VERSION here as part of each release so a bare `make release` never
+# re-publishes an already-released tag from newer code.
 DOCKER_USER ?= mvsrinath
 IMAGE_NAME  ?= sprintboard
-VERSION     ?= 1.0.0
+VERSION     ?= 1.1.0
 IMAGE        = docker.io/$(DOCKER_USER)/$(IMAGE_NAME)
 GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 PLATFORM    ?= linux/amd64
