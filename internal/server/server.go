@@ -121,6 +121,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		uploadService, err := uploads.NewService(uploads.Config{
 			S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 			BucketName:  os.Getenv("FILES_BUCKET_NAME"),
+			Region:      os.Getenv("FILES_BUCKET_REGION"),
 			AccessKeyID: os.Getenv("FILES_BUCKET_ACCESS_KEY_ID"),
 			SecretKey:   os.Getenv("FILES_BUCKET_SECRET_ACCESS_KEY"),
 			MaxFileSize: maxUploadSize,

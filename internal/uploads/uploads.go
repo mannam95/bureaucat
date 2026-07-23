@@ -22,10 +22,21 @@ var (
 // DefaultMaxFileSize is 10MB
 const DefaultMaxFileSize = 10 * 1024 * 1024
 
+// DefaultRegion is the SigV4 signing region used when none is configured.
+//
+// It exists for the local Garage dev stack, which does not validate the region.
+// Real S3 does: SigV4 embeds the region in the signature, so a bucket in, say,
+// eu-central-1 rejects anything signed for another region with
+// SignatureDoesNotMatch. Any deployment against AWS must set Region.
+const DefaultRegion = "garage"
+
 // Config holds upload service configuration.
 type Config struct {
-	S3Endpoint  string
-	BucketName  string
+	S3Endpoint string
+	BucketName string
+	// Region is the SigV4 signing region. Required against real S3; defaults to
+	// DefaultRegion so the Garage dev stack keeps working with it unset.
+	Region      string
 	AccessKeyID string
 	SecretKey   string
 	UseSSL      bool
@@ -44,11 +55,14 @@ func NewService(cfg Config) (*Service, error) {
 	if cfg.MaxFileSize == 0 {
 		cfg.MaxFileSize = DefaultMaxFileSize
 	}
+	if strings.TrimSpace(cfg.Region) == "" {
+		cfg.Region = DefaultRegion
+	}
 
 	// Build S3 client with static credentials and custom endpoint.
 	client := s3.New(s3.Options{
 		BaseEndpoint: aws.String(cfg.S3Endpoint),
-		Region:       "garage",
+		Region:       cfg.Region,
 		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretKey, ""),
 		UsePathStyle: true,
 	})

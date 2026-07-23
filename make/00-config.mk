@@ -34,7 +34,7 @@ PYTHON := python3
 # re-publishes an already-released tag from newer code.
 DOCKER_USER ?= mvsrinath
 IMAGE_NAME  ?= sprintboard
-VERSION     ?= 1.2.0
+VERSION     ?= 1.2.1
 IMAGE        = docker.io/$(DOCKER_USER)/$(IMAGE_NAME)
 GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 PLATFORM    ?= linux/amd64
