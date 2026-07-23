@@ -136,6 +136,9 @@ type TaskResponse struct {
 	SubtaskCount     int               `json:"subtask_count"`
 	Cycle            *TaskLinkRef      `json:"cycle,omitempty"`
 	Module           *TaskLinkRef      `json:"module,omitempty"`
+	FigmaLink        *string           `json:"figma_link,omitempty"`
+	Branch           *string           `json:"branch,omitempty"`
+	PullRequest      *string           `json:"pull_request,omitempty"`
 	CreatedAt       time.Time          `json:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
 }
@@ -168,6 +171,9 @@ type CreateTaskRequest struct {
 	DueDate     *time.Time `json:"due_date"`
 	Assignees   []string   `json:"assignees"`
 	Labels      []string   `json:"labels"`
+	FigmaLink   *string    `json:"figma_link"`
+	Branch      *string    `json:"branch"`
+	PullRequest *string    `json:"pull_request"`
 	// ParentTaskNumber, when set, creates this task as a subtask of the given
 	// (project-local) parent task. One level only: the parent must not itself
 	// be a subtask.
@@ -182,6 +188,11 @@ type UpdateTaskRequest struct {
 	Priority    *int         `json:"priority"`
 	StartDate   NullableTime `json:"start_date"`
 	DueDate     NullableTime `json:"due_date"`
+	// Custom fields. Omitted (nil) means "leave unchanged"; send an empty
+	// string to clear one.
+	FigmaLink   *string `json:"figma_link"`
+	Branch      *string `json:"branch"`
+	PullRequest *string `json:"pull_request"`
 }
 
 // PaginatedTasksResponse represents a paginated list of tasks.
@@ -505,6 +516,9 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StartDate:    timePtrToTimestamptz(req.StartDate),
 		DueDate:      timePtrToTimestamptz(req.DueDate),
 		ParentTaskID: parentTaskID,
+		FigmaLink:    stringToPgtypeText(req.FigmaLink),
+		Branch:       stringToPgtypeText(req.Branch),
+		PullRequest:  stringToPgtypeText(req.PullRequest),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create task")
@@ -674,6 +688,9 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
 		SubtaskCount:     int(fullTask.SubtaskCount),
+		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
+		Branch:           textToStringPtr(fullTask.Branch),
+		PullRequest:      textToStringPtr(fullTask.PullRequest),
 		CreatedAt:       fullTask.CreatedAt.Time,
 		UpdatedAt:       fullTask.UpdatedAt.Time,
 	})
@@ -756,6 +773,9 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		SubtaskCount:     int(task.SubtaskCount),
 		Cycle:            cycleRef,
 		Module:           moduleRef,
+		FigmaLink:        textToStringPtr(task.FigmaLink),
+		Branch:           textToStringPtr(task.Branch),
+		PullRequest:      textToStringPtr(task.PullRequest),
 		CreatedAt:       task.CreatedAt.Time,
 		UpdatedAt:       task.UpdatedAt.Time,
 	})
@@ -878,6 +898,9 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StartDate:       startDateArg,
 		UpdateDueDate:   req.DueDate.Set,
 		DueDate:         dueDateArg,
+		FigmaLink:       stringToPgtypeText(req.FigmaLink),
+		Branch:          stringToPgtypeText(req.Branch),
+		PullRequest:     stringToPgtypeText(req.PullRequest),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update task")
@@ -1033,6 +1056,9 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
 		Assignees:       assignees,
 		Labels:          labels,
+		FigmaLink:       textToStringPtr(fullTask.FigmaLink),
+		Branch:          textToStringPtr(fullTask.Branch),
+		PullRequest:     textToStringPtr(fullTask.PullRequest),
 		CreatedAt:       fullTask.CreatedAt.Time,
 		UpdatedAt:       fullTask.UpdatedAt.Time,
 	})
@@ -2063,6 +2089,9 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
 		Assignees:        assignees,
 		Labels:           labels,
+		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
+		Branch:           textToStringPtr(fullTask.Branch),
+		PullRequest:      textToStringPtr(fullTask.PullRequest),
 		CreatedAt:        fullTask.CreatedAt.Time,
 		UpdatedAt:        fullTask.UpdatedAt.Time,
 	})

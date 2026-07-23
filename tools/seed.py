@@ -69,6 +69,27 @@ STORIES = [
     "Implement webhooks", "Cache dashboard metrics", "Add SSO group mapping",
     "Redesign the onboarding wizard", "Add per-project roles", "Ship the mobile nav",
 ]
+GITHUB_REPO = "northwind/platform"
+
+def _slug(title):
+    s = "".join(c if c.isalnum() else "-" for c in title.lower())
+    while "--" in s:
+        s = s.replace("--", "-")
+    return s.strip("-")[:32]
+
+def custom_fields(title):
+    """Random Figma link / branch / pull request. Deliberately partial so the
+    demo shows both filled and empty ("Not set") fields."""
+    out = {}
+    if random.random() < 0.6:
+        token = "".join(random.choices("abcdef0123456789", k=12))
+        out["figma_link"] = f"https://figma.com/file/{token}/{_slug(title)}"
+    if random.random() < 0.75:
+        out["branch"] = f"{random.choice(['feat', 'fix', 'chore'])}/{_slug(title)}"
+    if random.random() < 0.5:
+        out["pull_request"] = f"https://github.com/{GITHUB_REPO}/pull/{random.randint(100, 999)}"
+    return out
+
 SUBTASKS = ["Write unit tests", "Update API docs", "Add DB migration",
             "Address code-review feedback", "Handle error states", "Add loading skeleton",
             "Wire up the endpoint", "Emit analytics event", "QA on staging",
@@ -188,7 +209,7 @@ def main():
             assignees = random.sample(user_ids, k=random.choice([0, 1, 1, 2]))
             t = api("POST", f"/projects/{key}/tasks", {"title": title, "description": f"{title}.",
                     "state_id": random.choice(state_pool), "priority": random.choice([0, 1, 2, 2, 3, 4]),
-                    "assignees": assignees})
+                    "assignees": assignees, **custom_fields(title)})
             total["tasks"] += 1
             cyc = random.choice(cycles); cycle_task_ids[cyc].append(t["id"])
             if random.random() < 0.7:
@@ -197,7 +218,7 @@ def main():
                 sub = api("POST", f"/projects/{key}/tasks", {"title": st,
                           "state_id": random.choice(state_pool), "priority": random.choice([0, 1, 2]),
                           "assignees": random.sample(user_ids, k=random.choice([0, 1])),
-                          "parent_task_number": t["task_number"]})
+                          "parent_task_number": t["task_number"], **custom_fields(st)})
                 total["subtasks"] += 1
                 # Sub-tasks inherit their parent's cycle/epic, so they are never
                 # placed in a cycle on their own.

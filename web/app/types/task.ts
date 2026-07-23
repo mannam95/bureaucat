@@ -31,6 +31,9 @@ export interface Task {
   subtask_count?: number;
   cycle?: TaskLinkRef;
   module?: TaskLinkRef;
+  figma_link?: string;
+  branch?: string;
+  pull_request?: string;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +121,9 @@ export interface CreateTaskRequest {
   due_date?: string;
   assignees?: string[];
   labels?: string[];
+  figma_link?: string;
+  branch?: string;
+  pull_request?: string;
   // When set, creates this task as a subtask of the given (project-local)
   // parent task number. One level of nesting only.
   parent_task_number?: number;
@@ -131,6 +137,10 @@ export interface UpdateTaskRequest {
   // Use `null` to clear; omit to leave unchanged.
   start_date?: string | null;
   due_date?: string | null;
+  // Omit to leave unchanged; send an empty string to clear.
+  figma_link?: string;
+  branch?: string;
+  pull_request?: string;
 }
 
 /** @deprecated — retained so legacy URL migration can parse old bookmarks. */

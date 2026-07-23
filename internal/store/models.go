@@ -26,6 +26,7 @@ const (
 	ActivityTypeCommentCreated  ActivityType = "comment_created"
 	ActivityTypeCommentUpdated  ActivityType = "comment_updated"
 	ActivityTypeCommentDeleted  ActivityType = "comment_deleted"
+	ActivityTypeMentioned       ActivityType = "mentioned"
 )
 
 func (e *ActivityType) Scan(src interface{}) error {
@@ -497,6 +498,9 @@ type Task struct {
 	StartDate    pgtype.Timestamptz `json:"start_date"`
 	DueDate      pgtype.Timestamptz `json:"due_date"`
 	ParentTaskID pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink    pgtype.Text        `json:"figma_link"`
+	Branch       pgtype.Text        `json:"branch"`
+	PullRequest  pgtype.Text        `json:"pull_request"`
 }
 
 type TaskAssignee struct {

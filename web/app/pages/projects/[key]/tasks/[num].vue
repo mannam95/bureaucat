@@ -384,6 +384,57 @@ async function onSubtaskCreated() {
   await Promise.all([loadSubtasks(), refreshTask()]);
 }
 
+// ---- Custom fields (Figma link / branch / pull request) ----
+// Edited one at a time, inline: the edit button swaps the value for a text
+// field with explicit save and cancel. Sub-tasks are tasks, so this works on
+// them unchanged.
+const CUSTOM_FIELDS = [
+  { key: "figma_link", label: "Figma Link", placeholder: "https://figma.com/..." },
+  { key: "branch", label: "Branch", placeholder: "feat/my-branch" },
+  { key: "pull_request", label: "Pull Request", placeholder: "https://github.com/..." },
+] as const;
+
+type CustomFieldKey = (typeof CUSTOM_FIELDS)[number]["key"];
+
+const editingField = ref<CustomFieldKey | null>(null);
+const customDraft = ref("");
+const savingField = ref(false);
+
+function customFieldValue(key: CustomFieldKey): string {
+  return currentTask.value?.[key] ?? "";
+}
+
+function startEditField(key: CustomFieldKey) {
+  editingField.value = key;
+  customDraft.value = customFieldValue(key);
+}
+
+function cancelEditField() {
+  editingField.value = null;
+  customDraft.value = "";
+}
+
+async function saveField(key: CustomFieldKey) {
+  // An empty string clears the field; the API treats omitted as "unchanged".
+  const value = customDraft.value.trim();
+  const payload =
+    key === "figma_link"
+      ? { figma_link: value }
+      : key === "branch"
+        ? { branch: value }
+        : { pull_request: value };
+
+  savingField.value = true;
+  const result = await updateTask(projectKey.value, taskNum.value, payload);
+  savingField.value = false;
+  if (result.success) {
+    cancelEditField();
+    await refreshTask();
+  } else {
+    toast.error(result.error || "Failed to update");
+  }
+}
+
 // ---- Cycle / Epic linking + sub-task re-parenting (right sidebar) ----
 // A top-level task can be linked to a cycle and an epic. A sub-task instead
 // shows its parent's cycle/epic (read-only) and can be moved under another
@@ -759,6 +810,79 @@ onMounted(() => {
                   :attachments="taskAttachments"
                   :loading="taskAttachmentsLoading"
                 />
+              </div>
+
+              <!-- Custom fields: one row each, edited inline -->
+              <div class="space-y-2">
+                <div
+                  v-for="field in CUSTOM_FIELDS"
+                  :key="field.key"
+                  class="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2"
+                >
+                  <span class="w-28 shrink-0 text-xs font-medium text-muted-foreground">
+                    {{ field.label }}
+                  </span>
+
+                  <!-- Editing: long text field with save / cancel -->
+                  <template v-if="editingField === field.key">
+                    <Input
+                      v-model="customDraft"
+                      :placeholder="field.placeholder"
+                      class="h-8 flex-1"
+                      :disabled="savingField"
+                      @keyup.enter="saveField(field.key)"
+                      @keyup.esc="cancelEditField"
+                    />
+                    <button
+                      type="button"
+                      class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                      :disabled="savingField"
+                      :aria-label="`Save ${field.label}`"
+                      @click="saveField(field.key)"
+                    >
+                      <Loader2 v-if="savingField" class="size-4 animate-spin" />
+                      <Check v-else class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                      :disabled="savingField"
+                      :aria-label="`Cancel editing ${field.label}`"
+                      @click="cancelEditField"
+                    >
+                      <X class="size-4" />
+                    </button>
+                  </template>
+
+                  <!-- Reading: value (linked when it is a URL) + edit button -->
+                  <template v-else>
+                    <a
+                      v-if="customFieldValue(field.key).startsWith('http')"
+                      :href="customFieldValue(field.key)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="min-w-0 flex-1 truncate text-sm text-primary hover:underline"
+                    >
+                      {{ customFieldValue(field.key) }}
+                    </a>
+                    <span
+                      v-else
+                      class="min-w-0 flex-1 truncate text-sm"
+                      :class="!customFieldValue(field.key) && 'text-muted-foreground'"
+                    >
+                      {{ customFieldValue(field.key) || "Not set" }}
+                    </span>
+                    <button
+                      v-if="isMember"
+                      type="button"
+                      class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      :aria-label="`Edit ${field.label}`"
+                      @click="startEditField(field.key)"
+                    >
+                      <Pencil class="size-3.5" />
+                    </button>
+                  </template>
+                </div>
               </div>
 
               <!-- Subtasks (one level only, so not shown on a subtask itself) -->

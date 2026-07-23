@@ -119,6 +119,9 @@ const form = ref({
   priority: 0,
   assignees: [] as string[],
   labels: [] as string[],
+  figma_link: "",
+  branch: "",
+  pull_request: "",
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -131,6 +134,9 @@ function resetForm() {
     priority: 0,
     assignees: [],
     labels: [],
+    figma_link: "",
+    branch: "",
+    pull_request: "",
   };
   selectedTemplateId.value = "";
   error.value = null;
@@ -268,6 +274,9 @@ async function handleSubmit() {
     priority: form.value.priority,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
     labels: form.value.labels.length > 0 ? form.value.labels : undefined,
+    figma_link: form.value.figma_link.trim() || undefined,
+    branch: form.value.branch.trim() || undefined,
+    pull_request: form.value.pull_request.trim() || undefined,
     parent_task_number: props.parentTaskNumber,
   });
 
@@ -726,6 +735,36 @@ function removeLabel(labelId: string) {
                 {{ label.name }}
               </template>
             </TokenSelect>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="figma_link">Figma Link</Label>
+            <Input
+              id="figma_link"
+              v-model="form.figma_link"
+              placeholder="https://figma.com/..."
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="branch">Branch</Label>
+            <Input
+              id="branch"
+              v-model="form.branch"
+              placeholder="feat/my-branch"
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="pull_request">Pull Request</Label>
+            <Input
+              id="pull_request"
+              v-model="form.pull_request"
+              placeholder="https://github.com/..."
+              :disabled="loading"
+            />
           </div>
 
         <DialogFooter>
