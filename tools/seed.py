@@ -78,17 +78,16 @@ def _slug(title):
     return s.strip("-")[:32]
 
 def custom_fields(title):
-    """Random Figma link / branch / pull request. Deliberately partial so the
-    demo shows both filled and empty ("Not set") fields."""
-    out = {}
-    if random.random() < 0.6:
-        token = "".join(random.choices("abcdef0123456789", k=12))
-        out["figma_link"] = f"https://figma.com/file/{token}/{_slug(title)}"
-    if random.random() < 0.75:
-        out["branch"] = f"{random.choice(['feat', 'fix', 'chore'])}/{_slug(title)}"
-    if random.random() < 0.5:
-        out["pull_request"] = f"https://github.com/{GITHUB_REPO}/pull/{random.randint(100, 999)}"
-    return out
+    """Random Figma / branch / pull request links. All three are links so the
+    demo shows them rendered as links."""
+    slug = _slug(title)
+    token = "".join(random.choices("abcdef0123456789", k=12))
+    branch = f"{random.choice(['feat', 'fix', 'chore'])}/{slug}"
+    return {
+        "figma_link": f"https://www.figma.com/design/{token}/{slug}?node-id={random.randint(1000, 9999)}-{random.randint(100, 999)}",
+        "branch": f"https://github.com/{GITHUB_REPO}/tree/{branch}",
+        "pull_request": f"https://github.com/{GITHUB_REPO}/pull/{random.randint(100, 999)}",
+    }
 
 SUBTASKS = ["Write unit tests", "Update API docs", "Add DB migration",
             "Address code-review feedback", "Handle error states", "Add loading skeleton",

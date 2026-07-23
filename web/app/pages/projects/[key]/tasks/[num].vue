@@ -389,9 +389,24 @@ async function onSubtaskCreated() {
 // field with explicit save and cancel. Sub-tasks are tasks, so this works on
 // them unchanged.
 const CUSTOM_FIELDS = [
-  { key: "figma_link", label: "Figma Link", placeholder: "https://figma.com/..." },
-  { key: "branch", label: "Branch", placeholder: "feat/my-branch" },
-  { key: "pull_request", label: "Pull Request", placeholder: "https://github.com/..." },
+  {
+    key: "figma_link",
+    label: "Figma Link",
+    hint: "The origin of the design",
+    placeholder: "https://figma.com/...",
+  },
+  {
+    key: "branch",
+    label: "Branch",
+    hint: "The branch where this task is worked on",
+    placeholder: "https://github.com/.../tree/feat/my-branch",
+  },
+  {
+    key: "pull_request",
+    label: "Pull Request",
+    hint: "The PR where this task is worked on",
+    placeholder: "https://github.com/.../pull/123",
+  },
 ] as const;
 
 type CustomFieldKey = (typeof CUSTOM_FIELDS)[number]["key"];
@@ -812,16 +827,23 @@ onMounted(() => {
                 />
               </div>
 
-              <!-- Custom fields: one row each, edited inline -->
-              <div class="space-y-2">
+              <!-- Custom fields: its own section, one row per field, edited inline -->
+              <div class="overflow-hidden rounded-lg border border-border/60">
+                <div class="border-b border-border/60 bg-muted/50 px-4 py-2">
+                  <h2 class="text-sm font-semibold">Custom Fields</h2>
+                </div>
+
                 <div
                   v-for="field in CUSTOM_FIELDS"
                   :key="field.key"
-                  class="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2"
+                  class="group flex items-start gap-4 border-b border-border/60 px-4 py-3 last:border-0"
                 >
-                  <span class="w-28 shrink-0 text-xs font-medium text-muted-foreground">
-                    {{ field.label }}
-                  </span>
+                  <div class="w-40 shrink-0">
+                    <p class="text-sm font-medium leading-tight">{{ field.label }}</p>
+                    <p class="mt-0.5 text-xs leading-tight text-muted-foreground">
+                      {{ field.hint }}
+                    </p>
+                  </div>
 
                   <!-- Editing: long text field with save / cancel -->
                   <template v-if="editingField === field.key">
@@ -854,14 +876,14 @@ onMounted(() => {
                     </button>
                   </template>
 
-                  <!-- Reading: value (linked when it is a URL) + edit button -->
+                  <!-- Reading: value (linked when it is a URL) + edit on hover -->
                   <template v-else>
                     <a
                       v-if="customFieldValue(field.key).startsWith('http')"
                       :href="customFieldValue(field.key)"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="min-w-0 flex-1 truncate text-sm text-primary hover:underline"
+                      class="min-w-0 flex-1 truncate text-sm text-primary underline underline-offset-2 hover:text-primary/80"
                     >
                       {{ customFieldValue(field.key) }}
                     </a>
@@ -875,7 +897,7 @@ onMounted(() => {
                     <button
                       v-if="isMember"
                       type="button"
-                      class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      class="rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
                       :aria-label="`Edit ${field.label}`"
                       @click="startEditField(field.key)"
                     >
