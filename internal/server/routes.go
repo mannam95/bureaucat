@@ -94,6 +94,7 @@ func (s *Server) registerRoutes() {
 		// Protected routes
 		protected := api.Group("", auth.Middleware(s.authManager, s.store), auth.EnforcePATScope())
 		protected.GET("/me", s.authHandler.Me)
+		protected.POST("/me/password", s.authHandler.ChangePassword)
 		protected.GET("/me/tasks", s.authHandler.MyTasks)
 
 		// Per-user in-app notifications

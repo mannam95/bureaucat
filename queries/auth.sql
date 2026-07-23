@@ -8,6 +8,13 @@ SELECT id, username, email, first_name, last_name, user_type, avatar_url, create
 FROM users
 WHERE id = $1;
 
+-- name: GetUserPasswordHash :one
+-- Deliberately narrow: only the password hash, so it is never carried around on
+-- the general-purpose user row. Used to verify the current password on change.
+SELECT password_hash
+FROM users
+WHERE id = $1;
+
 -- name: GetUserByEmailOrUsername :one
 SELECT id, username, email, password_hash, first_name, last_name, user_type,
        avatar_url, auth_provider, provider_user_id, created_at, updated_at

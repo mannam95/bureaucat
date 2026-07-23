@@ -811,6 +811,76 @@ func parseJSONBAuth(data []byte) interface{} {
 	return string(data)
 }
 
+// ChangePasswordRequest is the body for a signed-in user changing their own password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// ChangePassword lets the signed-in user change their own password. The current
+// password must be supplied, and all sessions are revoked afterwards so any
+// other device has to sign in again with the new password.
+func (h *AuthHandler) ChangePassword(c *echo.Context) error {
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user")
+	}
+
+	var req ChangePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "current and new password are required")
+	}
+
+	ctx := c.Request().Context()
+
+	currentHash, err := h.store.GetUserPasswordHash(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	// SSO accounts have no local password to change.
+	if !currentHash.Valid || currentHash.String == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "this account has no password set")
+	}
+	if !auth.CheckPassword(req.CurrentPassword, currentHash.String) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "current password is incorrect")
+	}
+	if req.NewPassword == req.CurrentPassword {
+		return echo.NewHTTPError(http.StatusBadRequest, "new password must be different from the current one")
+	}
+
+	// Same policy as signup: strict in production, anything goes in dev.
+	if !h.devMode {
+		if errs := validatePassword(req.NewPassword); len(errs) > 0 {
+			return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"message": "password does not meet requirements",
+				"errors":  errs,
+			})
+		}
+	}
+
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to hash password")
+	}
+	if err := h.store.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{
+		ID:           userID,
+		PasswordHash: pgtype.Text{String: newHash, Valid: true},
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update password")
+	}
+
+	// Changing a password invalidates every existing session.
+	if err := h.store.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to revoke sessions")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "password changed successfully"})
+}
+
 func validatePassword(password string) []string {
 	var errors []string
 

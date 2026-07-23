@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock } from "lucide-vue-next";
+import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock } from "lucide-vue-next";
+import { toast } from "vue-sonner";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import { cn } from "@/lib/utils";
 import type { DateValue } from "reka-ui";
@@ -11,6 +12,42 @@ definePageMeta({
 useSeoMeta({ title: "Settings" });
 
 const { listTokens, createToken, updateTokenScope, deleteToken } = usePAT();
+const { changePassword, logout } = useAuth();
+
+// Change-password form. Changing the password revokes every session, so on
+// success we sign out and send the user back to the sign-in page.
+const currentPassword = ref("");
+const newPassword = ref("");
+const confirmPassword = ref("");
+const pwLoading = ref(false);
+const pwError = ref<string | null>(null);
+
+async function handleChangePassword() {
+  pwError.value = null;
+  if (newPassword.value !== confirmPassword.value) {
+    pwError.value = "New passwords do not match";
+    return;
+  }
+
+  pwLoading.value = true;
+  const result = await changePassword({
+    current_password: currentPassword.value,
+    new_password: newPassword.value,
+  });
+  pwLoading.value = false;
+
+  if (!result.success) {
+    pwError.value = result.error || "Failed to change password";
+    return;
+  }
+
+  currentPassword.value = "";
+  newPassword.value = "";
+  confirmPassword.value = "";
+  toast.success("Password changed. Please sign in again.");
+  await logout();
+  await navigateTo("/signin");
+}
 
 type PATScope = "read_only" | "read_write";
 
@@ -442,6 +479,74 @@ onMounted(() => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <!-- Password Section -->
+        <div class="mt-12">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <Lock class="size-5" />
+              Password
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Change the password you use to sign in. This signs you out everywhere, so you will need to sign in again with the new password.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent class="pt-6">
+              <form class="space-y-4" @submit.prevent="handleChangePassword">
+                <div
+                  v-if="pwError"
+                  role="alert"
+                  class="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  {{ pwError }}
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="current-password">Current password</Label>
+                  <Input
+                    id="current-password"
+                    v-model="currentPassword"
+                    type="password"
+                    autocomplete="current-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="new-password">New password</Label>
+                  <Input
+                    id="new-password"
+                    v-model="newPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="confirm-password">Confirm new password</Label>
+                  <Input
+                    id="confirm-password"
+                    v-model="confirmPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  :disabled="pwLoading || !currentPassword || !newPassword || !confirmPassword"
+                >
+                  <Loader2 v-if="pwLoading" class="mr-2 size-4 animate-spin" />
+                  Change password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </main>
   </div>

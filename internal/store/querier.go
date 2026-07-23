@@ -158,6 +158,9 @@ type Querier interface {
 	GetUserByEmailOrUsername(ctx context.Context, email string) (GetUserByEmailOrUsernameRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByProviderID(ctx context.Context, arg GetUserByProviderIDParams) (GetUserByProviderIDRow, error)
+	// Deliberately narrow: only the password hash, so it is never carried around on
+	// the general-purpose user row. Used to verify the current password on change.
+	GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype.Text, error)
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
 	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)

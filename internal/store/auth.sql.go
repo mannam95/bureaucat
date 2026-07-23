@@ -410,6 +410,21 @@ func (q *Queries) GetUserByProviderID(ctx context.Context, arg GetUserByProvider
 	return i, err
 }
 
+const getUserPasswordHash = `-- name: GetUserPasswordHash :one
+SELECT password_hash
+FROM users
+WHERE id = $1
+`
+
+// Deliberately narrow: only the password hash, so it is never carried around on
+// the general-purpose user row. Used to verify the current password on change.
+func (q *Queries) GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getUserPasswordHash, id)
+	var password_hash pgtype.Text
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
 const linkProviderToUser = `-- name: LinkProviderToUser :exec
 UPDATE users
 SET auth_provider = $2, provider_user_id = $3, updated_at = NOW()

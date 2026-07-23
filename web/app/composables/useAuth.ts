@@ -103,6 +103,33 @@ export function useAuth() {
     useWorkspaces().clearWorkspaces();
   }
 
+  // Changing the password revokes every session server-side, so the caller is
+  // expected to send the user back to sign-in afterwards.
+  async function changePassword(data: {
+    current_password: string;
+    new_password: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch("/api/v1/me/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        // The strict-policy failure returns a list; surface it as one line.
+        const detail = Array.isArray(error.errors) ? error.errors.join(", ") : null;
+        return {
+          success: false,
+          error: detail || error.message || "Failed to change password",
+        };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function refreshToken(): Promise<boolean> {
     try {
       const response = await fetch("/api/v1/token_refresh", {
@@ -195,6 +222,7 @@ export function useAuth() {
     signup,
     signin,
     logout,
+    changePassword,
     refreshToken,
     initAuth,
     getAuthHeader,
