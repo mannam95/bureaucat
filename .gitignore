@@ -31,6 +31,10 @@ go.work
 
 # End of https://www.toptal.com/developers/gitignore/api/go
 
+### Python (tools/) ###
+__pycache__/
+*.py[cod]
+
 postgres-data/
 air.log
 tmp/
