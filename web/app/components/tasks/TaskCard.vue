@@ -81,37 +81,35 @@ const stateIcon = computed(() => {
 
 const priorityInfo = computed(() => PRIORITY_LABELS[props.task.priority] || PRIORITY_LABELS[0]);
 
-// Collect all people involved: creator + assignees (deduplicated)
-const involvedPeople = computed(() => {
-  const people: { id: string; firstName: string; lastName: string; avatarUrl?: string }[] = [];
-  const seen = new Set<string>();
+interface Person {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+}
 
-  if (props.task.created_by && !seen.has(props.task.created_by)) {
-    seen.add(props.task.created_by);
-    people.push({
-      id: props.task.created_by,
-      firstName: props.task.creator_first_name || "",
-      lastName: props.task.creator_last_name || "",
-      avatarUrl: props.task.creator_avatar_url,
-    });
-  }
-
-  if (props.task.assignees) {
-    for (const a of props.task.assignees) {
-      if (!seen.has(a.user_id)) {
-        seen.add(a.user_id);
-        people.push({
-          id: a.user_id,
-          firstName: a.first_name,
-          lastName: a.last_name,
-          avatarUrl: a.avatar_url,
-        });
+// Creator and assignees are separate columns: merging them made it impossible
+// to tell who raised a task from who is doing it. Empty on the dashboard, whose
+// API doesn't return creator fields.
+const creator = computed<Person | null>(() =>
+  props.task.created_by
+    ? {
+        id: props.task.created_by,
+        firstName: props.task.creator_first_name || "",
+        lastName: props.task.creator_last_name || "",
+        avatarUrl: props.task.creator_avatar_url,
       }
-    }
-  }
+    : null
+);
 
-  return people;
-});
+const assignedTo = computed<Person[]>(() =>
+  (props.task.assignees ?? []).map((a) => ({
+    id: a.user_id,
+    firstName: a.first_name,
+    lastName: a.last_name,
+    avatarUrl: a.avatar_url,
+  }))
+);
 </script>
 
 <template>
@@ -191,17 +189,36 @@ const involvedPeople = computed(() => {
         <span class="text-xs text-muted-foreground whitespace-nowrap">{{ priorityInfo.label }}</span>
       </div>
 
-      <!-- Col 5: Stacked avatars -->
+      <!-- Col 5: Created by (always a single person) -->
       <div class="flex items-center justify-end">
-        <div
-          v-if="involvedPeople.length > 0"
-          class="flex -space-x-1.5"
+        <NuxtLink
+          v-if="creator"
+          :to="`/profile/${creator.id}`"
+          :title="`Created by ${creator.firstName} ${creator.lastName}`.trim()"
+          @click.stop
         >
+          <Avatar class="size-6 border-2 border-background transition-transform hover:scale-110">
+            <AvatarImage
+              v-if="creator.avatarUrl"
+              :src="creator.avatarUrl"
+              :alt="`${creator.firstName} ${creator.lastName}`"
+            />
+            <AvatarFallback class="text-[10px]" :seed="creator.id">
+              {{ creator.firstName?.[0] || "" }}{{ creator.lastName?.[0] || "" }}
+            </AvatarFallback>
+          </Avatar>
+        </NuxtLink>
+        <span v-else class="text-xs text-muted-foreground">—</span>
+      </div>
+
+      <!-- Col 6: Assigned to (stacked; a dash makes unassigned tasks obvious) -->
+      <div class="flex items-center justify-end">
+        <div v-if="assignedTo.length > 0" class="flex -space-x-1.5">
           <NuxtLink
-            v-for="person in involvedPeople.slice(0, 4)"
+            v-for="person in assignedTo.slice(0, 3)"
             :key="person.id"
             :to="`/profile/${person.id}`"
-            :title="`${person.firstName} ${person.lastName}`"
+            :title="`Assigned to ${person.firstName} ${person.lastName}`.trim()"
             class="hover:z-10"
             @click.stop
           >
@@ -217,18 +234,19 @@ const involvedPeople = computed(() => {
             </Avatar>
           </NuxtLink>
           <Avatar
-            v-if="involvedPeople.length > 4"
+            v-if="assignedTo.length > 3"
             class="size-6 border-2 border-background"
-            :title="`${involvedPeople.length - 4} more`"
+            :title="`${assignedTo.length - 3} more`"
           >
             <AvatarFallback class="text-[10px] bg-muted">
-              +{{ involvedPeople.length - 4 }}
+              +{{ assignedTo.length - 3 }}
             </AvatarFallback>
           </Avatar>
         </div>
+        <span v-else class="text-xs text-muted-foreground">—</span>
       </div>
 
-      <!-- Col 6: Comment count (hidden for nested sub-task rows) -->
+      <!-- Col 7: Comment count (hidden for nested sub-task rows) -->
       <div class="flex items-center justify-end">
         <div
           v-if="!indented"
@@ -243,18 +261,5 @@ const involvedPeople = computed(() => {
   </NuxtLink>
 </template>
 
-<style scoped>
-.task-row {
-  grid-template-columns: 6rem 1fr 10rem 7rem 6rem 3rem;
-  column-gap: 0.375rem;
-}
-.task-row.selectable {
-  grid-template-columns: 1.5rem 6rem 1fr 10rem 7rem 6rem 3rem;
-}
-.task-row.has-workspace {
-  grid-template-columns: 8rem 6rem 1fr 10rem 7rem 6rem 3rem;
-}
-.task-row.has-workspace.selectable {
-  grid-template-columns: 1.5rem 8rem 6rem 1fr 10rem 7rem 6rem 3rem;
-}
-</style>
+<!-- The .task-row grid templates live in assets/css/tailwind.css so TaskList's
+     header row can share them. -->

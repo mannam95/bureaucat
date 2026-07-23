@@ -6,6 +6,7 @@ import {
   XCircle,
   Clock,
   PauseCircle,
+  Repeat,
   ChevronDown,
 } from "lucide-vue-next";
 import type { ModuleStatus } from "~/types";
@@ -31,6 +32,7 @@ const STATUS_META: Record<ModuleStatus, StatusMeta> = {
   backlog:     { icon: Clock,         color: "#6B7280", label: "Backlog" },
   planned:     { icon: Circle,        color: "#0EA5E9", label: "Planned" },
   in_progress: { icon: CircleDot,     color: "#F59E0B", label: "In progress" },
+  ongoing:     { icon: Repeat,        color: "#8B5CF6", label: "Ongoing" },
   paused:      { icon: PauseCircle,   color: "#F97316", label: "Paused" },
   completed:   { icon: CheckCircle2,  color: "#10B981", label: "Completed" },
   cancelled:   { icon: XCircle,       color: "#F43F5E", label: "Cancelled" },

@@ -86,6 +86,24 @@ function subtaskAsTask(sub: Subtask): Task {
 
 <template>
   <div class="overflow-hidden rounded-lg border border-border/50 divide-y divide-border/50">
+    <!-- Column headers. Shares .task-row with TaskCard so the columns line up;
+         empty spans hold the leading checkbox / workspace columns. -->
+    <div
+      v-if="tasks.length > 0"
+      class="task-row grid items-center bg-muted/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+      :class="{ selectable, 'has-workspace': showWorkspace }"
+    >
+      <span v-if="selectable" />
+      <span v-if="showWorkspace">Workspace</span>
+      <span>ID</span>
+      <span>Title</span>
+      <span class="justify-self-end">State</span>
+      <span class="justify-self-end">Priority</span>
+      <span class="justify-self-end">Created</span>
+      <span class="justify-self-end">Assigned</span>
+      <span class="justify-self-end">Comments</span>
+    </div>
+
     <template v-for="task in tasks" :key="task.id">
       <TaskCard
         :task="task"

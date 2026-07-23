@@ -20,6 +20,7 @@ const statusStyles: Record<string, string> = {
   backlog:     "border-muted-foreground/30 bg-muted text-muted-foreground",
   planned:     "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
   in_progress: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500",
+  ongoing:     "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   paused:      "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300",
   completed:   "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   cancelled:   "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",

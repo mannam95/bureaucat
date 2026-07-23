@@ -4,6 +4,9 @@ export type ModuleStatus =
   | "backlog"
   | "planned"
   | "in_progress"
+  // Continuous work (upkeep, support, infrastructure) that never legitimately
+  // reaches "completed", so it shouldn't sit in "in_progress" forever.
+  | "ongoing"
   | "paused"
   | "completed"
   | "cancelled";
@@ -12,6 +15,7 @@ export const MODULE_STATUSES: ModuleStatus[] = [
   "backlog",
   "planned",
   "in_progress",
+  "ongoing",
   "paused",
   "completed",
   "cancelled",

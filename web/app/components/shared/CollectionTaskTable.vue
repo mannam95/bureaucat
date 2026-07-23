@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends TaskRow">
 import { X } from "lucide-vue-next";
+import type { TaskAssignee } from "~/types";
 
 // Minimum shape the table needs from each task row.
 interface TaskRow {
@@ -9,6 +10,7 @@ interface TaskRow {
   title: string;
   state_name: string;
   state_color: string;
+  assignees?: TaskAssignee[];
 }
 
 const props = withDefaults(
@@ -42,7 +44,7 @@ const selectAllModel = computed<boolean | "indeterminate">(() =>
 const gridStyle = computed(() => {
   const cols: string[] = [];
   if (props.selectable) cols.push("28px");
-  cols.push("140px", "minmax(0, 1fr)", "90px");
+  cols.push("140px", "minmax(0, 1fr)", "90px", "84px");
   if (props.isAdmin) cols.push("28px");
   return `grid-template-columns: ${cols.join(" ")};`;
 });
@@ -64,6 +66,7 @@ const gridStyle = computed(() => {
       <span>State</span>
       <span>Title</span>
       <span>ID</span>
+      <span>Assigned</span>
       <span v-if="isAdmin"></span>
     </div>
 
@@ -102,6 +105,38 @@ const gridStyle = computed(() => {
 
         <span class="font-mono text-[11px] text-muted-foreground">
           {{ task.task_id }}
+        </span>
+
+        <!-- Assigned: a dash makes unassigned rows obvious, which is what the
+             "Unassigned" filter above is for. -->
+        <span class="flex items-center">
+          <span v-if="(task.assignees?.length ?? 0) > 0" class="flex -space-x-1.5">
+            <NuxtLink
+              v-for="person in (task.assignees ?? []).slice(0, 3)"
+              :key="person.user_id"
+              :to="`/profile/${person.user_id}`"
+              :title="`${person.first_name} ${person.last_name}`.trim() || person.username"
+              class="hover:z-10"
+              @click.stop
+            >
+              <Avatar class="size-6 border-2 border-background transition-transform hover:scale-110">
+                <AvatarImage v-if="person.avatar_url" :src="person.avatar_url" />
+                <AvatarFallback class="text-[10px]" :seed="person.user_id">
+                  {{ (person.first_name?.[0] || "") + (person.last_name?.[0] || "") }}
+                </AvatarFallback>
+              </Avatar>
+            </NuxtLink>
+            <Avatar
+              v-if="(task.assignees?.length ?? 0) > 3"
+              class="size-6 border-2 border-background"
+              :title="`${(task.assignees?.length ?? 0) - 3} more`"
+            >
+              <AvatarFallback class="text-[10px] bg-muted">
+                +{{ (task.assignees?.length ?? 0) - 3 }}
+              </AvatarFallback>
+            </Avatar>
+          </span>
+          <span v-else class="text-xs text-muted-foreground">—</span>
         </span>
 
         <button

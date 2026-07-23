@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   ChevronLeft,
-  ChevronsUpDown,
   Loader2,
   Plus,
   Pencil,
@@ -9,12 +8,10 @@ import {
   Trash2,
   CalendarDays,
   ArrowRight,
-  Search,
-  X,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { CycleAssigneeSummary, CycleSibling, CycleStateBucket } from "~/types";
-import EntityMultiSelect from "~/components/shared/EntityMultiSelect.vue";
+import type { CycleSibling, CycleTask } from "~/types";
+import CollectionFilterBar from "~/components/shared/CollectionFilterBar.vue";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -55,13 +52,11 @@ const showAddTask = ref(false);
 const showEdit = ref(false);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
-// All filtering is client-side over the already-loaded cycle tasks. State and
-// assignee are multi-select (sets of ids); search matches the task title.
-const stateFilter = ref<Set<string>>(new Set());
-const assigneeFilter = ref<Set<string>>(new Set());
-const searchQuery = ref("");
-const stateOpen = ref(false);
-const assigneeOpen = ref(false);
+// Filtering lives in CollectionFilterBar, which owns the controls and hands
+// back the narrowed list. The tasks actually shown are whatever it emits.
+const filterBar = ref<{ clear: () => void } | null>(null);
+const visibleTasks = ref<CycleTask[]>([]);
+const anyFilterActive = ref(false);
 // Bulk selection of task ids, for moving tasks to the next cycle.
 const selectedIds = ref<Set<string>>(new Set());
 const siblings = ref<CycleSibling[]>([]);
@@ -85,53 +80,14 @@ function formatDate(d: string): string {
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// Filter options come from the whole-cycle metrics, so they stay stable while
-// the task list is narrowed. The sidebar cards show the same data with counts.
-const stateOptions = computed<CycleStateBucket[]>(() => metrics.value?.state_breakdown ?? []);
-const assigneeOptions = computed<CycleAssigneeSummary[]>(() => metrics.value?.assignees ?? []);
-
-const anyFilterActive = computed(
-  () =>
-    stateFilter.value.size > 0 ||
-    assigneeFilter.value.size > 0 ||
-    searchQuery.value.trim() !== ""
-);
-
-// The tasks actually shown: the loaded list narrowed by the active filters.
-const visibleTasks = computed(() => {
-  let list = tasks.value;
-  if (stateFilter.value.size > 0) {
-    list = list.filter((t) => stateFilter.value.has(t.state_id));
-  }
-  if (assigneeFilter.value.size > 0) {
-    list = list.filter((t) =>
-      (t.assignees ?? []).some((a) => assigneeFilter.value.has(a.user_id))
-    );
-  }
-  const q = searchQuery.value.trim().toLowerCase();
-  if (q) {
-    list = list.filter((t) => t.title.toLowerCase().includes(q));
-  }
-  return list;
-});
-
-// Changing a filter can hide rows, so any bulk selection is reset alongside it.
-function setStateFilter(ids: string[]) {
-  stateFilter.value = new Set(ids);
+// Narrowing the list can hide rows, so any bulk selection is reset alongside it.
+function onFiltered(list: CycleTask[]) {
+  visibleTasks.value = list;
   selectedIds.value = new Set();
 }
-function setAssigneeFilter(ids: string[]) {
-  assigneeFilter.value = new Set(ids);
-  selectedIds.value = new Set();
-}
-function onSearch(v: string) {
-  searchQuery.value = v;
-  selectedIds.value = new Set();
-}
+
 function clearFilters() {
-  stateFilter.value = new Set();
-  assigneeFilter.value = new Set();
-  searchQuery.value = "";
+  filterBar.value?.clear();
   selectedIds.value = new Set();
 }
 
@@ -353,101 +309,13 @@ watch(cycleId, async () => {
               <div class="mb-4 flex flex-wrap items-center gap-2">
                 <h2 class="mr-1 text-lg font-semibold">Tasks</h2>
 
-                <!-- State (multi-select) -->
-                <Popover v-model:open="stateOpen">
-                  <PopoverTrigger as-child>
-                    <Button variant="outline" size="sm" class="h-9 gap-1.5">
-                      State
-                      <span
-                        v-if="stateFilter.size"
-                        class="rounded bg-primary/10 px-1 text-xs font-medium text-primary"
-                      >
-                        {{ stateFilter.size }}
-                      </span>
-                      <ChevronsUpDown class="size-3.5 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent class="w-56 p-0" align="start">
-                    <EntityMultiSelect
-                      :items="stateOptions"
-                      item-key="state_id"
-                      :model-value="[...stateFilter]"
-                      placeholder="Find state…"
-                      empty-message="No states"
-                      @update:model-value="setStateFilter"
-                    >
-                      <template #option="{ item }">
-                        <span
-                          class="size-2 shrink-0 rounded-full"
-                          :style="{ backgroundColor: (item as CycleStateBucket).state_color || '#6B7280' }"
-                        />
-                        <span class="truncate">{{ (item as CycleStateBucket).state_name }}</span>
-                      </template>
-                    </EntityMultiSelect>
-                  </PopoverContent>
-                </Popover>
-
-                <!-- Assignee (multi-select) -->
-                <Popover v-model:open="assigneeOpen">
-                  <PopoverTrigger as-child>
-                    <Button variant="outline" size="sm" class="h-9 gap-1.5">
-                      Assignee
-                      <span
-                        v-if="assigneeFilter.size"
-                        class="rounded bg-primary/10 px-1 text-xs font-medium text-primary"
-                      >
-                        {{ assigneeFilter.size }}
-                      </span>
-                      <ChevronsUpDown class="size-3.5 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent class="w-60 p-0" align="start">
-                    <EntityMultiSelect
-                      :items="assigneeOptions"
-                      item-key="user_id"
-                      :model-value="[...assigneeFilter]"
-                      placeholder="Find member…"
-                      empty-message="No assignees"
-                      @update:model-value="setAssigneeFilter"
-                    >
-                      <template #option="{ item }">
-                        <Avatar class="size-5">
-                          <AvatarImage
-                            v-if="(item as CycleAssigneeSummary).avatar_url"
-                            :src="(item as CycleAssigneeSummary).avatar_url"
-                          />
-                          <AvatarFallback class="text-[9px]" :seed="(item as CycleAssigneeSummary).user_id">
-                            {{ ((item as CycleAssigneeSummary).first_name[0] || "") + ((item as CycleAssigneeSummary).last_name[0] || "") }}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span class="truncate">
-                          {{ `${(item as CycleAssigneeSummary).first_name} ${(item as CycleAssigneeSummary).last_name}`.trim() || (item as CycleAssigneeSummary).username }}
-                        </span>
-                      </template>
-                    </EntityMultiSelect>
-                  </PopoverContent>
-                </Popover>
-
-                <!-- Search -->
-                <div class="relative min-w-[9rem] flex-1 sm:max-w-[16rem]">
-                  <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    :model-value="searchQuery"
-                    placeholder="Search tasks…"
-                    class="h-9 pl-8"
-                    @update:model-value="(v) => onSearch(String(v ?? ''))"
-                  />
-                </div>
-
-                <Button
-                  v-if="anyFilterActive"
-                  variant="ghost"
-                  size="sm"
-                  class="h-9 text-muted-foreground"
-                  @click="clearFilters"
-                >
-                  <X class="mr-1 size-3.5" /> Clear
-                </Button>
+                <CollectionFilterBar
+                  ref="filterBar"
+                  :tasks="tasks"
+                  :state-buckets="metrics?.state_breakdown"
+                  @update:filtered="(list) => onFiltered(list as CycleTask[])"
+                  @update:active="anyFilterActive = $event"
+                />
 
                 <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />

@@ -274,3 +274,21 @@
   margin-bottom: 0;
 }
 
+
+/* Task list grid. The header row (TaskList) and every task row (TaskCard) share
+   these templates so the columns line up; keeping them here avoids the two
+   drifting apart. Columns: [select] [workspace] id title state priority
+   created-by assigned-to comments. */
+.task-row {
+  grid-template-columns: 6rem 1fr 10rem 7rem 5rem 6rem 5rem;
+  column-gap: 0.375rem;
+}
+.task-row.selectable {
+  grid-template-columns: 1.5rem 6rem 1fr 10rem 7rem 5rem 6rem 5rem;
+}
+.task-row.has-workspace {
+  grid-template-columns: 8rem 6rem 1fr 10rem 7rem 5rem 6rem 5rem;
+}
+.task-row.has-workspace.selectable {
+  grid-template-columns: 1.5rem 8rem 6rem 1fr 10rem 7rem 5rem 6rem 5rem;
+}

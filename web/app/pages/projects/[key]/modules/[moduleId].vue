@@ -10,8 +10,9 @@ import {
   CalendarDays,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { ModuleStatus } from "~/types";
+import type { ModuleStatus, ModuleTask } from "~/types";
 import { MODULE_STATUSES } from "~/types";
+import CollectionFilterBar from "~/components/shared/CollectionFilterBar.vue";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -48,6 +49,10 @@ const showEdit = ref(false);
 const showDuplicate = ref(false);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
+// Filtering lives in CollectionFilterBar, which owns the controls and hands
+// back the narrowed list. The tasks actually shown are whatever it emits.
+const visibleTasks = ref<ModuleTask[]>([]);
+const anyFilterActive = ref(false);
 
 useHead({
   title: computed(
@@ -59,6 +64,7 @@ const statusChip: Record<string, string> = {
   backlog:     "border-muted-foreground/30 bg-muted text-muted-foreground",
   planned:     "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
   in_progress: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500",
+  ongoing:     "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   paused:      "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300",
   completed:   "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   cancelled:   "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
@@ -319,20 +325,33 @@ watch(moduleId, async () => {
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <!-- LEFT: Task list -->
             <section class="min-w-0">
-              <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-lg font-semibold">Tasks</h2>
-                <Button v-if="isAdmin" size="sm" @click="showAddTask = true">
+              <!-- Toolbar: title, filters, search, add -->
+              <div class="mb-4 flex flex-wrap items-center gap-2">
+                <h2 class="mr-1 text-lg font-semibold">Tasks</h2>
+
+                <CollectionFilterBar
+                  :tasks="tasks"
+                  :state-buckets="metrics?.state_breakdown"
+                  @update:filtered="(list) => (visibleTasks = list as ModuleTask[])"
+                  @update:active="anyFilterActive = $event"
+                />
+
+                <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />
                   Add Task
                 </Button>
               </div>
 
               <div
-                v-if="tasks.length === 0"
+                v-if="visibleTasks.length === 0"
                 class="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground"
               >
-                No tasks linked yet.
-                <div v-if="isAdmin" class="mt-3">
+                {{
+                  anyFilterActive
+                    ? "No tasks match these filters."
+                    : "No tasks linked yet."
+                }}
+                <div v-if="isAdmin && !anyFilterActive" class="mt-3">
                   <Button size="sm" @click="showAddTask = true">
                     <Plus class="mr-1.5 size-4" />
                     Add Task
@@ -342,7 +361,7 @@ watch(moduleId, async () => {
 
               <CollectionTaskTable
                 v-else
-                :tasks="tasks"
+                :tasks="visibleTasks"
                 :project-key="projectKey"
                 :is-admin="isAdmin"
                 remove-label="Remove from module:"

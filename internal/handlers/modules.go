@@ -31,6 +31,7 @@ var validModuleStatuses = map[string]struct{}{
 	"backlog":     {},
 	"planned":     {},
 	"in_progress": {},
+	"ongoing":     {},
 	"paused":      {},
 	"completed":   {},
 	"cancelled":   {},
