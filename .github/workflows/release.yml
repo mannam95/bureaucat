@@ -136,8 +136,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.version }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          # gh creates the tag at --target itself, so the runner needs no git
+          # identity and no separate tag push.
           gh release create "${{ steps.version.outputs.tag }}" \
+            --target "${{ github.sha }}" \
             --title "${{ steps.version.outputs.version }}" \
             --generate-notes
