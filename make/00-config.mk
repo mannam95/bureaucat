@@ -30,8 +30,12 @@ PYTHON := python3
 # Published image on Docker Hub. Every value is overridable ad-hoc, e.g.
 # `make release VERSION=1.2.0`. VERSION is also baked into the binary via
 # ldflags, so `bureaucat --version` matches the image tag.
-# Bump VERSION here as part of each release so a bare `make release` never
-# re-publishes an already-released tag from newer code.
+#
+# Releases are normally cut by CI (.github/workflows/release.yml), which derives
+# the version from git tags + commit messages - this file plays no part there.
+# VERSION below is only the fallback for a manual `make release`; bump it by hand
+# if you ever use that path, so it never re-publishes an already-released tag.
+# See RELEASING.md.
 DOCKER_USER ?= mvsrinath
 IMAGE_NAME  ?= sprintboard
 VERSION     ?= 1.2.2
