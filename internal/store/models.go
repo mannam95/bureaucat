@@ -70,6 +70,7 @@ const (
 	ModuleStatusBacklog    ModuleStatus = "backlog"
 	ModuleStatusPlanned    ModuleStatus = "planned"
 	ModuleStatusInProgress ModuleStatus = "in_progress"
+	ModuleStatusOngoing    ModuleStatus = "ongoing"
 	ModuleStatusPaused     ModuleStatus = "paused"
 	ModuleStatusCompleted  ModuleStatus = "completed"
 	ModuleStatusCancelled  ModuleStatus = "cancelled"
