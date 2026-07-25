@@ -930,6 +930,8 @@ onMounted(() => {
                   :subtasks="subtasks"
                   :project-key="projectKey"
                   :states="states"
+                  :members="members"
+                  :labels="projectLabels"
                   :is-member="isMember"
                   @updated="loadSubtasks"
                 />

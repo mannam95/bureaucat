@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChart3, Loader2, Users, LayoutGrid, ListTodo, GitBranch, FileText, Building2, Calendar as CalendarIcon, ChevronDown } from "lucide-vue-next";
+import { BarChart3, Loader2, Users, LayoutGrid, ListTodo, GitBranch, FileText, Building2, Paperclip, HardDrive, Calendar as CalendarIcon, ChevronDown } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import { type DateValue, today, getLocalTimeZone } from "@internationalized/date";
 import { VisAxis, VisXYContainer, VisGroupedBar } from "@unovis/vue";
@@ -85,16 +85,27 @@ watch([fromDate, toDate], loadStats);
 
 onMounted(loadStats);
 
+// Human-readable byte size (1536 -> "1.5 KB").
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** i;
+  return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`;
+}
+
 const totalCards = computed(() => {
   const t = stats.value?.totals;
   if (!t) return [];
   return [
-    { label: "Workspaces", value: t.workspaces, icon: Building2, color: "text-violet-400" },
-    { label: "Projects", value: t.projects, icon: LayoutGrid, color: "text-blue-400" },
-    { label: "Tasks", value: t.tasks, icon: ListTodo, color: "text-emerald-400" },
-    { label: "Subtasks", value: t.subtasks, icon: GitBranch, color: "text-teal-400" },
-    { label: "Pages", value: t.pages, icon: FileText, color: "text-amber-400" },
-    { label: "Users", value: t.users, icon: Users, color: "text-rose-400" },
+    { label: "Workspaces", value: t.workspaces.toLocaleString(), icon: Building2, color: "text-violet-400" },
+    { label: "Projects", value: t.projects.toLocaleString(), icon: LayoutGrid, color: "text-blue-400" },
+    { label: "Tasks", value: t.tasks.toLocaleString(), icon: ListTodo, color: "text-emerald-400" },
+    { label: "Subtasks", value: t.subtasks.toLocaleString(), icon: GitBranch, color: "text-teal-400" },
+    { label: "Pages", value: t.pages.toLocaleString(), icon: FileText, color: "text-amber-400" },
+    { label: "Users", value: t.users.toLocaleString(), icon: Users, color: "text-rose-400" },
+    { label: "Attachments", value: t.attachments.toLocaleString(), icon: Paperclip, color: "text-cyan-400" },
+    { label: "Attachments size", value: formatBytes(t.attachments_bytes), icon: HardDrive, color: "text-sky-400" },
   ];
 });
 
@@ -111,6 +122,16 @@ function shortDay(day: string | undefined): string {
 
 function titleCase(value: string): string {
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// The chart tooltip receives the x-axis value, which for our charts is the bar
+// index. These map that index back to a human-readable heading: the day for
+// time series, the category name for the breakdown bars.
+function dayLabelFor(data: { day: string }[]) {
+  return (i: number | Date) => shortDay(data[Math.round(Number(i))]?.day);
+}
+function categoryLabelFor(bars: { label: string }[]) {
+  return (i: number | Date) => bars[Math.round(Number(i))]?.label ?? "";
 }
 
 // Compact axis numbers (1200 -> "1.2k") and integer-only y ticks so unovis
@@ -141,14 +162,38 @@ const trendCharts = computed(() => {
   return [
     { key: "tasks", title: "Tasks created", color: "#6EE7B7", data: s?.tasks ?? [] },
     { key: "subtasks", title: "Subtasks created", color: "#93C5FD", data: s?.subtasks ?? [] },
+    { key: "comments", title: "Comments created", color: "#F9A8D4", data: s?.comments ?? [] },
+    { key: "activity", title: "Activity created", color: "#A5B4FC", data: s?.activity ?? [] },
+    { key: "attachments", title: "Attachments created", color: "#FDBA74", data: s?.attachments ?? [] },
     { key: "pages", title: "Pages created", color: "#C4B5FD", data: s?.pages ?? [] },
   ];
 });
 
+// Views-created series, split by visibility (stacked private + shared).
+interface ViewSeriesPoint {
+  day: string;
+  private: number;
+  shared: number;
+}
+
+const VIEW_PRIVATE_COLOR = "#FCD34D"; // amber-300
+const VIEW_SHARED_COLOR = "#93C5FD"; // blue-300
+
+const viewsConfig: ChartConfig = {
+  private: { label: "Private", color: VIEW_PRIVATE_COLOR },
+  shared: { label: "Shared", color: VIEW_SHARED_COLOR },
+};
+
+const viewsSeries = computed<ViewSeriesPoint[]>(() => stats.value?.series.views ?? []);
+
+const hasViews = computed(() =>
+  viewsSeries.value.some((d) => d.private > 0 || d.shared > 0)
+);
+
 interface BarPoint {
   label: string;
   count: number;
-  color: string;
+  fill: string;
 }
 
 const barConfig: ChartConfig = {
@@ -176,7 +221,7 @@ const stateBars = computed<BarPoint[]>(() =>
   (stats.value?.tasks_by_state ?? []).map((s) => ({
     label: titleCase(s.label),
     count: s.count,
-    color: STATE_LIGHT[s.label] ?? "#D1D5DB",
+    fill: STATE_LIGHT[s.label] ?? "#D1D5DB",
   }))
 );
 
@@ -184,7 +229,7 @@ const priorityBars = computed<BarPoint[]>(() =>
   (stats.value?.tasks_by_priority ?? []).map((p) => ({
     label: p.label,
     count: p.count,
-    color: PRIORITY_LIGHT[p.label] ?? "#D1D5DB",
+    fill: PRIORITY_LIGHT[p.label] ?? "#D1D5DB",
   }))
 );
 
@@ -264,14 +309,14 @@ const maxProjectTasks = computed(() =>
 
         <template v-else-if="stats">
           <!-- Totals -->
-          <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <Card v-for="card in totalCards" :key="card.label" class="gap-0 py-4">
               <CardHeader class="flex flex-row items-center justify-between space-y-0 px-4 pb-1.5">
                 <CardDescription class="text-xs">{{ card.label }}</CardDescription>
                 <component :is="card.icon" :class="['size-4', card.color]" />
               </CardHeader>
               <CardContent class="px-4">
-                <div class="text-2xl font-bold tracking-tight">{{ card.value.toLocaleString() }}</div>
+                <div class="text-2xl font-bold tracking-tight">{{ card.value }}</div>
               </CardContent>
             </Card>
           </div>
@@ -286,7 +331,7 @@ const maxProjectTasks = computed(() =>
             </div>
 
             <div class="grid gap-3 lg:grid-cols-3">
-              <Card v-for="chart in trendCharts" :key="chart.key" class="gap-3 py-4">
+              <Card v-for="(chart, i) in trendCharts" :key="chart.key" class="gap-3 py-4" :style="{ order: i < 2 ? i + 1 : i + 2 }">
                 <CardHeader class="px-4 pb-1">
                   <CardTitle class="text-base">{{ chart.title }}</CardTitle>
                 </CardHeader>
@@ -318,9 +363,60 @@ const maxProjectTasks = computed(() =>
                         :tick-line="false"
                       />
                       <ChartTooltip />
-                      <ChartCrosshair :template="componentToString(seriesConfig, ChartTooltipContent)" />
+                      <ChartCrosshair :template="componentToString({ count: { label: 'Created', color: chart.color } }, ChartTooltipContent, { labelFormatter: dayLabelFor(chart.data) })" />
                     </VisXYContainer>
                   </ChartContainer>
+                </CardContent>
+              </Card>
+
+              <!-- Views created, stacked by visibility (placed as the third trend) -->
+              <Card class="gap-3 py-4" :style="{ order: 3 }">
+                <CardHeader class="flex flex-row items-center justify-between space-y-0 px-4 pb-1">
+                  <CardTitle class="text-base">Views created</CardTitle>
+                  <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span class="flex items-center gap-1.5">
+                      <span class="size-2.5 rounded-full" :style="{ backgroundColor: VIEW_PRIVATE_COLOR }" />
+                      Private
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                      <span class="size-2.5 rounded-full" :style="{ backgroundColor: VIEW_SHARED_COLOR }" />
+                      Shared
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent class="px-4">
+                  <ChartContainer v-if="hasViews" :config="viewsConfig" class="h-44 w-full">
+                    <VisXYContainer :data="viewsSeries" :margin="{ top: 8, right: 8, bottom: 4, left: 4 }">
+                      <VisGroupedBar
+                        :x="(_d: ViewSeriesPoint, i: number) => i"
+                        :y="[(d: ViewSeriesPoint) => d.private, (d: ViewSeriesPoint) => d.shared]"
+                        :color="[VIEW_PRIVATE_COLOR, VIEW_SHARED_COLOR]"
+                        :rounded-corners="2"
+                        :bar-padding="0.15"
+                        :group-padding="0.15"
+                      />
+                      <VisAxis
+                        type="x"
+                        :x="(_d: ViewSeriesPoint, i: number) => i"
+                        :tick-format="(i: number) => shortDay(viewsSeries[i]?.day)"
+                        :num-ticks="5"
+                        :grid-line="false"
+                        :domain-line="false"
+                        :tick-line="false"
+                      />
+                      <VisAxis
+                        type="y"
+                        :tick-format="yTick"
+                        :num-ticks="4"
+                        :grid-line="false"
+                        :domain-line="false"
+                        :tick-line="false"
+                      />
+                      <ChartTooltip />
+                      <ChartCrosshair :template="componentToString(viewsConfig, ChartTooltipContent, { labelFormatter: dayLabelFor(viewsSeries) })" />
+                    </VisXYContainer>
+                  </ChartContainer>
+                  <p v-else class="py-12 text-center text-sm text-muted-foreground">No views yet</p>
                 </CardContent>
               </Card>
             </div>
@@ -346,7 +442,7 @@ const maxProjectTasks = computed(() =>
                       <VisGroupedBar
                         :x="(_d: BarPoint, i: number) => i"
                         :y="(d: BarPoint) => d.count"
-                        :color="(d: BarPoint) => d.color"
+                        :color="(d: BarPoint) => d.fill"
                         :rounded-corners="6"
                         :bar-padding="0.35"
                       />
@@ -367,7 +463,7 @@ const maxProjectTasks = computed(() =>
                         :tick-line="false"
                       />
                       <ChartTooltip />
-                      <ChartCrosshair :template="componentToString(barConfig, ChartTooltipContent)" />
+                      <ChartCrosshair :template="componentToString(barConfig, ChartTooltipContent, { labelFormatter: categoryLabelFor(stateBars) })" />
                     </VisXYContainer>
                   </ChartContainer>
                   <p v-else class="py-12 text-center text-sm text-muted-foreground">No tasks yet</p>
@@ -384,7 +480,7 @@ const maxProjectTasks = computed(() =>
                       <VisGroupedBar
                         :x="(_d: BarPoint, i: number) => i"
                         :y="(d: BarPoint) => d.count"
-                        :color="(d: BarPoint) => d.color"
+                        :color="(d: BarPoint) => d.fill"
                         :rounded-corners="6"
                         :bar-padding="0.35"
                       />
@@ -405,7 +501,7 @@ const maxProjectTasks = computed(() =>
                         :tick-line="false"
                       />
                       <ChartTooltip />
-                      <ChartCrosshair :template="componentToString(barConfig, ChartTooltipContent)" />
+                      <ChartCrosshair :template="componentToString(barConfig, ChartTooltipContent, { labelFormatter: categoryLabelFor(priorityBars) })" />
                     </VisXYContainer>
                   </ChartContainer>
                   <p v-else class="py-12 text-center text-sm text-muted-foreground">No tasks yet</p>

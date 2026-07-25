@@ -55,6 +55,12 @@ interface DayCount {
   count: number;
 }
 
+interface ViewDayCount {
+  day: string;
+  private: number;
+  shared: number;
+}
+
 export interface AdminStats {
   totals: {
     workspaces: number;
@@ -63,6 +69,8 @@ export interface AdminStats {
     subtasks: number;
     pages: number;
     users: number;
+    attachments: number;
+    attachments_bytes: number;
   };
   tasks_by_state: StatCount[];
   tasks_by_priority: StatCount[];
@@ -75,6 +83,10 @@ export interface AdminStats {
     tasks: DayCount[];
     subtasks: DayCount[];
     pages: DayCount[];
+    views: ViewDayCount[];
+    comments: DayCount[];
+    activity: DayCount[];
+    attachments: DayCount[];
   };
 }
 
