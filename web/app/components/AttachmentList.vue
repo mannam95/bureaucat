@@ -22,15 +22,23 @@ const lightboxOpen = ref(false);
 const lightboxSrc = ref("");
 const lightboxAlt = ref("");
 
-function isImage(mimeType: string): boolean {
-  return mimeType.startsWith("image/");
+// Detection falls back to the filename extension because attachments uploaded
+// via the API (e.g. the Taiga migration) can land with a generic
+// application/octet-stream type, and we still want them routed correctly.
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
+
+function isImage(a: Attachment): boolean {
+  return a.mime_type.startsWith("image/") || IMAGE_EXT.test(a.filename);
+}
+function isPdf(a: Attachment): boolean {
+  return a.mime_type === "application/pdf" || /\.pdf$/i.test(a.filename);
 }
 
 const imageAttachments = computed(() =>
-  props.attachments.filter((a) => isImage(a.mime_type))
+  props.attachments.filter((a) => isImage(a))
 );
 const fileAttachments = computed(() =>
-  props.attachments.filter((a) => !isImage(a.mime_type))
+  props.attachments.filter((a) => !isImage(a))
 );
 
 function openLightbox(attachment: Attachment) {
@@ -45,12 +53,26 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Images preview in-app; PDFs open in a new tab (the browser's viewer renders
+// them inline and offers its own download); anything else downloads directly
+// rather than opening a blank tab that immediately downloads.
 function handleClick(attachment: Attachment) {
-  if (isImage(attachment.mime_type)) {
+  if (isImage(attachment)) {
     openLightbox(attachment);
-  } else {
+  } else if (isPdf(attachment)) {
     window.open(attachment.url, "_blank");
+  } else {
+    triggerDownload(attachment);
   }
+}
+
+function triggerDownload(attachment: Attachment) {
+  const a = document.createElement("a");
+  a.href = attachment.url;
+  a.download = attachment.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 </script>
 

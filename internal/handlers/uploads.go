@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -129,8 +131,21 @@ func (h *UploadHandler) Serve(c *echo.Context) error {
 	}
 	defer reader.Close()
 
-	// Set response headers
-	c.Response().Header().Set("Content-Type", upload.MimeType)
+	// Set response headers. The browser previews a file inline only when the
+	// Content-Type is meaningful, so recover from a missing or generic stored
+	// type by inferring from the extension. This is what lets an image render
+	// and a PDF open in the browser's viewer instead of downloading — matters
+	// especially for attachments uploaded via the API (e.g. the Taiga
+	// migration), which often arrive as application/octet-stream.
+	contentType := upload.MimeType
+	if contentType == "" || contentType == "application/octet-stream" {
+		if inferred := mime.TypeByExtension(filepath.Ext(upload.Filename)); inferred != "" {
+			contentType = inferred
+		} else if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
+	c.Response().Header().Set("Content-Type", contentType)
 	c.Response().Header().Set("Cache-Control", "public, max-age=3600")
 
 	c.Response().WriteHeader(http.StatusOK)
