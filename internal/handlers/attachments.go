@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -138,7 +140,7 @@ func (h *AttachmentHandler) DeleteTaskAttachment(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	if err := h.store.DeleteAttachment(ctx, attachmentID); err != nil {
+	if err := h.deleteAttachment(ctx, attachmentID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
 	}
 
@@ -240,11 +242,41 @@ func (h *AttachmentHandler) DeleteCommentAttachment(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	if err := h.store.DeleteAttachment(ctx, attachmentID); err != nil {
+	if err := h.deleteAttachment(ctx, attachmentID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
 	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// deleteAttachment removes the attachment link and, when it was the last
+// reference to the underlying upload, deletes the upload record and its stored
+// file too - otherwise the file and row would be orphaned forever. Uploads can
+// legitimately be shared across attachments (the schema allows it), so the file
+// is only removed once no attachment points at it.
+func (h *AttachmentHandler) deleteAttachment(ctx context.Context, attachmentID uuid.UUID) error {
+	uploadID, err := h.store.DeleteAttachment(ctx, attachmentID)
+	if err != nil {
+		return err
+	}
+
+	remaining, err := h.store.CountAttachmentsByUpload(ctx, uploadID)
+	if err != nil {
+		return err
+	}
+	if remaining > 0 {
+		return nil
+	}
+
+	// Last reference gone: delete the stored file, then the upload row. The S3
+	// delete is best-effort - a failure there must not fail the user's request
+	// or leave a dangling uploads row pointing at a file we meant to remove.
+	if upload, err := h.store.GetUploadByID(ctx, uploadID); err == nil {
+		if delErr := h.uploadService.DeleteFile(upload.StoredName); delErr != nil {
+			log.Printf("attachment delete: failed to remove stored file %q: %v", upload.StoredName, delErr)
+		}
+	}
+	return h.store.DeleteUpload(ctx, uploadID)
 }
 
 // resolveTask looks up a task by project key and task number from route params.

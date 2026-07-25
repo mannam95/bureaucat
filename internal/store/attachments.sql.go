@@ -12,6 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAttachmentsByUpload = `-- name: CountAttachmentsByUpload :one
+SELECT count(*) FROM attachments WHERE upload_id = $1
+`
+
+func (q *Queries) CountAttachmentsByUpload(ctx context.Context, uploadID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countAttachmentsByUpload, uploadID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAttachment = `-- name: CreateAttachment :one
 INSERT INTO attachments (upload_id, entity_type, entity_id, created_by)
 VALUES ($1, $2, $3, $4)
@@ -44,13 +55,17 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 	return i, err
 }
 
-const deleteAttachment = `-- name: DeleteAttachment :exec
-DELETE FROM attachments WHERE id = $1
+const deleteAttachment = `-- name: DeleteAttachment :one
+DELETE FROM attachments WHERE id = $1 RETURNING upload_id
 `
 
-func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAttachment, id)
-	return err
+// Returns the upload_id so the caller can clean up the underlying file once no
+// attachment references it anymore.
+func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteAttachment, id)
+	var upload_id uuid.UUID
+	err := row.Scan(&upload_id)
+	return upload_id, err
 }
 
 const deleteAttachmentsByEntity = `-- name: DeleteAttachmentsByEntity :exec

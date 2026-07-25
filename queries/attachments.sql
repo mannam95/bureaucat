@@ -3,8 +3,13 @@ INSERT INTO attachments (upload_id, entity_type, entity_id, created_by)
 VALUES ($1, $2, $3, $4)
 RETURNING id, upload_id, entity_type, entity_id, created_by, created_at;
 
--- name: DeleteAttachment :exec
-DELETE FROM attachments WHERE id = $1;
+-- name: DeleteAttachment :one
+-- Returns the upload_id so the caller can clean up the underlying file once no
+-- attachment references it anymore.
+DELETE FROM attachments WHERE id = $1 RETURNING upload_id;
+
+-- name: CountAttachmentsByUpload :one
+SELECT count(*) FROM attachments WHERE upload_id = $1;
 
 -- name: DeleteAttachmentsByEntity :exec
 DELETE FROM attachments WHERE entity_type = $1 AND entity_id = $2;

@@ -48,6 +48,7 @@ type Querier interface {
 	CountAllWorkspaces(ctx context.Context) (int64, error)
 	CountAllWorkspacesFiltered(ctx context.Context, search pgtype.Text) (int64, error)
 	CountAttachments(ctx context.Context) (int64, error)
+	CountAttachmentsByUpload(ctx context.Context, uploadID uuid.UUID) (int64, error)
 	CountDeletedProjects(ctx context.Context) (int64, error)
 	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountPages(ctx context.Context) (int64, error)
@@ -104,7 +105,9 @@ type Querier interface {
 	// ==================== WORKSPACES ====================
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
-	DeleteAttachment(ctx context.Context, id uuid.UUID) error
+	// Returns the upload_id so the caller can clean up the underlying file once no
+	// attachment references it anymore.
+	DeleteAttachment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	DeleteAttachmentsByEntity(ctx context.Context, arg DeleteAttachmentsByEntityParams) error
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
 	DeletePersonalAccessToken(ctx context.Context, arg DeletePersonalAccessTokenParams) error

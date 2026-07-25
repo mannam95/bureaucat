@@ -130,7 +130,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 			return nil, fmt.Errorf("failed to create upload service: %w", err)
 		}
 		srv.uploadService = uploadService
-		srv.uploadHandler = handlers.NewUploadHandler(srv.store, uploadService)
+		srv.uploadHandler = handlers.NewUploadHandler(srv.store, uploadService, srv.authManager)
 
 		// Initialize per-user in-app notifications service, then wire it into the
 		// activity service so every logged activity fans out to participants.

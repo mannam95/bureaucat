@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -18,14 +19,39 @@ import (
 type UploadHandler struct {
 	store         store.Querier
 	uploadService *uploads.Service
+	authManager   *auth.Manager
 }
 
 // NewUploadHandler creates a new upload handler.
-func NewUploadHandler(store store.Querier, uploadService *uploads.Service) *UploadHandler {
+func NewUploadHandler(store store.Querier, uploadService *uploads.Service, authManager *auth.Manager) *UploadHandler {
 	return &UploadHandler{
 		store:         store,
 		uploadService: uploadService,
+		authManager:   authManager,
 	}
+}
+
+// authorized reports whether the request may fetch an upload. The serve route is
+// registered publicly (browser <img>/download requests cannot pass through the
+// header-based auth middleware), so authentication is enforced here instead.
+//
+// Browsers send the access_token cookie automatically on same-origin requests;
+// API clients may send an Authorization: Bearer JWT. Either, if valid, grants
+// access. No per-project check: any signed-in user may fetch any upload by id -
+// a deliberate, far smaller exposure than the previous "anyone with the URL".
+func (h *UploadHandler) authorized(c *echo.Context) bool {
+	if cookie, err := c.Cookie("access_token"); err == nil && cookie.Value != "" {
+		if _, err := h.authManager.ValidateAccessToken(cookie.Value); err == nil {
+			return true
+		}
+	}
+	authz := c.Request().Header.Get("Authorization")
+	if parts := strings.SplitN(authz, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+		if _, err := h.authManager.ValidateAccessToken(parts[1]); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // UploadResponse represents the response after a successful upload.
@@ -110,6 +136,10 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 //	@Failure		404	{object}	ErrorResponse
 //	@Router			/uploads/{id} [get]
 func (h *UploadHandler) Serve(c *echo.Context) error {
+	if !h.authorized(c) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "authentication required")
+	}
+
 	uploadIDStr := c.Param("id")
 	uploadID, err := uuid.Parse(uploadIDStr)
 	if err != nil {
