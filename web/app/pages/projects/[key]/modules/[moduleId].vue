@@ -26,7 +26,6 @@ const {
   currentModule,
   tasks,
   metrics,
-  members,
   getModule,
   updateModule,
   deleteModule,
@@ -34,7 +33,6 @@ const {
   listPickerTasks,
   addTasksToModule,
   removeTaskFromModule,
-  listModuleMembers,
   getModuleMetrics,
   clearCurrent,
 } = useModules();
@@ -83,20 +81,56 @@ function formatRange(a?: string, b?: string): string {
   return `${formatDate(a)} → ${formatDate(b)}`;
 }
 
+// Assignees for the sidebar card, derived from the module's tasks (module
+// metrics carry no assignee summary, unlike cycles). Same shape and card as the
+// cycle page: person + how many of this module's tasks they're on.
+const assignees = computed(() => {
+  const byUser = new Map<
+    string,
+    {
+      user_id: string;
+      first_name: string;
+      last_name: string;
+      username: string;
+      avatar_url?: string;
+      task_count: number;
+    }
+  >();
+  for (const t of tasks.value) {
+    for (const a of t.assignees ?? []) {
+      const existing = byUser.get(a.user_id);
+      if (existing) {
+        existing.task_count += 1;
+      } else {
+        byUser.set(a.user_id, {
+          user_id: a.user_id,
+          first_name: a.first_name,
+          last_name: a.last_name,
+          username: a.username,
+          avatar_url: a.avatar_url,
+          task_count: 1,
+        });
+      }
+    }
+  }
+  return [...byUser.values()].sort(
+    (x, y) =>
+      y.task_count - x.task_count ||
+      `${x.first_name} ${x.last_name}`.localeCompare(`${y.first_name} ${y.last_name}`)
+  );
+});
 
 async function loadAll() {
   loading.value = true;
   error.value = null;
-  const [m, met, t, mem] = await Promise.all([
+  const [m, met, t] = await Promise.all([
     getModule(projectKey.value, moduleId.value),
     getModuleMetrics(projectKey.value, moduleId.value),
     listModuleTasks(projectKey.value, moduleId.value),
-    listModuleMembers(projectKey.value, moduleId.value),
   ]);
   if (!m.success) error.value = m.error || "Failed to load module";
   if (!met.success && !error.value) error.value = met.error || "Failed to load metrics";
   if (!t.success && !error.value) error.value = t.error || "Failed to load tasks";
-  void mem;
   loading.value = false;
 }
 
@@ -104,15 +138,11 @@ async function reloadTasksAndMetrics() {
   await Promise.all([
     listModuleTasks(projectKey.value, moduleId.value),
     getModuleMetrics(projectKey.value, moduleId.value),
-    listModuleMembers(projectKey.value, moduleId.value),
   ]);
 }
 
 async function reloadModule() {
-  await Promise.all([
-    getModule(projectKey.value, moduleId.value),
-    listModuleMembers(projectKey.value, moduleId.value),
-  ]);
+  await getModule(projectKey.value, moduleId.value);
 }
 
 async function changeStatus(status: ModuleStatus) {
@@ -369,7 +399,7 @@ watch(moduleId, async () => {
               />
             </section>
 
-            <!-- RIGHT: Metrics + Members -->
+            <!-- RIGHT: Overview -->
             <aside class="space-y-6">
               <ProgressCard :metrics="metrics" />
 
@@ -378,16 +408,38 @@ watch(moduleId, async () => {
                 :buckets="metrics.state_breakdown"
               />
 
-              <!-- Members card (bordered, matches cycles aesthetic) -->
-              <section class="rounded-lg border p-4">
-                <ModuleMembersPanel
-                  :project-key="projectKey"
-                  :module-id="moduleId"
-                  :lead-id="currentModule.lead?.user_id"
-                  :members="members"
-                  :is-admin="isAdmin"
-                  @changed="reloadModule"
-                />
+              <!-- Assignees -->
+              <section
+                v-if="assignees.length"
+                class="rounded-lg border p-4"
+              >
+                <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Assignees
+                </h3>
+                <ul class="space-y-1">
+                  <li
+                    v-for="a in assignees"
+                    :key="a.user_id"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                  >
+                    <Avatar class="size-6">
+                      <AvatarImage
+                        v-if="a.avatar_url"
+                        :src="a.avatar_url"
+                        :alt="a.first_name"
+                      />
+                      <AvatarFallback class="text-[9px]" :seed="a.user_id">
+                        {{ (a.first_name[0] || "") + (a.last_name[0] || "") }}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span class="min-w-0 flex-1 truncate">
+                      {{ `${a.first_name} ${a.last_name}`.trim() || a.username }}
+                    </span>
+                    <span class="font-medium tabular-nums text-muted-foreground">
+                      {{ a.task_count }}
+                    </span>
+                  </li>
+                </ul>
               </section>
             </aside>
           </div>
@@ -397,7 +449,7 @@ watch(moduleId, async () => {
             :project-key="projectKey"
             :collection-id="moduleId"
             title="Add tasks to module"
-            description="Pick tasks to link, or create a brand new one. Assignees are auto-added as module members."
+            description="Pick tasks to link, or create a brand new one."
             empty-hint="No eligible tasks found."
             :load-tasks="loadPickerTasks"
             :add-tasks="addTasksToCurrentModule"
