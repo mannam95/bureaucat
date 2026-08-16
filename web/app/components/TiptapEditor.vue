@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useEditor, EditorContent } from "@tiptap/vue-3";
+import { useEditor, EditorContent, Extension } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Table } from "@tiptap/extension-table";
@@ -183,7 +183,40 @@ function handleMentionKeydown(event: KeyboardEvent): boolean {
   return false;
 }
 
+const codeFenceRegex = /^(?:```|~~~)([a-z]+)?$/;
+
+// StarterKit's code-block input rule only fires on a trailing space, since
+// input rules never run on Enter. This adds the Enter path, keeping the
+// optional language (```js + Enter) working the same way.
+const CodeFenceOnEnter = Extension.create({
+  name: "codeFenceOnEnter",
+  priority: 1000,
+  addKeyboardShortcuts() {
+    const convertFence = () => {
+      const { state } = this.editor;
+      const { $from, empty } = state.selection;
+      if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) {
+        return false;
+      }
+      const text = $from.parent.textContent;
+      if ($from.parentOffset !== text.length) return false;
+      const match = text.match(codeFenceRegex);
+      if (!match || !state.schema.nodes.codeBlock) return false;
+      return this.editor
+        .chain()
+        .deleteRange({ from: $from.start(), to: $from.end() })
+        .setNode("codeBlock", { language: match[1] ?? null })
+        .run();
+    };
+    return {
+      Enter: convertFence,
+      "Shift-Enter": convertFence,
+    };
+  },
+});
+
 const extensions = [
+  CodeFenceOnEnter,
   StarterKit.configure({
     heading: { levels: [1, 2, 3] },
     // Disable the drop cursor — drops are handled as file attachments, so the
