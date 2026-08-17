@@ -12,6 +12,7 @@
   "dependencies": {
     "@lucide/vue": "^1.23.0",
     "@nuxtjs/color-mode": "^4.0.0",
+    "@scalar/api-reference": "^1.65.1",
     "@tanstack/vue-table": "^8.21.3",
     "@tiptap/extension-image": "^3.22.2",
     "@tiptap/extension-link": "^3.22.2",
