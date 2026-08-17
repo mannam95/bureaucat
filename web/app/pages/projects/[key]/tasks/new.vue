@@ -54,6 +54,25 @@ const form = ref({
   labels: [] as string[],
 });
 
+const titleDraft = useDraft(
+  computed(() => `task-new:${projectKey.value}:title`),
+  computed({
+    get: () => form.value.title,
+    set: (v) => {
+      form.value.title = v;
+    },
+  })
+);
+const descriptionDraft = useDraft(
+  computed(() => `task-new:${projectKey.value}:description`),
+  computed({
+    get: () => form.value.description,
+    set: (v) => {
+      form.value.description = v;
+    },
+  })
+);
+
 const defaultState = computed(() => states.value.find((s) => s.is_default));
 
 const isMember = computed(
@@ -118,6 +137,8 @@ async function handleSubmit() {
   loading.value = false;
 
   if (result.success) {
+    titleDraft.clear();
+    descriptionDraft.clear();
     toast.success(`Task ${result.data?.task_id} created`);
     router.push(`/projects/${projectKey.value}/tasks/${result.data?.task_number}`);
   } else {

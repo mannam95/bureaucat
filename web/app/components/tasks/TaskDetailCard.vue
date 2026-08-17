@@ -317,6 +317,11 @@ const commentsLoading = ref(false);
 const commentContent = ref("");
 const submittingComment = ref(false);
 
+const commentDraft = useDraft(
+  computed(() => `comment:${props.projectKey}:${props.taskNumber}`),
+  commentContent
+);
+
 // Files picked for the comment being written; linked once it is posted.
 const {
   pending: pendingCommentFiles,
@@ -385,6 +390,7 @@ async function submitComment() {
       const created: Comment = await res.json();
       await attachCommentFiles(props.projectKey, props.taskNumber, created.id);
       commentContent.value = "";
+      commentDraft.clear();
       await loadComments();
     } else {
       const err = await res.json().catch(() => ({}));

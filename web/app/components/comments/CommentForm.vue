@@ -21,6 +21,11 @@ const { user } = useAuth();
 const content = ref("");
 const loading = ref(false);
 
+const draft = useDraft(
+  computed(() => `comment:${props.projectKey}:${props.taskNum}`),
+  content
+);
+
 // Tiptap emits `<p></p>` (and variants) for a visually-empty editor.
 // Strip tags and whitespace to test for genuine emptiness.
 const isContentEmpty = computed(() => {
@@ -84,6 +89,7 @@ async function handleSubmit() {
     }
 
     content.value = "";
+    draft.clear();
     pendingUploads.value = [];
     emit("created");
   } else {

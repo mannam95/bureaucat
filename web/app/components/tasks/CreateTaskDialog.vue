@@ -133,6 +133,38 @@ const form = ref({
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
 
+// Shares its key with the /tasks/new page so one unfinished task draft follows
+// the user between the two. Empty until a project is chosen (persistence off),
+// and subtask composers get their own scope. Restored on open rather than on
+// mount, since the dialog resets its form there.
+const draftScope = computed(() => {
+  const key = effectiveProjectKey.value;
+  if (!key) return "";
+  return props.parentTaskNumber != null
+    ? `task-new:${key}:sub:${props.parentTaskNumber}`
+    : `task-new:${key}`;
+});
+const titleDraft = useDraft(
+  computed(() => (draftScope.value ? `${draftScope.value}:title` : "")),
+  computed({
+    get: () => form.value.title,
+    set: (v) => {
+      form.value.title = v;
+    },
+  }),
+  { autoRestore: false }
+);
+const descriptionDraft = useDraft(
+  computed(() => (draftScope.value ? `${draftScope.value}:description` : "")),
+  computed({
+    get: () => form.value.description,
+    set: (v) => {
+      form.value.description = v;
+    },
+  }),
+  { autoRestore: false }
+);
+
 function resetForm() {
   form.value = {
     title: "",
@@ -260,6 +292,8 @@ watch(open, async (isOpen) => {
       });
     }
     resetForm();
+    titleDraft.restore();
+    descriptionDraft.restore();
   }
 });
 
@@ -289,6 +323,8 @@ async function handleSubmit() {
   loading.value = false;
 
   if (result.success && result.data) {
+    titleDraft.clear();
+    descriptionDraft.clear();
     open.value = false;
     emit("created");
     // Subtask mode stays on the parent's page; standalone create navigates to
