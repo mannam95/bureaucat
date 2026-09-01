@@ -10,6 +10,8 @@ export interface Task {
   state_type: string;
   state_color: string;
   priority: number;
+  /** Fine-grained 1-10 star rating; 0 = unset. Separate from `priority`. */
+  priority_rating?: number;
   start_date?: string;
   due_date?: string;
   created_by: string;
@@ -148,6 +150,7 @@ export interface UpdateTaskRequest {
   description?: string;
   state_id?: string;
   priority?: number;
+  priority_rating?: number;
   // Use `null` to clear; omit to leave unchanged.
   start_date?: string | null;
   due_date?: string | null;

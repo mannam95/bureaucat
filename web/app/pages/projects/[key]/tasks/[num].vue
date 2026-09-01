@@ -245,6 +245,22 @@ async function handlePriorityChange(priority: number) {
   }
 }
 
+async function handleRatingChange(rating: number) {
+  if ((currentTask.value?.priority_rating ?? 0) === rating) return;
+  updating.value = true;
+  const result = await updateTask(projectKey.value, taskNum.value, {
+    priority_rating: rating,
+  });
+  updating.value = false;
+
+  if (result.success) {
+    toast.success("Priority rating updated");
+    await listActivity(projectKey.value, taskNum.value);
+  } else {
+    toast.error(result.error || "Failed to update priority rating");
+  }
+}
+
 const startDateOpen = ref(false);
 const dueDateOpen = ref(false);
 const startDateDraft = ref<DateValue | undefined>();
@@ -981,6 +997,17 @@ onMounted(() => {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                </div>
+
+                <!-- Priority rating (1-10 stars) -->
+                <div class="flex items-center justify-between py-3">
+                  <p class="text-xs text-muted-foreground">Priority rating</p>
+                  <PriorityRating
+                    editable
+                    :model-value="currentTask.priority_rating ?? 0"
+                    :disabled="!isMember || updating"
+                    @update:model-value="handleRatingChange"
+                  />
                 </div>
 
                 <!-- Cycle -->

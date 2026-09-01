@@ -38,6 +38,7 @@ export interface CycleTask {
   state_type: string;
   state_color: string;
   priority: number;
+  priority_rating?: number;
   start_date?: string;
   due_date?: string;
   assignees: TaskAssignee[];

@@ -180,13 +180,19 @@ const assignedTo = computed<Person[]>(() =>
         </div>
       </div>
 
-      <!-- Col 4: Priority badge -->
-      <div class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit justify-self-end">
-        <span
-          class="size-2.5 shrink-0 rounded-full ring-1.5 ring-offset-1 ring-offset-background"
-          :style="{ backgroundColor: priorityInfo.color, '--tw-ring-color': priorityInfo.color }"
+      <!-- Col 4: Priority label + star rating -->
+      <div class="flex items-center gap-1.5 justify-self-end">
+        <PriorityRating
+          v-if="(task.priority_rating ?? 0) > 0"
+          :model-value="task.priority_rating"
         />
-        <span class="text-xs text-muted-foreground whitespace-nowrap">{{ priorityInfo.label }}</span>
+        <div class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit">
+          <span
+            class="size-2.5 shrink-0 rounded-full ring-1.5 ring-offset-1 ring-offset-background"
+            :style="{ backgroundColor: priorityInfo.color, '--tw-ring-color': priorityInfo.color }"
+          />
+          <span class="text-xs text-muted-foreground whitespace-nowrap">{{ priorityInfo.label }}</span>
+        </div>
       </div>
 
       <!-- Col 5: Created by (always a single person) -->

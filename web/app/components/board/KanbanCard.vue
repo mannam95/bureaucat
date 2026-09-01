@@ -77,12 +77,18 @@ function toggleDetail(open: boolean) {
             <Maximize2 class="size-3 shrink-0 opacity-50" />
             <span class="font-mono text-xs">{{ task.task_id }}</span>
           </NuxtLink>
-          <div
-            v-if="task.priority > 0"
-            class="size-2 rounded-full"
-            :style="{ backgroundColor: priorityInfo.color }"
-            :title="priorityInfo.label"
-          />
+          <div class="flex items-center gap-1.5">
+            <PriorityRating
+              v-if="(task.priority_rating ?? 0) > 0"
+              :model-value="task.priority_rating"
+            />
+            <div
+              v-if="task.priority > 0"
+              class="size-2 rounded-full"
+              :style="{ backgroundColor: priorityInfo.color }"
+              :title="priorityInfo.label"
+            />
+          </div>
         </div>
 
         <!-- Title -->
