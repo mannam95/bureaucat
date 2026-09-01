@@ -30,6 +30,15 @@ const {
 } = useProjects();
 
 const { createTask } = useTasks();
+// Files picked in the description toolbar before the task exists; linked to it
+// right after creation.
+const {
+  pending: pendingFiles,
+  uploading: attachmentsUploading,
+  addFiles: addPendingFiles,
+  remove: removePendingFile,
+  attachAll: attachPendingFiles,
+} = usePendingAttachments();
 
 const pageLoading = ref(true);
 const loading = ref(false);
@@ -44,6 +53,25 @@ const form = ref({
   assignees: [] as string[],
   labels: [] as string[],
 });
+
+const titleDraft = useDraft(
+  computed(() => `task-new:${projectKey.value}:title`),
+  computed({
+    get: () => form.value.title,
+    set: (v) => {
+      form.value.title = v;
+    },
+  })
+);
+const descriptionDraft = useDraft(
+  computed(() => `task-new:${projectKey.value}:description`),
+  computed({
+    get: () => form.value.description,
+    set: (v) => {
+      form.value.description = v;
+    },
+  })
+);
 
 const defaultState = computed(() => states.value.find((s) => s.is_default));
 
@@ -102,9 +130,15 @@ async function handleSubmit() {
     labels: form.value.labels.length > 0 ? form.value.labels : undefined,
   });
 
+  if (result.success && result.data) {
+    await attachPendingFiles(projectKey.value, result.data.task_number);
+  }
+
   loading.value = false;
 
   if (result.success) {
+    titleDraft.clear();
+    descriptionDraft.clear();
     toast.success(`Task ${result.data?.task_id} created`);
     router.push(`/projects/${projectKey.value}/tasks/${result.data?.task_number}`);
   } else {
@@ -287,7 +321,14 @@ onMounted(() => {
               <TiptapEditor
                 v-model="form.description"
                 :disabled="loading"
+                :uploading="attachmentsUploading"
                 :members="members"
+                @files-dropped="addPendingFiles"
+              />
+              <PendingAttachmentList
+                :files="pendingFiles"
+                :disabled="loading"
+                @remove="removePendingFile"
               />
             </div>
 

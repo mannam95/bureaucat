@@ -1,8 +1,17 @@
-interface UploadedFile {
+export interface UploadedFile {
   uploadId: string;
   filename: string;
   mimeType: string;
   url: string;
+}
+
+import { toast } from "vue-sonner";
+
+// Long filenames are single unbreakable tokens; shorten them so a toast or
+// label keeps its shape.
+function shortName(name: string, max = 36): string {
+  if (name.length <= max) return name;
+  return `${name.slice(0, max - 13)}…${name.slice(-12)}`;
 }
 
 export function useFileAttach() {
@@ -24,6 +33,10 @@ export function useFileAttach() {
             mimeType: file.type,
             url: res.data.url,
           });
+        } else {
+          // Rejections (oversized file, unsupported type, ...) are reported
+          // here so every caller gets feedback instead of failing silently.
+          toast.error(`${shortName(file.name)}: ${res.error || "upload failed"}`);
         }
       }
     } finally {

@@ -12,8 +12,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Link,
-  Repeat,
-  Layers,
+  Paperclip,
   Circle,
   CircleDot,
   CheckCircle2,
@@ -54,8 +53,6 @@ const {
 
 const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, fetchAllTasks } =
   useTasks();
-const { listAllCycles, addTasksToCycle, removeTaskFromCycle } = useCycles();
-const { modules, listModules, addTasksToModule, removeTaskFromModule } = useModules();
 const { comments, loading: commentsLoading, listComments } = useComments();
 const { activities, loading: activitiesLoading, listActivity } = useActivity();
 const { listAttachments, attachFile, deleteAttachment } = useAttachments();
@@ -71,6 +68,7 @@ useHead({
 
 const loading = ref(true);
 const error = ref<string | null>(null);
+const isMissing = computed(() => /not found/i.test(error.value || ""));
 const editingTitle = ref(false);
 const editingDescription = ref(false);
 const editTitle = ref("");
@@ -450,58 +448,18 @@ async function saveField(key: CustomFieldKey) {
   }
 }
 
-// ---- Cycle / Epic linking + sub-task re-parenting (right sidebar) ----
-// A top-level task can be linked to a cycle and an epic. A sub-task instead
-// shows its parent's cycle/epic (read-only) and can be moved under another
-// parent, so it only needs the list of candidate parents.
-const cycleOptions = ref<import("~/types").CycleSibling[]>([]);
+// ---- Sub-task re-parenting (right sidebar) ----
+// A top-level task's cycle and epic are managed by the TaskCycle / TaskModules
+// components (each loads its own options). A sub-task can instead be moved under
+// another parent, so here we only need the list of candidate parents.
 const parentOptions = ref<import("~/types").Task[]>([]);
 
 async function loadLinkOptions() {
-  if (isSubtask.value) {
-    const res = await fetchAllTasks(projectKey.value);
-    if (res.success && res.data) {
-      parentOptions.value = res.data.filter((t) => t.id !== currentTask.value?.id);
-    }
-    return;
+  if (!isSubtask.value) return;
+  const res = await fetchAllTasks(projectKey.value);
+  if (res.success && res.data) {
+    parentOptions.value = res.data.filter((t) => t.id !== currentTask.value?.id);
   }
-  const [cyclesRes] = await Promise.all([
-    listAllCycles(projectKey.value),
-    listModules(projectKey.value, 1, 100),
-  ]);
-  if (cyclesRes.success && cyclesRes.data) cycleOptions.value = cyclesRes.data;
-}
-
-// A task belongs to at most one cycle, so clear the existing link before adding
-// the new one. Passing null just clears the current cycle.
-async function setCycle(cycleId: string | null) {
-  const t = currentTask.value;
-  if (!t || t.cycle?.id === cycleId) return;
-  updating.value = true;
-  if (t.cycle) await removeTaskFromCycle(projectKey.value, t.cycle.id, t.id);
-  const res = cycleId
-    ? await addTasksToCycle(projectKey.value, cycleId, [t.id])
-    : { success: true };
-  await refreshTask();
-  updating.value = false;
-  if (res.success) toast.success(cycleId ? "Cycle updated" : "Cycle cleared");
-  else toast.error(res.error || "Failed to update cycle");
-}
-
-// Epic (module) is offered as a single-select control here for a clean sidebar,
-// so we clear the current epic before linking the new one.
-async function setModule(moduleId: string | null) {
-  const t = currentTask.value;
-  if (!t || t.module?.id === moduleId) return;
-  updating.value = true;
-  if (t.module) await removeTaskFromModule(projectKey.value, t.module.id, t.id);
-  const res = moduleId
-    ? await addTasksToModule(projectKey.value, moduleId, [t.id])
-    : { success: true };
-  await refreshTask();
-  updating.value = false;
-  if (res.success) toast.success(moduleId ? "Epic updated" : "Epic cleared");
-  else toast.error(res.error || "Failed to update epic");
 }
 
 // Move this sub-task under a different top-level parent.
@@ -608,17 +566,23 @@ onMounted(() => {
         </div>
 
         <!-- Error -->
-        <div
+        <NotFoundState
           v-else-if="error"
-          class="flex flex-col items-center justify-center py-20"
+          :code="isMissing ? 404 : '!'"
+          :title="isMissing ? 'Task not found' : 'Could not open this task'"
+          :message="isMissing
+            ? 'No task with this number exists in the project — it may have been deleted or moved elsewhere.'
+            : error"
+          :reference="`${projectKey}-${taskNum}`"
+          :stamp="isMissing ? 'NOT ON FILE' : 'RETURNED'"
         >
-          <p class="text-lg text-destructive">{{ error }}</p>
-          <Button class="mt-4" variant="outline" as-child>
-            <NuxtLink :to="`/projects/${projectKey}`">
-              Back to Project
-            </NuxtLink>
-          </Button>
-        </div>
+          <template #actions>
+            <Button as-child>
+              <NuxtLink :to="`/projects/${projectKey}`">Back to project</NuxtLink>
+            </Button>
+            <Button variant="outline" @click="loadData">Try again</Button>
+          </template>
+        </NotFoundState>
 
         <!-- Task content -->
         <template v-else-if="currentTask">
@@ -808,7 +772,6 @@ onMounted(() => {
                 <!-- Task attachments -->
                 <FileDropZone
                   v-if="isMember"
-                  :show-button="false"
                   :uploading="descriptionUploading"
                   accept="*/*"
                   @files-dropped="handleDescriptionFilesDropped"
@@ -819,6 +782,20 @@ onMounted(() => {
                     :loading="taskAttachmentsLoading"
                     @delete="handleDeleteTaskAttachment"
                   />
+                  <!-- Without attachments the list renders nothing, leaving no
+                       drop target — so offer one. -->
+                  <template #button="{ openFilePicker }">
+                    <button
+                      v-if="!taskAttachments.length && !taskAttachmentsLoading"
+                      type="button"
+                      class="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground transition-colors hover:border-solid hover:bg-muted/50"
+                      @click="openFilePicker"
+                    >
+                      <Loader2 v-if="descriptionUploading" class="size-3.5 animate-spin" />
+                      <Paperclip v-else class="size-3.5" />
+                      Drop files here or click to attach
+                    </button>
+                  </template>
                 </FileDropZone>
                 <AttachmentList
                   v-else
@@ -1007,103 +984,26 @@ onMounted(() => {
                 </div>
 
                 <!-- Cycle -->
-                <div class="flex items-center justify-between gap-2 py-3">
-                  <p class="shrink-0 text-xs text-muted-foreground">Cycle</p>
-                  <!-- Sub-task: shows the parent's cycle, read-only -->
-                  <span
-                    v-if="isSubtask"
-                    class="max-w-[9rem] truncate text-sm font-medium"
-                    :class="!currentTask.cycle && 'text-muted-foreground'"
-                    :title="currentTask.cycle?.title"
-                  >
-                    {{ currentTask.cycle?.title ?? "None" }}
-                  </span>
-                  <DropdownMenu v-else>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        class="h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent"
-                        :class="!currentTask.cycle && 'text-muted-foreground'"
-                        :disabled="!isMember || updating"
-                      >
-                        <Repeat class="size-3.5 shrink-0 opacity-70" />
-                        <span class="max-w-[8rem] truncate">{{ currentTask.cycle?.title ?? "Set cycle" }}</span>
-                        <ChevronDown class="size-3.5 shrink-0 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="max-h-72 w-56 overflow-y-auto">
-                      <DropdownMenuItem v-if="currentTask.cycle" @click="setCycle(null)">
-                        <X class="mr-2 size-3.5" /> Clear cycle
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        v-for="c in cycleOptions"
-                        :key="c.id"
-                        @click="setCycle(c.id)"
-                      >
-                        <Check
-                          class="mr-2 size-3.5"
-                          :class="currentTask.cycle?.id === c.id ? 'opacity-100' : 'opacity-0'"
-                        />
-                        <span class="truncate">{{ c.title }}</span>
-                      </DropdownMenuItem>
-                      <p
-                        v-if="cycleOptions.length === 0"
-                        class="px-2 py-1.5 text-xs text-muted-foreground"
-                      >
-                        No cycles in this project
-                      </p>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <div class="py-3">
+                  <TaskCycle
+                    :project-key="projectKey"
+                    :task-id="currentTask.id"
+                    :cycle-id="currentTask.cycle_id"
+                    :cycle-title="currentTask.cycle_title"
+                    :can-edit="isAdmin && !isDisabled"
+                    @refresh="refreshTask"
+                  />
                 </div>
 
-                <!-- Epic -->
-                <div class="flex items-center justify-between gap-2 py-3">
-                  <p class="shrink-0 text-xs text-muted-foreground">Epic</p>
-                  <!-- Sub-task: shows the parent's epic, read-only -->
-                  <span
-                    v-if="isSubtask"
-                    class="max-w-[9rem] truncate text-sm font-medium"
-                    :class="!currentTask.module && 'text-muted-foreground'"
-                    :title="currentTask.module?.title"
-                  >
-                    {{ currentTask.module?.title ?? "None" }}
-                  </span>
-                  <DropdownMenu v-else>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        class="h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent"
-                        :class="!currentTask.module && 'text-muted-foreground'"
-                        :disabled="!isMember || updating"
-                      >
-                        <Layers class="size-3.5 shrink-0 opacity-70" />
-                        <span class="max-w-[8rem] truncate">{{ currentTask.module?.title ?? "Set epic" }}</span>
-                        <ChevronDown class="size-3.5 shrink-0 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="max-h-72 w-56 overflow-y-auto">
-                      <DropdownMenuItem v-if="currentTask.module" @click="setModule(null)">
-                        <X class="mr-2 size-3.5" /> Clear epic
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        v-for="m in modules"
-                        :key="m.id"
-                        @click="setModule(m.id)"
-                      >
-                        <Check
-                          class="mr-2 size-3.5"
-                          :class="currentTask.module?.id === m.id ? 'opacity-100' : 'opacity-0'"
-                        />
-                        <span class="truncate">{{ m.title }}</span>
-                      </DropdownMenuItem>
-                      <p
-                        v-if="modules.length === 0"
-                        class="px-2 py-1.5 text-xs text-muted-foreground"
-                      >
-                        No epics in this project
-                      </p>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <!-- Modules -->
+                <div class="py-3">
+                  <TaskModules
+                    :project-key="projectKey"
+                    :task-id="currentTask.id"
+                    :modules="currentTask.modules || []"
+                    :can-edit="isAdmin && !isDisabled"
+                    @refresh="refreshTask"
+                  />
                 </div>
 
                 <!-- Parent (sub-tasks only) -->

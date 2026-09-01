@@ -53,6 +53,16 @@ const emit = defineEmits<{
 const { getAuthHeader } = useAuth();
 const { currentWorkspace } = useWorkspaces();
 const { createTask, listSubtaskCandidates, attachSubtasks } = useTasks();
+// Files picked in the description toolbar before the task exists; linked to it
+// right after creation.
+const {
+  pending: pendingFiles,
+  uploading: attachmentsUploading,
+  addFiles: addPendingFiles,
+  remove: removePendingFile,
+  clear: clearPendingFiles,
+  attachAll: attachPendingFiles,
+} = usePendingAttachments();
 const { listStates, listLabels, listMembers, listTemplates } = useProjects();
 
 // --- Project selection ---
@@ -126,6 +136,38 @@ const form = ref({
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
 
+// Shares its key with the /tasks/new page so one unfinished task draft follows
+// the user between the two. Empty until a project is chosen (persistence off),
+// and subtask composers get their own scope. Restored on open rather than on
+// mount, since the dialog resets its form there.
+const draftScope = computed(() => {
+  const key = effectiveProjectKey.value;
+  if (!key) return "";
+  return props.parentTaskNumber != null
+    ? `task-new:${key}:sub:${props.parentTaskNumber}`
+    : `task-new:${key}`;
+});
+const titleDraft = useDraft(
+  computed(() => (draftScope.value ? `${draftScope.value}:title` : "")),
+  computed({
+    get: () => form.value.title,
+    set: (v) => {
+      form.value.title = v;
+    },
+  }),
+  { autoRestore: false }
+);
+const descriptionDraft = useDraft(
+  computed(() => (draftScope.value ? `${draftScope.value}:description` : "")),
+  computed({
+    get: () => form.value.description,
+    set: (v) => {
+      form.value.description = v;
+    },
+  }),
+  { autoRestore: false }
+);
+
 function resetForm() {
   form.value = {
     title: "",
@@ -140,6 +182,7 @@ function resetForm() {
   };
   selectedTemplateId.value = "";
   error.value = null;
+  clearPendingFiles();
 }
 
 async function loadProjectMeta(key: string) {
@@ -255,6 +298,8 @@ watch(open, async (isOpen) => {
       });
     }
     resetForm();
+    titleDraft.restore();
+    descriptionDraft.restore();
   }
 });
 
@@ -280,9 +325,15 @@ async function handleSubmit() {
     parent_task_number: props.parentTaskNumber,
   });
 
+  if (result.success && result.data) {
+    await attachPendingFiles(result.data.project_key, result.data.task_number);
+  }
+
   loading.value = false;
 
   if (result.success && result.data) {
+    titleDraft.clear();
+    descriptionDraft.clear();
     open.value = false;
     emit("created");
     // Subtask mode stays on the parent's page; standalone create navigates to
@@ -643,7 +694,14 @@ function removeLabel(labelId: string) {
             <TiptapEditor
               v-model="form.description"
               :disabled="loading"
+              :uploading="attachmentsUploading"
               :members="effMembers"
+              @files-dropped="addPendingFiles"
+            />
+            <PendingAttachmentList
+              :files="pendingFiles"
+              :disabled="loading"
+              @remove="removePendingFile"
             />
           </div>
 

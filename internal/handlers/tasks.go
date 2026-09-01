@@ -101,12 +101,6 @@ func NewTaskHandler(s store.Querier, pool *pgxpool.Pool, filterRunner *store.Fil
 	}
 }
 
-// TaskLinkRef is a lightweight reference to a cycle or module linked to a task.
-type TaskLinkRef struct {
-	ID    uuid.UUID `json:"id"`
-	Title string    `json:"title"`
-}
-
 // TaskResponse represents a task in API responses.
 type TaskResponse struct {
 	ID              uuid.UUID          `json:"id"`
@@ -134,8 +128,9 @@ type TaskResponse struct {
 	ParentTaskNumber *int              `json:"parent_task_number,omitempty"`
 	ParentTaskTitle  *string           `json:"parent_task_title,omitempty"`
 	SubtaskCount     int               `json:"subtask_count"`
-	Cycle            *TaskLinkRef      `json:"cycle,omitempty"`
-	Module           *TaskLinkRef      `json:"module,omitempty"`
+	CycleID          *uuid.UUID        `json:"cycle_id,omitempty"`
+	CycleTitle       *string           `json:"cycle_title,omitempty"`
+	Modules          []TaskModuleInfo  `json:"modules,omitempty"`
 	FigmaLink        *string           `json:"figma_link,omitempty"`
 	Branch           *string           `json:"branch,omitempty"`
 	PullRequest      *string           `json:"pull_request,omitempty"`
@@ -152,6 +147,12 @@ type AssigneeResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	AvatarURL *string   `json:"avatar_url,omitempty"`
+}
+
+// TaskModuleInfo represents a module a task belongs to.
+type TaskModuleInfo struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
 }
 
 // TaskLabelInfo represents a label on a task.
@@ -738,13 +739,13 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
 
-	// Cycle/module shown on the task. For a sub-task, surface the parent's links
+	// Cycle/modules shown on the task. For a sub-task, surface the parent's links
 	// (sub-tasks follow their parent) so the detail page can show them read-only.
 	linkTaskID := task.ID
 	if p := pgUUIDToUUIDPtr(task.ParentTaskID); p != nil {
 		linkTaskID = *p
 	}
-	cycleRef, moduleRef := h.getTaskCycleAndModule(ctx, linkTaskID)
+	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
 		ID:              task.ID,
@@ -771,8 +772,9 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(task.ParentTaskTitle),
 		SubtaskCount:     int(task.SubtaskCount),
-		Cycle:            cycleRef,
-		Module:           moduleRef,
+		CycleID:          cycleID,
+		CycleTitle:       cycleTitle,
+		Modules:          h.getTaskModules(ctx, linkTaskID),
 		FigmaLink:        textToStringPtr(task.FigmaLink),
 		Branch:           textToStringPtr(task.Branch),
 		PullRequest:      textToStringPtr(task.PullRequest),
@@ -781,25 +783,31 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	})
 }
 
-// getTaskCycleAndModule returns the cycle and (first) module linked to the given
-// task, or nil if none. Uses the raw pool to avoid extra sqlc round-trips.
-func (h *TaskHandler) getTaskCycleAndModule(ctx context.Context, taskID uuid.UUID) (*TaskLinkRef, *TaskLinkRef) {
-	var cycle, module *TaskLinkRef
-	var id uuid.UUID
-	var title string
-	if err := h.pool.QueryRow(ctx,
-		`SELECT c.id, c.title FROM cycle_tasks ct JOIN cycles c ON c.id = ct.cycle_id
-		 WHERE ct.task_id = $1 AND c.deleted_at IS NULL LIMIT 1`,
-		taskID).Scan(&id, &title); err == nil {
-		cycle = &TaskLinkRef{ID: id, Title: title}
+// getTaskModules returns the modules a task belongs to (possibly several).
+func (h *TaskHandler) getTaskModules(ctx context.Context, taskID uuid.UUID) []TaskModuleInfo {
+	rows, err := h.store.ListTaskModules(ctx, taskID)
+	if err != nil {
+		return []TaskModuleInfo{}
 	}
-	if err := h.pool.QueryRow(ctx,
-		`SELECT m.id, m.title FROM module_tasks mt JOIN modules m ON m.id = mt.module_id
-		 WHERE mt.task_id = $1 AND m.deleted_at IS NULL LIMIT 1`,
-		taskID).Scan(&id, &title); err == nil {
-		module = &TaskLinkRef{ID: id, Title: title}
+	modules := make([]TaskModuleInfo, len(rows))
+	for i, r := range rows {
+		modules[i] = TaskModuleInfo{ID: r.ID, Title: r.Title}
 	}
-	return cycle, module
+	return modules
+}
+
+// getTaskCycle returns the cycle a task belongs to, if any. A task belongs to
+// at most one cycle.
+func (h *TaskHandler) getTaskCycle(ctx context.Context, taskID uuid.UUID) (*uuid.UUID, *string) {
+	cycleID, err := h.store.GetTaskCycleID(ctx, taskID)
+	if err != nil {
+		return nil, nil
+	}
+	cycle, err := h.store.GetCycleByID(ctx, cycleID)
+	if err != nil {
+		return &cycleID, nil
+	}
+	return &cycleID, &cycle.Title
 }
 
 // UpdateTask updates a task.

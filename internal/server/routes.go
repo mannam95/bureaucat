@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
-	echoSwagger "github.com/swaggo/echo-swagger"
 
 	"bereaucat/internal/auth"
 	"bereaucat/internal/buildinfo"
@@ -39,14 +38,11 @@ type HealthResponse struct {
 }
 
 func (s *Server) registerRoutes() {
-	// Swagger documentation
-	s.echo.GET("/docs", func(c *echo.Context) error {
-		return c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
-	})
-	s.echo.GET("/docs/*", echoSwagger.WrapHandler)
-
 	// API routes under /api/v1
 	api := s.echo.Group("/api/v1")
+
+	// OpenAPI spec consumed by the /docs page (Scalar)
+	api.GET("/openapi.json", openAPISpec)
 
 	api.GET("/health", healthCheck)
 	api.GET("/ht/", s.healthCheckDetailed)

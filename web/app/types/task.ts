@@ -1,8 +1,3 @@
-export interface TaskLinkRef {
-  id: string;
-  title: string;
-}
-
 export interface Task {
   id: string;
   project_key: string;
@@ -29,8 +24,9 @@ export interface Task {
   parent_task_number?: number;
   parent_task_title?: string;
   subtask_count?: number;
-  cycle?: TaskLinkRef;
-  module?: TaskLinkRef;
+  cycle_id?: string;
+  cycle_title?: string;
+  modules?: TaskModule[];
   figma_link?: string;
   branch?: string;
   pull_request?: string;
@@ -122,6 +118,12 @@ export interface TaskLabel {
   id: string;
   name: string;
   color: string;
+}
+
+// A module a task belongs to. Tasks can be in several modules at once.
+export interface TaskModule {
+  id: string;
+  title: string;
 }
 
 export interface CreateTaskRequest {

@@ -104,6 +104,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// ==================== WORKSPACES ====================
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
+	CyclesCreatedPerDay(ctx context.Context, arg CyclesCreatedPerDayParams) ([]CyclesCreatedPerDayRow, error)
 	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
 	// Returns the upload_id so the caller can clean up the underlying file once no
 	// attachment references it anymore.
@@ -241,6 +242,8 @@ type Querier interface {
 	ListTaskAssignees(ctx context.Context, taskID uuid.UUID) ([]ListTaskAssigneesRow, error)
 	ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]ListTaskCommentsRow, error)
 	ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListTaskLabelsRow, error)
+	// The modules a task belongs to (a task can be in more than one).
+	ListTaskModules(ctx context.Context, taskID uuid.UUID) ([]ListTaskModulesRow, error)
 	// ==================== TASK PARTICIPANTS ====================
 	// Everyone involved with a task: its creator, current assignees, and anyone who
 	// has commented (non-deleted comments). Used to fan out notifications.
@@ -260,6 +263,7 @@ type Querier interface {
 	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
+	ModulesCreatedPerDay(ctx context.Context, arg ModulesCreatedPerDayParams) ([]ModulesCreatedPerDayRow, error)
 	// Move a task to a different project, assigning a new project-local task number
 	// and state. Cycle/module links and labels are handled separately by the caller.
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
