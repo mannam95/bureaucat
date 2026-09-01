@@ -21,7 +21,7 @@ import {
   Trash2,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling } from "~/types";
+import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task } from "~/types";
 import { PRIORITY_LABELS } from "~/types";
 
 definePageMeta({
@@ -371,9 +371,28 @@ async function loadTasks(page = 1) {
   });
 }
 
+// The board groups tasks by state client-side, so it needs the WHOLE filtered
+// set — not one paginated page like the list. Fetch all matching tasks (walking
+// pages) into its own state, leaving the list's paginated `tasks` untouched.
+const boardTasks = ref<Task[]>([]);
+
+async function loadBoardTasks() {
+  const hasFilter = effectiveTree.value.children.length > 0;
+  const res = await fetchAllTasks(projectKey.value, {
+    tree: effectiveTree.value,
+    sortBy: sortBy.value,
+    sortDir: sortDir.value,
+    viewSlug: hasFilter ? activeViewSlug.value ?? undefined : undefined,
+  });
+  if (res.success && res.data) boardTasks.value = res.data;
+}
+
 async function handleTaskCreated() {
   setPageInUrl(1);
   await loadTasks(1);
+  // The board reads its own full task set, so refresh it too when it's on screen
+  // (the Create Task button is available from the board tab as well).
+  if (activeTab.value === "board") await loadBoardTasks();
 }
 
 async function handleMemberAdded() {
@@ -476,18 +495,31 @@ watch(currentPageFromUrl, (newPage) => {
 watch(
   [effectiveTree, sortBy, sortDir, activeViewSlug],
   () => {
-    if (!loading.value) {
-      loadTasks(1);
-    }
+    if (loading.value) return;
+    // Refresh whichever view is on screen; the other reloads on tab switch.
+    if (activeTab.value === "board") loadBoardTasks();
+    else loadTasks(1);
   },
   { deep: true }
 );
+
+// Switching to the board needs the full task set (not just the list's current
+// page); switching back to the list refreshes its current page.
+watch(activeTab, (tab) => {
+  if (loading.value) return;
+  if (tab === "board") loadBoardTasks();
+  else if (tab === "tasks") loadTasks(tasksPage.value);
+});
 
 const existingMemberIds = computed(() => members.value.map((m) => m.user_id));
 
 onMounted(async () => {
   await hydrateFromUrl();
-  loadProject();
+  // loadProject hydrates a saved-view filter (?view= with no ?f=), so it must
+  // finish before the board builds its full-set fetch — otherwise the board
+  // would load unfiltered.
+  await loadProject();
+  if (activeTab.value === "board") loadBoardTasks();
 });
 </script>
 
@@ -767,7 +799,7 @@ onMounted(async () => {
             <!-- Board Tab -->
             <TabsContent value="board" class="-mx-32 mt-6 px-2">
               <KanbanBoard
-                :tasks="tasks"
+                :tasks="boardTasks"
                 :states="states"
                 :members="members"
                 :labels="labels"
@@ -775,7 +807,7 @@ onMounted(async () => {
                 :is-member="canWrite"
                 :group-by="groupBy"
                 :current-user-id="currentUserId"
-                @refresh="() => loadTasks(tasksPage)"
+                @refresh="loadBoardTasks"
               />
             </TabsContent>
 
