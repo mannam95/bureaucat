@@ -207,14 +207,19 @@ DELETE FROM module_tasks
 WHERE module_id = $1 AND task_id = $2;
 
 -- name: ListModuleTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating,
        t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at,
        p.project_key,
-       ps.name AS state_name, ps.state_type, ps.color AS state_color
+       ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       -- Which sprint/cycle (if any) this task is in. A task belongs to at most
+       -- one cycle, so LEFT JOIN + LIMIT-free single row is safe.
+       c.title AS cycle_title
 FROM module_tasks mt
 JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN cycle_tasks cyt ON cyt.task_id = t.id
+LEFT JOIN cycles c ON c.id = cyt.cycle_id AND c.deleted_at IS NULL
 WHERE mt.module_id = $1
   AND (sqlc.narg('assignee_id')::uuid IS NULL OR EXISTS (
       SELECT 1 FROM task_assignees ta

@@ -394,6 +394,7 @@ watch(moduleId, async () => {
                 :tasks="visibleTasks"
                 :project-key="projectKey"
                 :is-admin="isAdmin"
+                show-cycle
                 remove-label="Remove from module:"
                 @remove="handleRemoveTask"
               />

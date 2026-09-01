@@ -68,6 +68,9 @@ export interface ModuleTask {
   state_type: string;
   state_color: string;
   priority: number;
+  priority_rating?: number;
+  /** Sprint/cycle this task belongs to (nil if none). Shown in the module table. */
+  cycle_title?: string;
   start_date?: string;
   due_date?: string;
   assignees: TaskAssignee[];
