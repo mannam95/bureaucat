@@ -196,21 +196,21 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"labels", "is_set"}:   labelsPresence(true),
 
 	// ---- cycle (sprint; join via cycle_tasks, one cycle per task) ----
-	{"cycle", "in"}:        cycleExists(false),
-	{"cycle", "not_in"}:    cycleExists(true),
-	{"cycle", "is_empty"}:  cyclePresence(false),
-	{"cycle", "is_set"}:    cyclePresence(true),
+	{"cycle", "in"}:       cycleExists(false),
+	{"cycle", "not_in"}:   cycleExists(true),
+	{"cycle", "is_empty"}: cyclePresence(false),
+	{"cycle", "is_set"}:   cyclePresence(true),
 
 	// ---- dates ----
-	{"start_date", "before"}:  dateOp("t.start_date", "before"),
-	{"start_date", "after"}:   dateOp("t.start_date", "after"),
-	{"start_date", "between"}: dateBetween("t.start_date"),
+	{"start_date", "before"}:   dateOp("t.start_date", "before"),
+	{"start_date", "after"}:    dateOp("t.start_date", "after"),
+	{"start_date", "between"}:  dateBetween("t.start_date"),
 	{"start_date", "is_empty"}: nullCheck("t.start_date", true),
 	{"start_date", "is_set"}:   nullCheck("t.start_date", false),
 
-	{"due_date", "before"}:  dateOp("t.due_date", "before"),
-	{"due_date", "after"}:   dateOp("t.due_date", "after"),
-	{"due_date", "between"}: dateBetween("t.due_date"),
+	{"due_date", "before"}:   dateOp("t.due_date", "before"),
+	{"due_date", "after"}:    dateOp("t.due_date", "after"),
+	{"due_date", "between"}:  dateBetween("t.due_date"),
 	{"due_date", "is_empty"}: nullCheck("t.due_date", true),
 	{"due_date", "is_set"}:   nullCheck("t.due_date", false),
 	{"due_date", "overdue"}:  dueDateOverdue,

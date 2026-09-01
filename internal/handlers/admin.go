@@ -629,9 +629,9 @@ type AdminStatsResponse struct {
 	TopProjects          []ProjectStat   `json:"top_projects"`
 	ProjectsPerWorkspace []WorkspaceStat `json:"projects_per_workspace"`
 	Series               struct {
-		From     string     `json:"from"`
-		To       string     `json:"to"`
-		Days     int        `json:"days"`
+		From        string         `json:"from"`
+		To          string         `json:"to"`
+		Days        int            `json:"days"`
 		Tasks       []DayCount     `json:"tasks"`
 		Subtasks    []DayCount     `json:"subtasks"`
 		Pages       []DayCount     `json:"pages"`

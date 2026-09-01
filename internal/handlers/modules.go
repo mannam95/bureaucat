@@ -140,12 +140,12 @@ type ModuleTaskResponse struct {
 
 // ModuleMetricsResponse mirrors CycleMetricsResponse for modules.
 type ModuleMetricsResponse struct {
-	Total          int                     `json:"total"`
-	Completed      int                     `json:"completed"`
-	InProgress     int                     `json:"in_progress"`
-	Todo           int                     `json:"todo"`
-	Cancelled      int                     `json:"cancelled"`
-	StateBreakdown []ModuleStateBucket     `json:"state_breakdown"`
+	Total          int                 `json:"total"`
+	Completed      int                 `json:"completed"`
+	InProgress     int                 `json:"in_progress"`
+	Todo           int                 `json:"todo"`
+	Cancelled      int                 `json:"cancelled"`
+	StateBreakdown []ModuleStateBucket `json:"state_breakdown"`
 }
 
 // ModuleStateBucket is the per-state task count breakdown.

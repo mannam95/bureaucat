@@ -24,7 +24,7 @@ type Notification struct {
 	ProjectKey  string    // e.g. "DEVOP"
 	TaskNumber  int       // e.g. 123
 	TaskTitle   string
-	BaseURL     string    // App base URL for building task links (e.g. "https://bureaucat.example.com")
+	BaseURL     string // App base URL for building task links (e.g. "https://bureaucat.example.com")
 }
 
 // TaskURL returns the full URL to the task.

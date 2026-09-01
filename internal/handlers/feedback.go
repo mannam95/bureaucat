@@ -34,11 +34,11 @@ const (
 // self-hosted app with a single process, this is adequate; a multi-replica
 // deployment would swap in Redis or similar.
 type ipRateLimiter struct {
-	mu       sync.Mutex
-	hits     map[string][]time.Time
-	limit    int
-	window   time.Duration
-	maxSize  int
+	mu      sync.Mutex
+	hits    map[string][]time.Time
+	limit   int
+	window  time.Duration
+	maxSize int
 }
 
 func newIPRateLimiter(limit int, window time.Duration, maxSize int) *ipRateLimiter {
@@ -323,7 +323,6 @@ func parseFeedbackBody(c *echo.Context) (string, error) {
 	}
 	return msg, nil
 }
-
 
 // FeedbackItem is the admin listing shape.
 type FeedbackItem struct {

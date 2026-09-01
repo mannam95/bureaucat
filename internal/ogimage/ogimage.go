@@ -1,11 +1,11 @@
 package ogimage
 
 import (
+	"bytes"
 	_ "embed"
 	"image"
 	"image/color"
 	"image/png"
-	"bytes"
 	"math"
 
 	"golang.org/x/image/font"

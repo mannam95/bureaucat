@@ -45,8 +45,8 @@ type Config struct {
 
 // Service handles file uploads to S3-compatible storage.
 type Service struct {
-	client     *s3.Client
-	bucketName string
+	client      *s3.Client
+	bucketName  string
 	maxFileSize int64
 }
 

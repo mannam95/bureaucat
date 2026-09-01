@@ -103,39 +103,39 @@ func NewTaskHandler(s store.Querier, pool *pgxpool.Pool, filterRunner *store.Fil
 
 // TaskResponse represents a task in API responses.
 type TaskResponse struct {
-	ID              uuid.UUID          `json:"id"`
-	ProjectKey      string             `json:"project_key"`
-	TaskNumber      int                `json:"task_number"`
-	TaskID          string             `json:"task_id"` // e.g., "DEVOP-123"
-	Title           string             `json:"title"`
-	Description     *string            `json:"description,omitempty"`
-	StateID         uuid.UUID          `json:"state_id"`
-	StateName       string             `json:"state_name"`
-	StateType       string             `json:"state_type"`
-	StateColor      string             `json:"state_color"`
-	Priority        int                `json:"priority"`
+	ID               uuid.UUID          `json:"id"`
+	ProjectKey       string             `json:"project_key"`
+	TaskNumber       int                `json:"task_number"`
+	TaskID           string             `json:"task_id"` // e.g., "DEVOP-123"
+	Title            string             `json:"title"`
+	Description      *string            `json:"description,omitempty"`
+	StateID          uuid.UUID          `json:"state_id"`
+	StateName        string             `json:"state_name"`
+	StateType        string             `json:"state_type"`
+	StateColor       string             `json:"state_color"`
+	Priority         int                `json:"priority"`
 	StartDate        *time.Time         `json:"start_date,omitempty"`
 	DueDate          *time.Time         `json:"due_date,omitempty"`
 	CreatedBy        uuid.UUID          `json:"created_by"`
 	CreatorUsername  string             `json:"creator_username"`
-	CreatorFirstName string            `json:"creator_first_name"`
-	CreatorLastName  string            `json:"creator_last_name"`
-	CreatorAvatarURL *string           `json:"creator_avatar_url,omitempty"`
-	Assignees       []AssigneeResponse `json:"assignees,omitempty"`
-	Labels          []TaskLabelInfo    `json:"labels,omitempty"`
-	CommentCount    int                `json:"comment_count"`
-	ParentTaskID     *uuid.UUID        `json:"parent_task_id,omitempty"`
-	ParentTaskNumber *int              `json:"parent_task_number,omitempty"`
-	ParentTaskTitle  *string           `json:"parent_task_title,omitempty"`
-	SubtaskCount     int               `json:"subtask_count"`
-	CycleID          *uuid.UUID        `json:"cycle_id,omitempty"`
-	CycleTitle       *string           `json:"cycle_title,omitempty"`
-	Modules          []TaskModuleInfo  `json:"modules,omitempty"`
-	FigmaLink        *string           `json:"figma_link,omitempty"`
-	Branch           *string           `json:"branch,omitempty"`
-	PullRequest      *string           `json:"pull_request,omitempty"`
-	CreatedAt       time.Time          `json:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at"`
+	CreatorFirstName string             `json:"creator_first_name"`
+	CreatorLastName  string             `json:"creator_last_name"`
+	CreatorAvatarURL *string            `json:"creator_avatar_url,omitempty"`
+	Assignees        []AssigneeResponse `json:"assignees,omitempty"`
+	Labels           []TaskLabelInfo    `json:"labels,omitempty"`
+	CommentCount     int                `json:"comment_count"`
+	ParentTaskID     *uuid.UUID         `json:"parent_task_id,omitempty"`
+	ParentTaskNumber *int               `json:"parent_task_number,omitempty"`
+	ParentTaskTitle  *string            `json:"parent_task_title,omitempty"`
+	SubtaskCount     int                `json:"subtask_count"`
+	CycleID          *uuid.UUID         `json:"cycle_id,omitempty"`
+	CycleTitle       *string            `json:"cycle_title,omitempty"`
+	Modules          []TaskModuleInfo   `json:"modules,omitempty"`
+	FigmaLink        *string            `json:"figma_link,omitempty"`
+	Branch           *string            `json:"branch,omitempty"`
+	PullRequest      *string            `json:"pull_request,omitempty"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 // AssigneeResponse represents a task assignee.
@@ -665,26 +665,26 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	labels := h.getTaskLabels(ctx, task.ID)
 
 	return c.JSON(http.StatusCreated, TaskResponse{
-		ID:              fullTask.ID,
-		ProjectKey:      projectKey,
-		TaskNumber:      int(fullTask.TaskNumber),
-		TaskID:          projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:           fullTask.Title,
-		Description:     textToStringPtr(fullTask.Description),
-		StateID:         fullTask.StateID,
-		StateName:       fullTask.StateName,
-		StateType:       fullTask.StateType,
-		StateColor:      textToString(fullTask.StateColor, "#6B7280"),
-		Priority:        int(fullTask.Priority),
-		StartDate:       timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:         timestamptzToTimePtr(fullTask.DueDate),
+		ID:               fullTask.ID,
+		ProjectKey:       projectKey,
+		TaskNumber:       int(fullTask.TaskNumber),
+		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:            fullTask.Title,
+		Description:      textToStringPtr(fullTask.Description),
+		StateID:          fullTask.StateID,
+		StateName:        fullTask.StateName,
+		StateType:        fullTask.StateType,
+		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
+		Priority:         int(fullTask.Priority),
+		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
 		CreatorUsername:  fullTask.CreatorUsername,
 		CreatorFirstName: fullTask.CreatorFirstName,
 		CreatorLastName:  fullTask.CreatorLastName,
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Assignees:       assignees,
-		Labels:          labels,
+		Assignees:        assignees,
+		Labels:           labels,
 		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
@@ -692,8 +692,8 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
 		Branch:           textToStringPtr(fullTask.Branch),
 		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:       fullTask.CreatedAt.Time,
-		UpdatedAt:       fullTask.UpdatedAt.Time,
+		CreatedAt:        fullTask.CreatedAt.Time,
+		UpdatedAt:        fullTask.UpdatedAt.Time,
 	})
 }
 
@@ -748,26 +748,26 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:              task.ID,
-		ProjectKey:      projectKey,
-		TaskNumber:      int(task.TaskNumber),
-		TaskID:          projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
-		Title:           task.Title,
-		Description:     textToStringPtr(task.Description),
-		StateID:         task.StateID,
-		StateName:       task.StateName,
-		StateType:       task.StateType,
-		StateColor:      textToString(task.StateColor, "#6B7280"),
-		Priority:        int(task.Priority),
-		StartDate:       timestamptzToTimePtr(task.StartDate),
-		DueDate:         timestamptzToTimePtr(task.DueDate),
+		ID:               task.ID,
+		ProjectKey:       projectKey,
+		TaskNumber:       int(task.TaskNumber),
+		TaskID:           projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
+		Title:            task.Title,
+		Description:      textToStringPtr(task.Description),
+		StateID:          task.StateID,
+		StateName:        task.StateName,
+		StateType:        task.StateType,
+		StateColor:       textToString(task.StateColor, "#6B7280"),
+		Priority:         int(task.Priority),
+		StartDate:        timestamptzToTimePtr(task.StartDate),
+		DueDate:          timestamptzToTimePtr(task.DueDate),
 		CreatedBy:        task.CreatedBy,
 		CreatorUsername:  task.CreatorUsername,
 		CreatorFirstName: task.CreatorFirstName,
 		CreatorLastName:  task.CreatorLastName,
 		CreatorAvatarURL: textToStringPtr(task.CreatorAvatarUrl),
-		Assignees:       assignees,
-		Labels:          labels,
+		Assignees:        assignees,
+		Labels:           labels,
 		ParentTaskID:     pgUUIDToUUIDPtr(task.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(task.ParentTaskTitle),
@@ -778,8 +778,8 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		FigmaLink:        textToStringPtr(task.FigmaLink),
 		Branch:           textToStringPtr(task.Branch),
 		PullRequest:      textToStringPtr(task.PullRequest),
-		CreatedAt:       task.CreatedAt.Time,
-		UpdatedAt:       task.UpdatedAt.Time,
+		CreatedAt:        task.CreatedAt.Time,
+		UpdatedAt:        task.UpdatedAt.Time,
 	})
 }
 
@@ -1044,31 +1044,31 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	labels := h.getTaskLabels(ctx, task.ID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:              fullTask.ID,
-		ProjectKey:      projectKey,
-		TaskNumber:      int(fullTask.TaskNumber),
-		TaskID:          projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:           fullTask.Title,
-		Description:     textToStringPtr(fullTask.Description),
-		StateID:         fullTask.StateID,
-		StateName:       fullTask.StateName,
-		StateType:       fullTask.StateType,
-		StateColor:      textToString(fullTask.StateColor, "#6B7280"),
-		Priority:        int(fullTask.Priority),
-		StartDate:       timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:         timestamptzToTimePtr(fullTask.DueDate),
+		ID:               fullTask.ID,
+		ProjectKey:       projectKey,
+		TaskNumber:       int(fullTask.TaskNumber),
+		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:            fullTask.Title,
+		Description:      textToStringPtr(fullTask.Description),
+		StateID:          fullTask.StateID,
+		StateName:        fullTask.StateName,
+		StateType:        fullTask.StateType,
+		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
+		Priority:         int(fullTask.Priority),
+		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
 		CreatorUsername:  fullTask.CreatorUsername,
 		CreatorFirstName: fullTask.CreatorFirstName,
 		CreatorLastName:  fullTask.CreatorLastName,
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Assignees:       assignees,
-		Labels:          labels,
-		FigmaLink:       textToStringPtr(fullTask.FigmaLink),
-		Branch:          textToStringPtr(fullTask.Branch),
-		PullRequest:     textToStringPtr(fullTask.PullRequest),
-		CreatedAt:       fullTask.CreatedAt.Time,
-		UpdatedAt:       fullTask.UpdatedAt.Time,
+		Assignees:        assignees,
+		Labels:           labels,
+		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
+		Branch:           textToStringPtr(fullTask.Branch),
+		PullRequest:      textToStringPtr(fullTask.PullRequest),
+		CreatedAt:        fullTask.CreatedAt.Time,
+		UpdatedAt:        fullTask.UpdatedAt.Time,
 	})
 }
 
