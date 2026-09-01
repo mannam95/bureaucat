@@ -102,7 +102,7 @@ WHERE cycle_id = $1 AND task_id = $2;
 SELECT cycle_id FROM cycle_tasks WHERE task_id = $1;
 
 -- name: ListCycleTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating,
        t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at,
        p.project_key,
        ps.name AS state_name, ps.state_type, ps.color AS state_color

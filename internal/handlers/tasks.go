@@ -114,6 +114,7 @@ type TaskResponse struct {
 	StateType        string             `json:"state_type"`
 	StateColor       string             `json:"state_color"`
 	Priority         int                `json:"priority"`
+	PriorityRating   int                `json:"priority_rating"`
 	StartDate        *time.Time         `json:"start_date,omitempty"`
 	DueDate          *time.Time         `json:"due_date,omitempty"`
 	CreatedBy        uuid.UUID          `json:"created_by"`
@@ -164,17 +165,18 @@ type TaskLabelInfo struct {
 
 // CreateTaskRequest represents the request to create a task.
 type CreateTaskRequest struct {
-	Title       string     `json:"title"`
-	Description *string    `json:"description"`
-	StateID     *string    `json:"state_id"`
-	Priority    *int       `json:"priority"`
-	StartDate   *time.Time `json:"start_date"`
-	DueDate     *time.Time `json:"due_date"`
-	Assignees   []string   `json:"assignees"`
-	Labels      []string   `json:"labels"`
-	FigmaLink   *string    `json:"figma_link"`
-	Branch      *string    `json:"branch"`
-	PullRequest *string    `json:"pull_request"`
+	Title          string     `json:"title"`
+	Description    *string    `json:"description"`
+	StateID        *string    `json:"state_id"`
+	Priority       *int       `json:"priority"`
+	PriorityRating *int       `json:"priority_rating"`
+	StartDate      *time.Time `json:"start_date"`
+	DueDate        *time.Time `json:"due_date"`
+	Assignees      []string   `json:"assignees"`
+	Labels         []string   `json:"labels"`
+	FigmaLink      *string    `json:"figma_link"`
+	Branch         *string    `json:"branch"`
+	PullRequest    *string    `json:"pull_request"`
 	// ParentTaskNumber, when set, creates this task as a subtask of the given
 	// (project-local) parent task. One level only: the parent must not itself
 	// be a subtask.
@@ -183,12 +185,13 @@ type CreateTaskRequest struct {
 
 // UpdateTaskRequest represents the request to update a task.
 type UpdateTaskRequest struct {
-	Title       *string      `json:"title"`
-	Description *string      `json:"description"`
-	StateID     *string      `json:"state_id"`
-	Priority    *int         `json:"priority"`
-	StartDate   NullableTime `json:"start_date"`
-	DueDate     NullableTime `json:"due_date"`
+	Title          *string      `json:"title"`
+	Description    *string      `json:"description"`
+	StateID        *string      `json:"state_id"`
+	Priority       *int         `json:"priority"`
+	PriorityRating *int         `json:"priority_rating"`
+	StartDate      NullableTime `json:"start_date"`
+	DueDate        NullableTime `json:"due_date"`
 	// Custom fields. Omitted (nil) means "leave unchanged"; send an empty
 	// string to clear one.
 	FigmaLink   *string `json:"figma_link"`
@@ -297,6 +300,7 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 			StateType:        t.StateType,
 			StateColor:       textToString(t.StateColor, "#6B7280"),
 			Priority:         int(t.Priority),
+			PriorityRating:   int(t.PriorityRating),
 			StartDate:        timestamptzToTimePtr(t.StartDate),
 			DueDate:          timestamptzToTimePtr(t.DueDate),
 			CreatedBy:        t.CreatedBy,
@@ -506,20 +510,25 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	}
 
 	// Create task
+	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
+		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
+	}
+
 	task, err := h.store.CreateTask(ctx, store.CreateTaskParams{
-		ProjectID:    projectID,
-		TaskNumber:   int32(nextNumber),
-		Title:        req.Title,
-		Description:  stringToPgtypeText(req.Description),
-		StateID:      stateID,
-		Priority:     priority,
-		CreatedBy:    userID,
-		StartDate:    timePtrToTimestamptz(req.StartDate),
-		DueDate:      timePtrToTimestamptz(req.DueDate),
-		ParentTaskID: parentTaskID,
-		FigmaLink:    stringToPgtypeText(req.FigmaLink),
-		Branch:       stringToPgtypeText(req.Branch),
-		PullRequest:  stringToPgtypeText(req.PullRequest),
+		ProjectID:      projectID,
+		TaskNumber:     int32(nextNumber),
+		Title:          req.Title,
+		Description:    stringToPgtypeText(req.Description),
+		StateID:        stateID,
+		Priority:       priority,
+		PriorityRating: intToPgtypeInt4(req.PriorityRating),
+		CreatedBy:      userID,
+		StartDate:      timePtrToTimestamptz(req.StartDate),
+		DueDate:        timePtrToTimestamptz(req.DueDate),
+		ParentTaskID:   parentTaskID,
+		FigmaLink:      stringToPgtypeText(req.FigmaLink),
+		Branch:         stringToPgtypeText(req.Branch),
+		PullRequest:    stringToPgtypeText(req.PullRequest),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create task")
@@ -676,6 +685,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StateType:        fullTask.StateType,
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
+		PriorityRating:   int(fullTask.PriorityRating),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
@@ -759,6 +769,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		StateType:        task.StateType,
 		StateColor:       textToString(task.StateColor, "#6B7280"),
 		Priority:         int(task.Priority),
+		PriorityRating:   int(task.PriorityRating),
 		StartDate:        timestamptzToTimePtr(task.StartDate),
 		DueDate:          timestamptzToTimePtr(task.DueDate),
 		CreatedBy:        task.CreatedBy,
@@ -896,12 +907,17 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	}
 
 	// Update task
+	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
+		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
+	}
+
 	task, err := h.store.UpdateTask(ctx, store.UpdateTaskParams{
 		ID:              oldTask.ID,
 		Title:           stringToPgtypeText(req.Title),
 		Description:     stringToPgtypeText(req.Description),
 		StateID:         stateID,
 		Priority:        intToPgtypeInt4(req.Priority),
+		PriorityRating:  intToPgtypeInt4(req.PriorityRating),
 		UpdateStartDate: req.StartDate.Set,
 		StartDate:       startDateArg,
 		UpdateDueDate:   req.DueDate.Set,
@@ -1055,6 +1071,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StateType:        fullTask.StateType,
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
+		PriorityRating:   int(fullTask.PriorityRating),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
@@ -2082,6 +2099,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		StateType:        fullTask.StateType,
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
+		PriorityRating:   int(fullTask.PriorityRating),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,

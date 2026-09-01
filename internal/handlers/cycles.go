@@ -71,19 +71,20 @@ type PaginatedCyclesResponse struct {
 
 // CycleTaskResponse is a task as it appears in a cycle context.
 type CycleTaskResponse struct {
-	ID         uuid.UUID          `json:"id"`
-	ProjectKey string             `json:"project_key"`
-	TaskNumber int                `json:"task_number"`
-	TaskID     string             `json:"task_id"`
-	Title      string             `json:"title"`
-	StateID    uuid.UUID          `json:"state_id"`
-	StateName  string             `json:"state_name"`
-	StateType  string             `json:"state_type"`
-	StateColor string             `json:"state_color"`
-	Priority   int                `json:"priority"`
-	StartDate  *time.Time         `json:"start_date,omitempty"`
-	DueDate    *time.Time         `json:"due_date,omitempty"`
-	Assignees  []AssigneeResponse `json:"assignees"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectKey     string             `json:"project_key"`
+	TaskNumber     int                `json:"task_number"`
+	TaskID         string             `json:"task_id"`
+	Title          string             `json:"title"`
+	StateID        uuid.UUID          `json:"state_id"`
+	StateName      string             `json:"state_name"`
+	StateType      string             `json:"state_type"`
+	StateColor     string             `json:"state_color"`
+	Priority       int                `json:"priority"`
+	PriorityRating int                `json:"priority_rating"`
+	StartDate      *time.Time         `json:"start_date,omitempty"`
+	DueDate        *time.Time         `json:"due_date,omitempty"`
+	Assignees      []AssigneeResponse `json:"assignees"`
 }
 
 // CycleMetricsResponse combines top-level counts, state breakdown, and assignees.
@@ -537,19 +538,20 @@ func (h *CycleHandler) ListCycleTasks(c *echo.Context) error {
 	out := make([]CycleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = CycleTaskResponse{
-			ID:         t.ID,
-			ProjectKey: t.ProjectKey,
-			TaskNumber: int(t.TaskNumber),
-			TaskID:     t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
-			Title:      t.Title,
-			StateID:    t.StateID,
-			StateName:  t.StateName,
-			StateType:  t.StateType,
-			StateColor: textToString(t.StateColor, "#6B7280"),
-			Priority:   int(t.Priority),
-			StartDate:  timestamptzToTimePtr(t.StartDate),
-			DueDate:    timestamptzToTimePtr(t.DueDate),
-			Assignees:  assigneesByTask[t.ID],
+			ID:             t.ID,
+			ProjectKey:     t.ProjectKey,
+			TaskNumber:     int(t.TaskNumber),
+			TaskID:         t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:          t.Title,
+			StateID:        t.StateID,
+			StateName:      t.StateName,
+			StateType:      t.StateType,
+			StateColor:     textToString(t.StateColor, "#6B7280"),
+			Priority:       int(t.Priority),
+			PriorityRating: int(t.PriorityRating),
+			StartDate:      timestamptzToTimePtr(t.StartDate),
+			DueDate:        timestamptzToTimePtr(t.DueDate),
+			Assignees:      assigneesByTask[t.ID],
 		}
 		if out[i].Assignees == nil {
 			out[i].Assignees = []AssigneeResponse{}
