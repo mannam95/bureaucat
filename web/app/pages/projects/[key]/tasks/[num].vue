@@ -990,7 +990,7 @@ onMounted(() => {
                     :task-id="currentTask.id"
                     :cycle-id="currentTask.cycle_id"
                     :cycle-title="currentTask.cycle_title"
-                    :can-edit="isAdmin && !isDisabled"
+                    :can-edit="isAdmin && !isDisabled && !isSubtask"
                     @refresh="refreshTask"
                   />
                 </div>
@@ -1001,7 +1001,7 @@ onMounted(() => {
                     :project-key="projectKey"
                     :task-id="currentTask.id"
                     :modules="currentTask.modules || []"
-                    :can-edit="isAdmin && !isDisabled"
+                    :can-edit="isAdmin && !isDisabled && !isSubtask"
                     @refresh="refreshTask"
                   />
                 </div>

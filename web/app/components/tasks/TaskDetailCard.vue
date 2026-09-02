@@ -39,12 +39,16 @@ const { getAuthHeader, user } = useAuth();
 const { updateTask } = useTasks();
 const { currentProject } = useProjects();
 
-// Cycle/module membership is admin-only, matching the task detail page.
+// Cycle/module membership is admin-only, matching the task detail page. A
+// sub-task follows its parent (it shows the parent's cycle/modules read-only),
+// so editing is disabled for sub-tasks — otherwise the edit would act on the
+// sub-task's own (invisible) membership while the card shows the parent's.
 const canEditRelations = computed(
   () =>
     currentProject.value?.project_key === props.projectKey &&
     currentProject.value?.role === "admin" &&
-    !currentProject.value?.disabled
+    !currentProject.value?.disabled &&
+    !task.value?.parent_task_id
 );
 
 const task = ref<Task | null>(null);
