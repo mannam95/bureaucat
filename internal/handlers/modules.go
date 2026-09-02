@@ -1150,6 +1150,53 @@ func (h *ModuleHandler) ListProjectTasksNotInModule(c *echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+// ListTasksInNoModule returns project top-level tasks that are in no module at
+// all, powering the "Tasks Without an Epic" backlog on the Modules tab.
+func (h *ModuleHandler) ListTasksInNoModule(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	searchParam := pgtype.Text{}
+	if s := strings.TrimSpace(c.QueryParam("search")); s != "" {
+		searchParam = pgtype.Text{String: s, Valid: true}
+	}
+
+	ctx := c.Request().Context()
+	rows, err := h.store.ListProjectTasksInNoModule(ctx, store.ListProjectTasksInNoModuleParams{
+		ProjectID: projectID,
+		Limit:     int32(limit),
+		Search:    searchParam,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list tasks")
+	}
+
+	out := make([]ModuleTaskResponse, len(rows))
+	for i, t := range rows {
+		out[i] = ModuleTaskResponse{
+			ID:         t.ID,
+			ProjectKey: t.ProjectKey,
+			TaskNumber: int(t.TaskNumber),
+			TaskID:     t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:      t.Title,
+			StateID:    t.StateID,
+			StateName:  t.StateName,
+			StateType:  t.StateType,
+			StateColor: textToString(t.StateColor, "#6B7280"),
+			Priority:   int(t.Priority),
+			Assignees:  []AssigneeResponse{},
+		}
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
 // ====================== Members ======================
 
 // ListModuleMembers returns a module's members.

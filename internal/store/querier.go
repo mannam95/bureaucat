@@ -221,6 +221,9 @@ type Querier interface {
 	ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error)
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
+	// Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
+	// no module at all. Unlike the picker above, this excludes tasks in ANY module.
+	ListProjectTasksInNoModule(ctx context.Context, arg ListProjectTasksInNoModuleParams) ([]ListProjectTasksInNoModuleRow, error)
 	// Picker source: project tasks that are NOT already in the given module. A task
 	// can belong to many modules, so we only exclude by the target module.
 	ListProjectTasksNotInModule(ctx context.Context, arg ListProjectTasksNotInModuleParams) ([]ListProjectTasksNotInModuleRow, error)

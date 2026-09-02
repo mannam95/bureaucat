@@ -7,11 +7,22 @@ const props = defineProps<{
   isAdmin: boolean;
 }>();
 
-const { modules, loading, total, page, totalPages, listModules } = useModules();
+const { modules, loading, total, page, totalPages, listModules, listTasksInNoModule } =
+  useModules();
 
 const showCreate = ref(false);
 const perPage = 12;
 const filters = ref<ModuleListFilters>({ sort_by: "created_at", sort_dir: "desc" });
+
+// How many top-level tasks aren't in any module, for the backlog card that opens
+// the "Tasks Without an Epic" view. Only shown to admins (adding is admin-only).
+const backlogCount = ref(0);
+async function loadBacklogCount() {
+  if (!props.isAdmin) return;
+  const r = await listTasksInNoModule(props.projectKey, "", 100);
+  if (r.success && r.data) backlogCount.value = r.data.length;
+}
+const showBacklogCard = computed(() => props.isAdmin && backlogCount.value > 0);
 
 function fetchPage(p = 1) {
   listModules(props.projectKey, p, perPage, filters.value);
@@ -26,11 +37,17 @@ function onSaved() {
   fetchPage(1);
 }
 
-onMounted(() => fetchPage(1));
+onMounted(() => {
+  fetchPage(1);
+  loadBacklogCount();
+});
 
 watch(
   () => props.projectKey,
-  () => fetchPage(1)
+  () => {
+    fetchPage(1);
+    loadBacklogCount();
+  }
 );
 
 watch(
@@ -63,7 +80,7 @@ watch(
     </div>
 
     <div
-      v-else-if="modules.length === 0"
+      v-else-if="modules.length === 0 && !showBacklogCard"
       class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16"
     >
       <div class="flex size-16 items-center justify-center rounded-full bg-muted">
@@ -82,6 +99,13 @@ watch(
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <BacklogCard
+          v-if="showBacklogCard && page === 1"
+          title="Tasks Without an Epic"
+          subtitle="Top-level tasks not in any epic yet."
+          :count="backlogCount"
+          :to="`/projects/${projectKey}/modules/backlog`"
+        />
         <ModuleCard
           v-for="m in modules"
           :key="m.id"

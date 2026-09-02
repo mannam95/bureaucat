@@ -245,6 +245,7 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/modules", s.moduleHandler.ListModules)
 				projectGroup.POST("/modules", s.moduleHandler.CreateModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/modules/tasks-picker", s.moduleHandler.ListProjectTasksNotInModule)
+				projectGroup.GET("/modules/no-module-tasks", s.moduleHandler.ListTasksInNoModule)
 				projectGroup.GET("/modules/:moduleId", s.moduleHandler.GetModule)
 				projectGroup.PATCH("/modules/:moduleId", s.moduleHandler.UpdateModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.DELETE("/modules/:moduleId", s.moduleHandler.DeleteModule, auth.ProjectRoleMiddleware("admin"))

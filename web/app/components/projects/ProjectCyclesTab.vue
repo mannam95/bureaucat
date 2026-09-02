@@ -6,10 +6,21 @@ const props = defineProps<{
   isAdmin: boolean;
 }>();
 
-const { cycles, loading, total, page, totalPages, listCycles } = useCycles();
+const { cycles, loading, total, page, totalPages, listCycles, listUnassignedTasks } =
+  useCycles();
 
 const showCreate = ref(false);
 const perPage = 12;
+
+// How many top-level tasks aren't in any cycle, for the backlog card that opens
+// the "Tasks Without a Cycle" view. Only shown to admins (adding is admin-only).
+const backlogCount = ref(0);
+async function loadBacklogCount() {
+  if (!props.isAdmin) return;
+  const r = await listUnassignedTasks(props.projectKey, "", 100);
+  if (r.success && r.data) backlogCount.value = r.data.length;
+}
+const showBacklogCard = computed(() => props.isAdmin && backlogCount.value > 0);
 
 function fetchPage(p = 1) {
   listCycles(props.projectKey, p, perPage);
@@ -26,11 +37,15 @@ function onCreated() {
 
 onMounted(() => {
   fetchPage(1);
+  loadBacklogCount();
 });
 
 watch(
   () => props.projectKey,
-  () => fetchPage(1)
+  () => {
+    fetchPage(1);
+    loadBacklogCount();
+  }
 );
 </script>
 
@@ -55,7 +70,7 @@ watch(
     </div>
 
     <div
-      v-else-if="cycles.length === 0"
+      v-else-if="cycles.length === 0 && !showBacklogCard"
       class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16"
     >
       <div class="flex size-16 items-center justify-center rounded-full bg-muted">
@@ -73,6 +88,13 @@ watch(
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <BacklogCard
+          v-if="showBacklogCard && page === 1"
+          title="Tasks Without a Cycle"
+          subtitle="Top-level tasks not in any cycle yet."
+          :count="backlogCount"
+          :to="`/projects/${projectKey}/cycles/backlog`"
+        />
         <CycleCard
           v-for="c in cycles"
           :key="c.id"

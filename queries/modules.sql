@@ -257,6 +257,21 @@ WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 ORDER BY t.created_at DESC
 LIMIT $2;
 
+-- name: ListProjectTasksInNoModule :many
+-- Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
+-- no module at all. Unlike the picker above, this excludes tasks in ANY module.
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN project_states ps ON t.state_id = ps.id
+WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id)
+  AND (sqlc.narg('search')::text IS NULL
+       OR t.title ILIKE '%' || sqlc.narg('search') || '%')
+ORDER BY t.created_at DESC
+LIMIT $2;
+
 -- name: GetModuleMetrics :one
 SELECT
     COUNT(*)::int                                                         AS total,

@@ -399,6 +399,51 @@ export function useModules() {
     }
   }
 
+  // Backlog source for the Modules tab: project top-level tasks that are in no
+  // module at all. Kept out of the paginated `modules` state.
+  async function listTasksInNoModule(
+    projectKey: string,
+    search = "",
+    limit = 100
+  ): Promise<{ success: boolean; data?: ModuleTask[]; error?: string }> {
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (search) params.set("search", search);
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/modules/no-module-tasks?${params}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch tasks" };
+      }
+      return { success: true, data: await response.json() };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  // Every module in the project (for the backlog's "add to" picker), without
+  // disturbing the paginated `modules` state the card grid renders.
+  async function listAllModules(
+    projectKey: string
+  ): Promise<{ success: boolean; data?: Module[]; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/modules?page=1&per_page=200`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch modules" };
+      }
+      const data: PaginatedModulesResponse = await response.json();
+      return { success: true, data: data.modules || [] };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   function clearCurrent() {
     state.currentModule = null;
     state.tasks = [];
@@ -429,6 +474,8 @@ export function useModules() {
     addTasksToModule,
     removeTaskFromModule,
     listPickerTasks,
+    listTasksInNoModule,
+    listAllModules,
     listModuleMembers,
     addModuleMember,
     removeModuleMember,
