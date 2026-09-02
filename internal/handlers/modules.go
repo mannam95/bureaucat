@@ -1178,20 +1178,50 @@ func (h *ModuleHandler) ListTasksInNoModule(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list tasks")
 	}
 
+	// Decorate with assignees so the backlog table matches the module task table
+	// (priority rating, sprint and assignees), not just the lean picker.
+	ids := make([]uuid.UUID, len(rows))
+	for i, t := range rows {
+		ids[i] = t.ID
+	}
+	assigneesByTask := map[uuid.UUID][]AssigneeResponse{}
+	if len(ids) > 0 {
+		assignees, err := h.store.ListAssigneesForTasks(ctx, ids)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to load assignees")
+		}
+		for _, a := range assignees {
+			assigneesByTask[a.TaskID] = append(assigneesByTask[a.TaskID], AssigneeResponse{
+				ID:        a.ID,
+				UserID:    a.UserID,
+				Username:  a.Username,
+				Email:     a.Email,
+				FirstName: a.FirstName,
+				LastName:  a.LastName,
+				AvatarURL: textToStringPtr(a.AvatarUrl),
+			})
+		}
+	}
+
 	out := make([]ModuleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = ModuleTaskResponse{
-			ID:         t.ID,
-			ProjectKey: t.ProjectKey,
-			TaskNumber: int(t.TaskNumber),
-			TaskID:     t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
-			Title:      t.Title,
-			StateID:    t.StateID,
-			StateName:  t.StateName,
-			StateType:  t.StateType,
-			StateColor: textToString(t.StateColor, "#6B7280"),
-			Priority:   int(t.Priority),
-			Assignees:  []AssigneeResponse{},
+			ID:             t.ID,
+			ProjectKey:     t.ProjectKey,
+			TaskNumber:     int(t.TaskNumber),
+			TaskID:         t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:          t.Title,
+			StateID:        t.StateID,
+			StateName:      t.StateName,
+			StateType:      t.StateType,
+			StateColor:     textToString(t.StateColor, "#6B7280"),
+			Priority:       int(t.Priority),
+			PriorityRating: int(t.PriorityRating),
+			CycleTitle:     textToStringPtr(t.CycleTitle),
+			Assignees:      assigneesByTask[t.ID],
+		}
+		if out[i].Assignees == nil {
+			out[i].Assignees = []AssigneeResponse{}
 		}
 	}
 	return c.JSON(http.StatusOK, out)

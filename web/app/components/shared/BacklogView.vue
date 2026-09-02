@@ -1,20 +1,27 @@
 <script setup lang="ts">
 /**
  * Body of a backlog detail page: the project's top-level tasks that aren't in
- * any cycle (or any module), with search, multi-select and a bulk "add to
- * <target>" action. The parent page supplies the data loader, the list of
- * targets (cycles/modules) and the add action, so one component serves both.
+ * any cycle (or any module). It reuses the SAME toolbar (CollectionFilterBar)
+ * and table (CollectionTaskTable) as the cycle/module detail views, so the
+ * columns, filtering, sorting and reset all match. The only extra is a bulk
+ * "add to <target>" action in the selection bar.
  */
-import { Loader2, Search } from "lucide-vue-next";
+import { Loader2 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
+import CollectionFilterBar from "~/components/shared/CollectionFilterBar.vue";
+import type { TaskAssignee } from "~/types";
 
 interface BacklogTask {
   id: string;
-  title: string;
-  task_id: string;
   task_number: number;
+  task_id: string;
+  title: string;
+  state_id: string;
   state_name: string;
   state_color: string;
+  priority_rating?: number;
+  cycle_title?: string;
+  assignees?: TaskAssignee[];
 }
 interface Target {
   id: string;
@@ -26,49 +33,38 @@ type AckResult = { success: boolean; error?: string };
 const props = withDefaults(
   defineProps<{
     projectKey: string;
-    // Lowercase noun for buttons/hints, e.g. "cycle" or "epic".
+    // Lowercase noun for buttons, e.g. "cycle" or "epic".
     targetNoun: string;
     targets: Target[];
+    // Show the Sprint column (module backlog: a no-epic task can still be in a
+    // cycle). Off for the cycle backlog, where tasks are in no cycle by design.
+    showCycle?: boolean;
     // Adding is admin-gated; a non-admin viewer gets a read-only list.
     canAdd?: boolean;
     loadTasks: (search: string, limit: number) => Promise<LoadResult>;
     addTasks: (targetId: string, ids: string[]) => Promise<AckResult>;
   }>(),
-  { canAdd: true }
+  { showCycle: false, canAdd: true }
 );
 
 const emit = defineEmits<{ added: [] }>();
 
-const tasks = ref<BacklogTask[]>([]);
-const loading = ref(true);
-const search = ref("");
+const loadedTasks = ref<BacklogTask[]>([]);
+const visibleTasks = ref<BacklogTask[]>([]);
+const sortState = ref<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
 const selectedIds = ref<Set<string>>(new Set());
 const targetId = ref("");
+const loading = ref(true);
 const adding = ref(false);
-let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-
-const searchActive = computed(() => search.value.trim() !== "");
-
-const gridCols = computed(() =>
-  props.canAdd
-    ? "grid-template-columns: 28px 150px minmax(0, 1fr) 90px;"
-    : "grid-template-columns: 150px minmax(0, 1fr) 90px;"
-);
-
-const allSelected = computed(
-  () => tasks.value.length > 0 && tasks.value.every((t) => selectedIds.value.has(t.id))
-);
-const selectAllModel = computed<boolean | "indeterminate">(() =>
-  allSelected.value ? true : selectedIds.value.size > 0 ? "indeterminate" : false
-);
 
 async function reload() {
   loading.value = true;
-  const res = await props.loadTasks(search.value.trim(), 100);
+  // Whole set (server caps at 200), then filtered/sorted client-side by the bar.
+  const res = await props.loadTasks("", 200);
   loading.value = false;
   if (res.success) {
-    tasks.value = res.data || [];
-    const ids = new Set(tasks.value.map((t) => t.id));
+    loadedTasks.value = res.data || [];
+    const ids = new Set(loadedTasks.value.map((t) => t.id));
     selectedIds.value = new Set([...selectedIds.value].filter((id) => ids.has(id)));
   }
 }
@@ -80,9 +76,9 @@ function toggleSelect(id: string) {
   selectedIds.value = next;
 }
 function toggleSelectAll() {
-  selectedIds.value = allSelected.value
-    ? new Set()
-    : new Set(tasks.value.map((t) => t.id));
+  const ids = visibleTasks.value.map((t) => t.id);
+  const allSel = ids.length > 0 && ids.every((id) => selectedIds.value.has(id));
+  selectedIds.value = allSel ? new Set() : new Set(ids);
 }
 
 async function add() {
@@ -101,11 +97,6 @@ async function add() {
   }
 }
 
-watch(search, () => {
-  if (searchDebounce) clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(reload, 250);
-});
-
 // Preselect the only target so a one-cycle / one-module project needs no pick.
 watch(
   () => props.targets,
@@ -120,103 +111,69 @@ onMounted(reload);
 
 <template>
   <div class="space-y-4">
-    <!-- Toolbar: search + (admin) target picker + add -->
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="relative min-w-[9rem] flex-1 sm:max-w-xs">
-        <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input v-model="search" placeholder="Search tasks…" class="h-9 pl-8" />
-      </div>
-
-      <template v-if="canAdd">
-        <select
-          v-model="targetId"
-          class="ml-auto h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="targets.length === 0"
-        >
-          <option value="" disabled>
-            {{ targets.length ? `Add to ${targetNoun}…` : `No ${targetNoun} yet` }}
-          </option>
-          <option v-for="t in targets" :key="t.id" :value="t.id">
-            {{ t.title }}
-          </option>
-        </select>
-        <Button
-          size="sm"
-          class="h-9"
-          :disabled="adding || !targetId || selectedIds.size === 0"
-          @click="add"
-        >
-          <Loader2 v-if="adding" class="mr-1.5 size-4 animate-spin" />
-          Add {{ selectedIds.size || "" }}
-        </Button>
-      </template>
+    <div v-if="loading" class="flex items-center justify-center py-16">
+      <Loader2 class="size-6 animate-spin text-muted-foreground" />
     </div>
 
-    <div class="overflow-hidden rounded-lg border bg-background">
+    <template v-else>
+      <!-- Same toolbar as the cycle/module views: search, filter, sort, reset -->
+      <div class="flex flex-wrap items-center gap-2">
+        <CollectionFilterBar
+          :tasks="loadedTasks"
+          @update:filtered="(list) => (visibleTasks = list as BacklogTask[])"
+          @update:sort="(s) => (sortState = s)"
+        />
+      </div>
+
+      <!-- Bulk selection: pick a target and add, mirroring the detail views -->
       <div
-        class="grid items-center gap-3 border-b bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-        :style="gridCols"
+        v-if="canAdd && selectedIds.size > 0"
+        class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
       >
-        <span v-if="canAdd" class="flex items-center">
-          <Checkbox
-            :model-value="selectAllModel"
-            aria-label="Select all backlog tasks"
-            @update:model-value="toggleSelectAll"
-          />
-        </span>
-        <span>State</span>
-        <span>Title</span>
-        <span>ID</span>
+        <span class="font-medium">{{ selectedIds.size }} selected</span>
+        <div class="flex items-center gap-2">
+          <Button variant="ghost" size="sm" @click="selectedIds = new Set()">
+            Clear
+          </Button>
+          <select
+            v-model="targetId"
+            class="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="targets.length === 0"
+          >
+            <option value="" disabled>
+              {{ targets.length ? `Add to ${targetNoun}…` : `No ${targetNoun} yet` }}
+            </option>
+            <option v-for="t in targets" :key="t.id" :value="t.id">
+              {{ t.title }}
+            </option>
+          </select>
+          <Button size="sm" :disabled="adding || !targetId" @click="add">
+            <Loader2 v-if="adding" class="mr-1.5 size-4 animate-spin" />
+            Add
+          </Button>
+        </div>
       </div>
 
-      <div class="max-h-[70vh] overflow-y-auto [scrollbar-gutter:stable]">
-        <div
-          v-if="loading"
-          class="flex items-center justify-center py-12 text-sm text-muted-foreground"
-        >
-          <Loader2 class="mr-2 size-4 animate-spin" /> Loading…
-        </div>
-        <div
-          v-else-if="tasks.length === 0"
-          class="py-12 text-center text-sm text-muted-foreground"
-        >
-          {{ searchActive ? "No matching tasks." : `Every task is in a ${targetNoun}.` }}
-        </div>
-        <template v-else>
-          <!-- Admins get selectable rows; viewers get a plain list. -->
-          <label
-            v-for="task in tasks"
-            :key="task.id"
-            class="grid items-center gap-3 border-b border-border/40 px-4 py-2.5 last:border-0 hover:bg-muted/40"
-            :class="[canAdd ? 'cursor-pointer' : '', selectedIds.has(task.id) ? 'bg-amber-500/5' : '']"
-            :style="gridCols"
-          >
-            <Checkbox
-              v-if="canAdd"
-              :model-value="selectedIds.has(task.id)"
-              :aria-label="`Select ${task.title}`"
-              @update:model-value="toggleSelect(task.id)"
-            />
-            <span
-              class="inline-flex w-fit max-w-full items-center truncate rounded px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider"
-              :style="{
-                backgroundColor: (task.state_color || '#6B7280') + '22',
-                color: task.state_color || '#6B7280',
-              }"
-            >
-              {{ task.state_name }}
-            </span>
-            <NuxtLink
-              :to="`/projects/${projectKey}/tasks/${task.task_number}`"
-              class="min-w-0 truncate text-sm font-medium hover:text-amber-600 hover:underline dark:hover:text-amber-500"
-              @click.stop
-            >
-              {{ task.title }}
-            </NuxtLink>
-            <span class="font-mono text-[11px] text-muted-foreground">{{ task.task_id }}</span>
-          </label>
-        </template>
+      <div
+        v-if="visibleTasks.length === 0"
+        class="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground"
+      >
+        {{ loadedTasks.length === 0 ? `Every task is in a ${targetNoun}.` : "No tasks match the filters." }}
       </div>
-    </div>
+
+      <CollectionTaskTable
+        v-else
+        :tasks="visibleTasks"
+        :project-key="projectKey"
+        :is-admin="false"
+        :selectable="canAdd"
+        :selected="selectedIds"
+        :show-cycle="showCycle"
+        :sort-key="sortState.key"
+        :sort-dir="sortState.dir"
+        @toggle-select="toggleSelect"
+        @toggle-select-all="toggleSelectAll"
+      />
+    </template>
   </div>
 </template>

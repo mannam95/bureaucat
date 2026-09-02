@@ -260,11 +260,15 @@ LIMIT $2;
 -- name: ListProjectTasksInNoModule :many
 -- Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
 -- no module at all. Unlike the picker above, this excludes tasks in ANY module.
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
-       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
+-- A task with no module can still be in a cycle, so we surface its sprint too.
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority, t.priority_rating,
+       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       c.title AS cycle_title
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN cycle_tasks cyt ON cyt.task_id = t.id
+LEFT JOIN cycles c ON c.id = cyt.cycle_id AND c.deleted_at IS NULL
 WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id)
   AND (sqlc.narg('search')::text IS NULL

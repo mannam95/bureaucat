@@ -780,11 +780,14 @@ func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModules
 }
 
 const listProjectTasksInNoModule = `-- name: ListProjectTasksInNoModule :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
-       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority, t.priority_rating,
+       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       c.title AS cycle_title
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN cycle_tasks cyt ON cyt.task_id = t.id
+LEFT JOIN cycles c ON c.id = cyt.cycle_id AND c.deleted_at IS NULL
 WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id)
   AND ($3::text IS NULL
@@ -800,20 +803,23 @@ type ListProjectTasksInNoModuleParams struct {
 }
 
 type ListProjectTasksInNoModuleRow struct {
-	ID         uuid.UUID   `json:"id"`
-	ProjectID  uuid.UUID   `json:"project_id"`
-	TaskNumber int32       `json:"task_number"`
-	Title      string      `json:"title"`
-	StateID    uuid.UUID   `json:"state_id"`
-	Priority   int32       `json:"priority"`
-	ProjectKey string      `json:"project_key"`
-	StateName  string      `json:"state_name"`
-	StateType  string      `json:"state_type"`
-	StateColor pgtype.Text `json:"state_color"`
+	ID             uuid.UUID   `json:"id"`
+	ProjectID      uuid.UUID   `json:"project_id"`
+	TaskNumber     int32       `json:"task_number"`
+	Title          string      `json:"title"`
+	StateID        uuid.UUID   `json:"state_id"`
+	Priority       int32       `json:"priority"`
+	PriorityRating int32       `json:"priority_rating"`
+	ProjectKey     string      `json:"project_key"`
+	StateName      string      `json:"state_name"`
+	StateType      string      `json:"state_type"`
+	StateColor     pgtype.Text `json:"state_color"`
+	CycleTitle     pgtype.Text `json:"cycle_title"`
 }
 
 // Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
 // no module at all. Unlike the picker above, this excludes tasks in ANY module.
+// A task with no module can still be in a cycle, so we surface its sprint too.
 func (q *Queries) ListProjectTasksInNoModule(ctx context.Context, arg ListProjectTasksInNoModuleParams) ([]ListProjectTasksInNoModuleRow, error) {
 	rows, err := q.db.Query(ctx, listProjectTasksInNoModule, arg.ProjectID, arg.Limit, arg.Search)
 	if err != nil {
@@ -830,10 +836,12 @@ func (q *Queries) ListProjectTasksInNoModule(ctx context.Context, arg ListProjec
 			&i.Title,
 			&i.StateID,
 			&i.Priority,
+			&i.PriorityRating,
 			&i.ProjectKey,
 			&i.StateName,
 			&i.StateType,
 			&i.StateColor,
+			&i.CycleTitle,
 		); err != nil {
 			return nil, err
 		}

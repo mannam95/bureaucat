@@ -118,7 +118,7 @@ WHERE ct.cycle_id = $1
 ORDER BY ps.position ASC, t.created_at DESC;
 
 -- name: ListUnassignedProjectTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority, t.priority_rating,
        p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
 FROM tasks t
 JOIN projects p ON t.project_id = p.id

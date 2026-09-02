@@ -563,7 +563,7 @@ func (q *Queries) ListProjectCyclesAll(ctx context.Context, projectID uuid.UUID)
 }
 
 const listUnassignedProjectTasks = `-- name: ListUnassignedProjectTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority, t.priority_rating,
        p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
@@ -583,16 +583,17 @@ type ListUnassignedProjectTasksParams struct {
 }
 
 type ListUnassignedProjectTasksRow struct {
-	ID         uuid.UUID   `json:"id"`
-	ProjectID  uuid.UUID   `json:"project_id"`
-	TaskNumber int32       `json:"task_number"`
-	Title      string      `json:"title"`
-	StateID    uuid.UUID   `json:"state_id"`
-	Priority   int32       `json:"priority"`
-	ProjectKey string      `json:"project_key"`
-	StateName  string      `json:"state_name"`
-	StateType  string      `json:"state_type"`
-	StateColor pgtype.Text `json:"state_color"`
+	ID             uuid.UUID   `json:"id"`
+	ProjectID      uuid.UUID   `json:"project_id"`
+	TaskNumber     int32       `json:"task_number"`
+	Title          string      `json:"title"`
+	StateID        uuid.UUID   `json:"state_id"`
+	Priority       int32       `json:"priority"`
+	PriorityRating int32       `json:"priority_rating"`
+	ProjectKey     string      `json:"project_key"`
+	StateName      string      `json:"state_name"`
+	StateType      string      `json:"state_type"`
+	StateColor     pgtype.Text `json:"state_color"`
 }
 
 func (q *Queries) ListUnassignedProjectTasks(ctx context.Context, arg ListUnassignedProjectTasksParams) ([]ListUnassignedProjectTasksRow, error) {
@@ -611,6 +612,7 @@ func (q *Queries) ListUnassignedProjectTasks(ctx context.Context, arg ListUnassi
 			&i.Title,
 			&i.StateID,
 			&i.Priority,
+			&i.PriorityRating,
 			&i.ProjectKey,
 			&i.StateName,
 			&i.StateType,

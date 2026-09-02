@@ -77,6 +77,7 @@ onMounted(async () => {
           target-noun="epic"
           :targets="targets"
           :can-add="isAdmin"
+          show-cycle
           :load-tasks="loadBacklogTasks"
           :add-tasks="addToModule"
           @added="loadTargets"
