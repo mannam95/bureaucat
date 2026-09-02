@@ -268,6 +268,7 @@ export type SortKey =
   | "created_at"
   | "updated_at"
   | "priority"
+  | "priority_rating"
   | "due_date"
   | "start_date"
   | "title";

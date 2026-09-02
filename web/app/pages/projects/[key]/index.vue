@@ -95,6 +95,7 @@ const {
   clearAll,
   sortBy,
   sortDir,
+  resetSort,
   groupBy,
   activeViewSlug,
   setActiveView,
@@ -646,6 +647,7 @@ onMounted(async () => {
                   @update:sort-dir="(v) => (sortDir = v)"
                   @update:group-by="(v) => (groupBy = v)"
                   @reset="resetFilters"
+                  @reset-sort="resetSort"
                 />
                 <div v-if="canWrite" class="flex items-center">
                   <Button class="rounded-r-none" @click="showCreateTask = true">

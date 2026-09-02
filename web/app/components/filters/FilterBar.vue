@@ -36,6 +36,7 @@ const emit = defineEmits<{
   "update:searchQuery": [value: string];
   "update:sortBy": [value: SortKey];
   "update:sortDir": [value: SortDir];
+  resetSort: [];
   "update:groupBy": [value: ViewGroupBy];
   reset: [];
 }>();
@@ -111,6 +112,7 @@ function updatePredicate(index: number, p: Predicate) {
         :sort-dir="sortDir"
         @update:sort-by="(v) => emit('update:sortBy', v)"
         @update:sort-dir="(v) => emit('update:sortDir', v)"
+        @reset="emit('resetSort')"
       />
 
       <Button

@@ -292,6 +292,18 @@ export function useFilterTree() {
       void replaceQuery(q);
     },
   });
+  // Reset sort to the default in a SINGLE query write. Setting sortBy and
+  // sortDir separately races: each reads route.query before the other's
+  // router.replace lands, so the second clobbers the first (leaving a stale
+  // sort_by in the URL).
+  function resetSort() {
+    const q = { ...route.query };
+    delete q.sort_by;
+    delete q.sort_dir;
+    delete q.page;
+    void replaceQuery(q);
+  }
+
   const groupBy = computed<ViewGroupBy>({
     get: () => ((route.query.group_by as ViewGroupBy) ?? DEFAULT_GROUP_BY),
     set: (v) => {
@@ -439,6 +451,7 @@ export function useFilterTree() {
     removeNodeAt,
     sortBy,
     sortDir,
+    resetSort,
     groupBy,
     activeViewSlug,
     setActiveView,

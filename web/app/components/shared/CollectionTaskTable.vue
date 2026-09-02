@@ -44,12 +44,18 @@ const sortKey = ref<SortKey | null>(null);
 const sortDir = ref<"asc" | "desc">("asc");
 
 function toggleSort(key: SortKey) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
-  } else {
+  // Rating is most useful highest-first; text/state read better A->Z.
+  const firstDir: "asc" | "desc" = key === "priority_rating" ? "desc" : "asc";
+  if (sortKey.value !== key) {
     sortKey.value = key;
-    // Rating is most useful highest-first; text/state read better A->Z.
-    sortDir.value = key === "priority_rating" ? "desc" : "asc";
+    sortDir.value = firstDir;
+    return;
+  }
+  // Same column: cycle first dir -> other dir -> cleared (back to default order).
+  if (sortDir.value === firstDir) {
+    sortDir.value = firstDir === "asc" ? "desc" : "asc";
+  } else {
+    sortKey.value = null;
   }
 }
 
