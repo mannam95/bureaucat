@@ -373,7 +373,7 @@ func (q *Queries) ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]
 }
 
 const listCycleTasks = `-- name: ListCycleTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating,
        t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at,
        p.project_key,
        ps.name AS state_name, ps.state_type, ps.color AS state_color
@@ -395,22 +395,23 @@ type ListCycleTasksParams struct {
 }
 
 type ListCycleTasksRow struct {
-	ID          uuid.UUID          `json:"id"`
-	ProjectID   uuid.UUID          `json:"project_id"`
-	TaskNumber  int32              `json:"task_number"`
-	Title       string             `json:"title"`
-	Description pgtype.Text        `json:"description"`
-	StateID     uuid.UUID          `json:"state_id"`
-	Priority    int32              `json:"priority"`
-	StartDate   pgtype.Timestamptz `json:"start_date"`
-	DueDate     pgtype.Timestamptz `json:"due_date"`
-	CreatedBy   uuid.UUID          `json:"created_by"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	ProjectKey  string             `json:"project_key"`
-	StateName   string             `json:"state_name"`
-	StateType   string             `json:"state_type"`
-	StateColor  pgtype.Text        `json:"state_color"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	PriorityRating int32              `json:"priority_rating"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ProjectKey     string             `json:"project_key"`
+	StateName      string             `json:"state_name"`
+	StateType      string             `json:"state_type"`
+	StateColor     pgtype.Text        `json:"state_color"`
 }
 
 func (q *Queries) ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) ([]ListCycleTasksRow, error) {
@@ -430,6 +431,7 @@ func (q *Queries) ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) 
 			&i.Description,
 			&i.StateID,
 			&i.Priority,
+			&i.PriorityRating,
 			&i.StartDate,
 			&i.DueDate,
 			&i.CreatedBy,

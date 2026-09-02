@@ -568,14 +568,19 @@ func (q *Queries) ListModuleTaskIDs(ctx context.Context, moduleID uuid.UUID) ([]
 }
 
 const listModuleTasks = `-- name: ListModuleTasks :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating,
        t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at,
        p.project_key,
-       ps.name AS state_name, ps.state_type, ps.color AS state_color
+       ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       -- Which sprint/cycle (if any) this task is in. A task belongs to at most
+       -- one cycle, so LEFT JOIN + LIMIT-free single row is safe.
+       c.title AS cycle_title
 FROM module_tasks mt
 JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN cycle_tasks cyt ON cyt.task_id = t.id
+LEFT JOIN cycles c ON c.id = cyt.cycle_id AND c.deleted_at IS NULL
 WHERE mt.module_id = $1
   AND ($2::uuid IS NULL OR EXISTS (
       SELECT 1 FROM task_assignees ta
@@ -590,22 +595,24 @@ type ListModuleTasksParams struct {
 }
 
 type ListModuleTasksRow struct {
-	ID          uuid.UUID          `json:"id"`
-	ProjectID   uuid.UUID          `json:"project_id"`
-	TaskNumber  int32              `json:"task_number"`
-	Title       string             `json:"title"`
-	Description pgtype.Text        `json:"description"`
-	StateID     uuid.UUID          `json:"state_id"`
-	Priority    int32              `json:"priority"`
-	StartDate   pgtype.Timestamptz `json:"start_date"`
-	DueDate     pgtype.Timestamptz `json:"due_date"`
-	CreatedBy   uuid.UUID          `json:"created_by"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	ProjectKey  string             `json:"project_key"`
-	StateName   string             `json:"state_name"`
-	StateType   string             `json:"state_type"`
-	StateColor  pgtype.Text        `json:"state_color"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	PriorityRating int32              `json:"priority_rating"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ProjectKey     string             `json:"project_key"`
+	StateName      string             `json:"state_name"`
+	StateType      string             `json:"state_type"`
+	StateColor     pgtype.Text        `json:"state_color"`
+	CycleTitle     pgtype.Text        `json:"cycle_title"`
 }
 
 func (q *Queries) ListModuleTasks(ctx context.Context, arg ListModuleTasksParams) ([]ListModuleTasksRow, error) {
@@ -625,6 +632,7 @@ func (q *Queries) ListModuleTasks(ctx context.Context, arg ListModuleTasksParams
 			&i.Description,
 			&i.StateID,
 			&i.Priority,
+			&i.PriorityRating,
 			&i.StartDate,
 			&i.DueDate,
 			&i.CreatedBy,
@@ -634,6 +642,7 @@ func (q *Queries) ListModuleTasks(ctx context.Context, arg ListModuleTasksParams
 			&i.StateName,
 			&i.StateType,
 			&i.StateColor,
+			&i.CycleTitle,
 		); err != nil {
 			return nil, err
 		}

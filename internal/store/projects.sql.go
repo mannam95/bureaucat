@@ -475,45 +475,47 @@ func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectState
 
 const createTask = `-- name: CreateTask :one
 
-INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, created_at, updated_at, deleted_at
+INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 0))
+RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
 
 type CreateTaskParams struct {
-	ProjectID    uuid.UUID          `json:"project_id"`
-	TaskNumber   int32              `json:"task_number"`
-	Title        string             `json:"title"`
-	Description  pgtype.Text        `json:"description"`
-	StateID      uuid.UUID          `json:"state_id"`
-	Priority     int32              `json:"priority"`
-	CreatedBy    uuid.UUID          `json:"created_by"`
-	StartDate    pgtype.Timestamptz `json:"start_date"`
-	DueDate      pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink    pgtype.Text        `json:"figma_link"`
-	Branch       pgtype.Text        `json:"branch"`
-	PullRequest  pgtype.Text        `json:"pull_request"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink      pgtype.Text        `json:"figma_link"`
+	Branch         pgtype.Text        `json:"branch"`
+	PullRequest    pgtype.Text        `json:"pull_request"`
+	PriorityRating interface{}        `json:"priority_rating"`
 }
 
 type CreateTaskRow struct {
-	ID           uuid.UUID          `json:"id"`
-	ProjectID    uuid.UUID          `json:"project_id"`
-	TaskNumber   int32              `json:"task_number"`
-	Title        string             `json:"title"`
-	Description  pgtype.Text        `json:"description"`
-	StateID      uuid.UUID          `json:"state_id"`
-	Priority     int32              `json:"priority"`
-	CreatedBy    uuid.UUID          `json:"created_by"`
-	StartDate    pgtype.Timestamptz `json:"start_date"`
-	DueDate      pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink    pgtype.Text        `json:"figma_link"`
-	Branch       pgtype.Text        `json:"branch"`
-	PullRequest  pgtype.Text        `json:"pull_request"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink      pgtype.Text        `json:"figma_link"`
+	Branch         pgtype.Text        `json:"branch"`
+	PullRequest    pgtype.Text        `json:"pull_request"`
+	PriorityRating int32              `json:"priority_rating"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 // ==================== TASKS ====================
@@ -532,6 +534,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		arg.FigmaLink,
 		arg.Branch,
 		arg.PullRequest,
+		arg.PriorityRating,
 	)
 	var i CreateTaskRow
 	err := row.Scan(
@@ -549,6 +552,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.FigmaLink,
 		&i.Branch,
 		&i.PullRequest,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -965,7 +969,7 @@ func (q *Queries) GetTaskAttachEligibility(ctx context.Context, id uuid.UUID) (G
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
@@ -994,6 +998,7 @@ type GetTaskByIDRow struct {
 	FigmaLink        pgtype.Text        `json:"figma_link"`
 	Branch           pgtype.Text        `json:"branch"`
 	PullRequest      pgtype.Text        `json:"pull_request"`
+	PriorityRating   int32              `json:"priority_rating"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
@@ -1028,6 +1033,7 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 		&i.FigmaLink,
 		&i.Branch,
 		&i.PullRequest,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -1047,7 +1053,7 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 }
 
 const getTaskByProjectAndNumber = `-- name: GetTaskByProjectAndNumber :one
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
@@ -1081,6 +1087,7 @@ type GetTaskByProjectAndNumberRow struct {
 	FigmaLink        pgtype.Text        `json:"figma_link"`
 	Branch           pgtype.Text        `json:"branch"`
 	PullRequest      pgtype.Text        `json:"pull_request"`
+	PriorityRating   int32              `json:"priority_rating"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
@@ -1115,6 +1122,7 @@ func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByPr
 		&i.FigmaLink,
 		&i.Branch,
 		&i.PullRequest,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -2597,7 +2605,7 @@ SET project_id = $1,
     state_id = $3,
     updated_at = NOW()
 WHERE id = $4 AND deleted_at IS NULL
-RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, created_at, updated_at, deleted_at
+RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
 
 type MoveTaskParams struct {
@@ -2608,23 +2616,24 @@ type MoveTaskParams struct {
 }
 
 type MoveTaskRow struct {
-	ID           uuid.UUID          `json:"id"`
-	ProjectID    uuid.UUID          `json:"project_id"`
-	TaskNumber   int32              `json:"task_number"`
-	Title        string             `json:"title"`
-	Description  pgtype.Text        `json:"description"`
-	StateID      uuid.UUID          `json:"state_id"`
-	Priority     int32              `json:"priority"`
-	CreatedBy    uuid.UUID          `json:"created_by"`
-	StartDate    pgtype.Timestamptz `json:"start_date"`
-	DueDate      pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink    pgtype.Text        `json:"figma_link"`
-	Branch       pgtype.Text        `json:"branch"`
-	PullRequest  pgtype.Text        `json:"pull_request"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink      pgtype.Text        `json:"figma_link"`
+	Branch         pgtype.Text        `json:"branch"`
+	PullRequest    pgtype.Text        `json:"pull_request"`
+	PriorityRating int32              `json:"priority_rating"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 // Move a task to a different project, assigning a new project-local task number
@@ -2652,6 +2661,7 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow
 		&i.FigmaLink,
 		&i.Branch,
 		&i.PullRequest,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -3298,9 +3308,10 @@ SET title = COALESCE($2, title),
     figma_link = COALESCE($10, figma_link),
     branch = COALESCE($11, branch),
     pull_request = COALESCE($12, pull_request),
+    priority_rating = COALESCE($13, priority_rating),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, created_at, updated_at, deleted_at
+RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
 
 type UpdateTaskParams struct {
@@ -3316,26 +3327,28 @@ type UpdateTaskParams struct {
 	FigmaLink       pgtype.Text        `json:"figma_link"`
 	Branch          pgtype.Text        `json:"branch"`
 	PullRequest     pgtype.Text        `json:"pull_request"`
+	PriorityRating  pgtype.Int4        `json:"priority_rating"`
 }
 
 type UpdateTaskRow struct {
-	ID           uuid.UUID          `json:"id"`
-	ProjectID    uuid.UUID          `json:"project_id"`
-	TaskNumber   int32              `json:"task_number"`
-	Title        string             `json:"title"`
-	Description  pgtype.Text        `json:"description"`
-	StateID      uuid.UUID          `json:"state_id"`
-	Priority     int32              `json:"priority"`
-	CreatedBy    uuid.UUID          `json:"created_by"`
-	StartDate    pgtype.Timestamptz `json:"start_date"`
-	DueDate      pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink    pgtype.Text        `json:"figma_link"`
-	Branch       pgtype.Text        `json:"branch"`
-	PullRequest  pgtype.Text        `json:"pull_request"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	TaskNumber     int32              `json:"task_number"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	StateID        uuid.UUID          `json:"state_id"`
+	Priority       int32              `json:"priority"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	StartDate      pgtype.Timestamptz `json:"start_date"`
+	DueDate        pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink      pgtype.Text        `json:"figma_link"`
+	Branch         pgtype.Text        `json:"branch"`
+	PullRequest    pgtype.Text        `json:"pull_request"`
+	PriorityRating int32              `json:"priority_rating"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error) {
@@ -3352,6 +3365,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		arg.FigmaLink,
 		arg.Branch,
 		arg.PullRequest,
+		arg.PriorityRating,
 	)
 	var i UpdateTaskRow
 	err := row.Scan(
@@ -3369,6 +3383,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.FigmaLink,
 		&i.Branch,
 		&i.PullRequest,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
