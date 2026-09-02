@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CheckCircle2, XCircle, Clock, MessageSquare, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
+import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
 import type { Task, ProjectState } from "~/types";
 
 const props = withDefaults(
@@ -21,7 +21,7 @@ const props = withDefaults(
     expandable?: boolean;
     expanded?: boolean;
     // Renders this row as a nested sub-task: light background, indented ID with a
-    // corner marker, and no expand chevron / comment badge.
+    // corner marker, and no expand chevron.
     indented?: boolean;
   }>(),
   {
@@ -85,18 +85,16 @@ interface Person {
   avatarUrl?: string;
 }
 
-// Creator and assignees are separate columns: merging them made it impossible
-// to tell who raised a task from who is doing it. Empty on the dashboard, whose
-// API doesn't return creator fields.
-const creator = computed<Person | null>(() =>
-  props.task.created_by
-    ? {
-        id: props.task.created_by,
-        firstName: props.task.creator_first_name || "",
-        lastName: props.task.creator_last_name || "",
-        avatarUrl: props.task.creator_avatar_url,
-      }
-    : null
+// The list shows when a task was created (matching the "Created Date" column
+// header and its sort). Who created it lives on the task detail page.
+const createdDate = computed(() =>
+  props.task.created_at
+    ? new Date(props.task.created_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : ""
 );
 
 const assignedTo = computed<Person[]>(() =>
@@ -182,26 +180,11 @@ const assignedTo = computed<Person[]>(() =>
         <PriorityRating :model-value="task.priority_rating ?? 0" />
       </div>
 
-      <!-- Col 5: Created by (always a single person) -->
+      <!-- Col 5: Created date -->
       <div class="flex items-center justify-end">
-        <NuxtLink
-          v-if="creator"
-          :to="`/profile/${creator.id}`"
-          :title="`Created by ${creator.firstName} ${creator.lastName}`.trim()"
-          @click.stop
-        >
-          <Avatar class="size-6 border-2 border-background transition-transform hover:scale-110">
-            <AvatarImage
-              v-if="creator.avatarUrl"
-              :src="creator.avatarUrl"
-              :alt="`${creator.firstName} ${creator.lastName}`"
-            />
-            <AvatarFallback class="text-[10px]" :seed="creator.id">
-              {{ creator.firstName?.[0] || "" }}{{ creator.lastName?.[0] || "" }}
-            </AvatarFallback>
-          </Avatar>
-        </NuxtLink>
-        <span v-else class="text-xs text-muted-foreground">—</span>
+        <span class="whitespace-nowrap text-xs tabular-nums text-muted-foreground" :title="createdDate">
+          {{ createdDate || "—" }}
+        </span>
       </div>
 
       <!-- Col 6: Assigned to (stacked; a dash makes unassigned tasks obvious) -->
@@ -239,17 +222,6 @@ const assignedTo = computed<Person[]>(() =>
         <span v-else class="text-xs text-muted-foreground">—</span>
       </div>
 
-      <!-- Col 7: Comment count (hidden for nested sub-task rows) -->
-      <div class="flex items-center justify-end">
-        <div
-          v-if="!indented"
-          class="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5"
-          :title="`${task.comment_count} comment${task.comment_count !== 1 ? 's' : ''}`"
-        >
-          <MessageSquare class="size-3 text-muted-foreground" />
-          <span class="font-mono text-xs font-medium text-muted-foreground">{{ task.comment_count }}</span>
-        </div>
-      </div>
     </div>
   </NuxtLink>
 </template>

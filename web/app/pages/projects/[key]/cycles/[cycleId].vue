@@ -8,6 +8,7 @@ import {
   Trash2,
   CalendarDays,
   ArrowRight,
+  UserX,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { CycleSibling, CycleTask } from "~/types";
@@ -57,6 +58,13 @@ const deleting = ref(false);
 const filterBar = ref<{ clear: () => void } | null>(null);
 const visibleTasks = ref<CycleTask[]>([]);
 const anyFilterActive = ref(false);
+
+// Tasks in this cycle with nobody assigned, shown as an "Unassigned" row in the
+// sidebar so the assignee breakdown accounts for every task.
+const unassignedCount = computed(
+  () => tasks.value.filter((t) => (t.assignees?.length ?? 0) === 0).length
+);
+const sortState = ref<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
 // Bulk selection of task ids, for moving tasks to the next cycle.
 const selectedIds = ref<Set<string>>(new Set());
 const siblings = ref<CycleSibling[]>([]);
@@ -315,6 +323,7 @@ watch(cycleId, async () => {
                   :state-buckets="metrics?.state_breakdown"
                   @update:filtered="(list) => onFiltered(list as CycleTask[])"
                   @update:active="anyFilterActive = $event"
+                  @update:sort="(s) => (sortState = s)"
                 />
 
                 <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
@@ -377,6 +386,8 @@ watch(cycleId, async () => {
                 :is-admin="isAdmin"
                 :selectable="isAdmin"
                 :selected="selectedIds"
+                :sort-key="sortState.key"
+                :sort-dir="sortState.dir"
                 remove-label="Remove from cycle:"
                 @remove="handleRemoveTask"
                 @toggle-select="toggleSelect"
@@ -395,7 +406,7 @@ watch(cycleId, async () => {
 
               <!-- Assignees -->
               <section
-                v-if="metrics && metrics.assignees.length"
+                v-if="metrics && (metrics.assignees.length || unassignedCount > 0)"
                 class="rounded-lg border p-4"
               >
                 <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -422,6 +433,18 @@ watch(cycleId, async () => {
                     </span>
                     <span class="font-medium tabular-nums text-muted-foreground">
                       {{ a.task_count }}
+                    </span>
+                  </li>
+                  <li
+                    v-if="unassignedCount > 0"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                  >
+                    <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+                      <UserX class="size-3.5" />
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-muted-foreground">Unassigned</span>
+                    <span class="font-medium tabular-nums text-muted-foreground">
+                      {{ unassignedCount }}
                     </span>
                   </li>
                 </ul>

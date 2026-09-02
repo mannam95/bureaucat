@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Task, Subtask, ProjectState } from "~/types";
+import { ArrowUp, ArrowDown } from "lucide-vue-next";
+import type { Task, Subtask, ProjectState, SortKey, SortDir } from "~/types";
 
 const props = withDefaults(
   defineProps<{
@@ -23,9 +24,18 @@ const props = withDefaults(
     workspaceByProject?: Record<string, string>;
     // Allow expanding a parent task's sub-tasks inline in the list.
     expandable?: boolean;
+    // Current sort, for the read-only ▲/▼ indicator on the matching header.
+    sortBy?: SortKey;
+    sortDir?: SortDir;
   }>(),
   { states: () => [], isMember: false, selectable: false, showWorkspace: false, expandable: true }
 );
+
+// The header column a sort key maps to shows a read-only direction arrow.
+function sortArrow(key: SortKey) {
+  if (props.sortBy !== key) return null;
+  return props.sortDir === "asc" ? ArrowUp : ArrowDown;
+}
 
 const emit = defineEmits<{
   updated: [];
@@ -77,8 +87,7 @@ function isMemberFor(task: Task): boolean {
   return props.isMember;
 }
 
-// Adapt a Subtask into the shape TaskCard renders. Indented rows hide the comment
-// badge, so the sub-task's missing comment_count is never shown.
+// Adapt a Subtask into the shape TaskCard renders.
 function subtaskAsTask(sub: Subtask): Task {
   return { ...sub, comment_count: 0, subtask_count: 0 } as unknown as Task;
 }
@@ -96,12 +105,20 @@ function subtaskAsTask(sub: Subtask): Task {
       <span v-if="selectable" />
       <span v-if="showWorkspace">Workspace</span>
       <span>ID</span>
-      <span>Title</span>
+      <span class="inline-flex items-center gap-1">
+        Title
+        <component :is="sortArrow('title')" v-if="sortArrow('title')" class="size-3" />
+      </span>
       <span class="justify-self-end">State</span>
-      <span class="justify-self-end">Priority ★</span>
-      <span class="justify-self-end">Created</span>
+      <span class="justify-self-end inline-flex items-center gap-1">
+        Priority ★
+        <component :is="sortArrow('priority_rating')" v-if="sortArrow('priority_rating')" class="size-3" />
+      </span>
+      <span class="justify-self-end inline-flex items-center gap-1 whitespace-nowrap">
+        Created Date
+        <component :is="sortArrow('created_at')" v-if="sortArrow('created_at')" class="size-3" />
+      </span>
       <span class="justify-self-end">Assigned</span>
-      <span class="justify-self-end">Comments</span>
     </div>
 
     <template v-for="task in tasks" :key="task.id">

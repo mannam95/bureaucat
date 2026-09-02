@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends TaskRow">
-import { X, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-vue-next";
+import { X, ArrowUp, ArrowDown } from "lucide-vue-next";
 import type { TaskAssignee } from "~/types";
 
 // Minimum shape the table needs from each task row.
@@ -28,9 +28,18 @@ const props = withDefaults(
     // Show a "Sprint" column with each task's cycle. Used on the module page,
     // where a task's sprint isn't otherwise visible; redundant on a cycle page.
     showCycle?: boolean;
+    // Current sort (owned by the toolbar), for the read-only header indicator.
+    sortKey?: string | null;
+    sortDir?: "asc" | "desc";
   }>(),
-  { selectable: false, showCycle: false }
+  { selectable: false, showCycle: false, sortKey: null, sortDir: "asc" }
 );
+
+// A read-only direction arrow on the header of whatever column is sorted.
+function sortArrow(key: string) {
+  if (props.sortKey !== key) return null;
+  return props.sortDir === "asc" ? ArrowUp : ArrowDown;
+}
 
 const emit = defineEmits<{
   remove: [taskId: string];
@@ -38,54 +47,9 @@ const emit = defineEmits<{
   toggleSelectAll: [];
 }>();
 
-// ---- Client-side sorting (the collection's tasks are all loaded already) ----
-type SortKey = "state_name" | "priority_rating" | "title" | "assignee";
-const sortKey = ref<SortKey | null>(null);
-const sortDir = ref<"asc" | "desc">("asc");
-
-function toggleSort(key: SortKey) {
-  // Rating is most useful highest-first; text/state read better A->Z.
-  const firstDir: "asc" | "desc" = key === "priority_rating" ? "desc" : "asc";
-  if (sortKey.value !== key) {
-    sortKey.value = key;
-    sortDir.value = firstDir;
-    return;
-  }
-  // Same column: cycle first dir -> other dir -> cleared (back to default order).
-  if (sortDir.value === firstDir) {
-    sortDir.value = firstDir === "asc" ? "desc" : "asc";
-  } else {
-    sortKey.value = null;
-  }
-}
-
-function assigneeName(t: TaskRow): string {
-  const a = t.assignees?.[0];
-  if (!a) return "";
-  return (`${a.first_name} ${a.last_name}`.trim() || a.username).toLowerCase();
-}
-
-const sortedTasks = computed<T[]>(() => {
-  const key = sortKey.value;
-  if (!key) return props.tasks;
-  const dir = sortDir.value === "asc" ? 1 : -1;
-  return [...props.tasks].sort((a, b) => {
-    let cmp = 0;
-    if (key === "priority_rating") {
-      cmp = (a.priority_rating ?? 0) - (b.priority_rating ?? 0);
-    } else if (key === "title") {
-      cmp = a.title.localeCompare(b.title);
-    } else if (key === "state_name") {
-      cmp = a.state_name.localeCompare(b.state_name);
-    } else {
-      cmp = assigneeName(a).localeCompare(assigneeName(b));
-    }
-    // Stable, deterministic tiebreak so equal rows don't jitter between sorts.
-    if (cmp === 0) return a.task_number - b.task_number;
-    return cmp * dir;
-  });
-});
-
+// Filtering and sorting are owned by the toolbar (CollectionFilterBar), which
+// hands this table the already filtered + sorted list. The table is a plain
+// renderer.
 const allSelected = computed(
   () => props.tasks.length > 0 && props.tasks.every((t) => props.selected?.has(t.id))
 );
@@ -122,35 +86,30 @@ const gridStyle = computed(() => {
         />
       </span>
 
-      <button type="button" class="flex items-center gap-1 text-left uppercase hover:text-foreground" @click="toggleSort('state_name')">
+      <span class="inline-flex items-center gap-1">
         State
-        <component :is="sortKey === 'state_name' ? (sortDir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown" class="size-3" :class="sortKey === 'state_name' ? 'opacity-100' : 'opacity-40'" />
-      </button>
-
-      <button type="button" class="flex items-center gap-1 text-left uppercase hover:text-foreground" @click="toggleSort('priority_rating')">
-        <span title="Priority rating">★</span>
-        <component :is="sortKey === 'priority_rating' ? (sortDir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown" class="size-3" :class="sortKey === 'priority_rating' ? 'opacity-100' : 'opacity-40'" />
-      </button>
-
-      <button type="button" class="flex items-center gap-1 text-left uppercase hover:text-foreground" @click="toggleSort('title')">
+        <component :is="sortArrow('state_name')" v-if="sortArrow('state_name')" class="size-3" />
+      </span>
+      <span title="Priority rating" class="inline-flex items-center gap-1">
+        Priority ★
+        <component :is="sortArrow('priority_rating')" v-if="sortArrow('priority_rating')" class="size-3" />
+      </span>
+      <span class="inline-flex items-center gap-1">
         Title
-        <component :is="sortKey === 'title' ? (sortDir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown" class="size-3" :class="sortKey === 'title' ? 'opacity-100' : 'opacity-40'" />
-      </button>
-
+        <component :is="sortArrow('title')" v-if="sortArrow('title')" class="size-3" />
+      </span>
       <span>ID</span>
       <span v-if="showCycle">Sprint</span>
-
-      <button type="button" class="flex items-center gap-1 text-left uppercase hover:text-foreground" @click="toggleSort('assignee')">
+      <span class="inline-flex items-center gap-1">
         Assigned
-        <component :is="sortKey === 'assignee' ? (sortDir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown" class="size-3" :class="sortKey === 'assignee' ? 'opacity-100' : 'opacity-40'" />
-      </button>
-
+        <component :is="sortArrow('assignee')" v-if="sortArrow('assignee')" class="size-3" />
+      </span>
       <span v-if="isAdmin"></span>
     </div>
 
     <div class="max-h-[70vh] overflow-y-auto [scrollbar-gutter:stable]">
       <div
-        v-for="task in sortedTasks"
+        v-for="task in tasks"
         :key="task.id"
         class="group grid items-center gap-3 border-b border-border/40 px-4 py-2.5 text-sm transition-colors last:border-0 hover:bg-muted/40"
         :class="{ 'bg-amber-500/5': selectable && selected?.has(task.id) }"

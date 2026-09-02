@@ -304,6 +304,22 @@ export function useFilterTree() {
     void replaceQuery(q);
   }
 
+  // Reset everything the toolbar owns — filters, search and sort — in ONE query
+  // write. Calling clearAll() then resetSort() races the same way (the second
+  // reads the pre-clear query and writes the search/filters back), so the
+  // single unified "Reset" button must clear them together here.
+  function resetAll() {
+    tree.value = emptyTree();
+    const q = { ...route.query };
+    delete q.f;
+    delete q.q;
+    delete q.view;
+    delete q.sort_by;
+    delete q.sort_dir;
+    delete q.page;
+    void replaceQuery(q);
+  }
+
   const groupBy = computed<ViewGroupBy>({
     get: () => ((route.query.group_by as ViewGroupBy) ?? DEFAULT_GROUP_BY),
     set: (v) => {
@@ -452,6 +468,7 @@ export function useFilterTree() {
     sortBy,
     sortDir,
     resetSort,
+    resetAll,
     groupBy,
     activeViewSlug,
     setActiveView,

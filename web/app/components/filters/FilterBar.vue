@@ -36,15 +36,21 @@ const emit = defineEmits<{
   "update:searchQuery": [value: string];
   "update:sortBy": [value: SortKey];
   "update:sortDir": [value: SortDir];
-  resetSort: [];
   "update:groupBy": [value: ViewGroupBy];
   reset: [];
 }>();
 
 const addingFilter = ref(false);
 
+// The single "Reset" clears search + filters + sort, so it shows whenever any of
+// those is non-default (sort defaults to created_at / descending).
 function hasAnyFilter(): boolean {
-  return props.tree.children.length > 0 || props.searchQuery.length > 0;
+  return (
+    props.tree.children.length > 0 ||
+    props.searchQuery.length > 0 ||
+    props.sortBy !== "created_at" ||
+    props.sortDir !== "desc"
+  );
 }
 
 function updateChildAt(index: number, node: FilterNode) {
@@ -112,7 +118,6 @@ function updatePredicate(index: number, p: Predicate) {
         :sort-dir="sortDir"
         @update:sort-by="(v) => emit('update:sortBy', v)"
         @update:sort-dir="(v) => emit('update:sortDir', v)"
-        @reset="emit('resetSort')"
       />
 
       <Button
@@ -122,7 +127,7 @@ function updatePredicate(index: number, p: Predicate) {
         @click="emit('reset')"
       >
         <X class="mr-1 size-3.5" />
-        Clear
+        Reset
       </Button>
     </div>
 

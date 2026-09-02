@@ -92,10 +92,9 @@ const {
   tree,
   setTree,
   clearTreeAndView,
-  clearAll,
+  resetAll,
   sortBy,
   sortDir,
-  resetSort,
   groupBy,
   activeViewSlug,
   setActiveView,
@@ -467,7 +466,9 @@ function openRenameView(view: ProjectView) {
 }
 
 function resetFilters() {
-  clearAll();
+  // One "Reset" clears search + filters + sort in a single query write. Two
+  // writes (clear then reset-sort) race and leave the search text behind.
+  resetAll();
 }
 
 function handleTreeUpdate(next: FilterTree) {
@@ -647,7 +648,6 @@ onMounted(async () => {
                   @update:sort-dir="(v) => (sortDir = v)"
                   @update:group-by="(v) => (groupBy = v)"
                   @reset="resetFilters"
-                  @reset-sort="resetSort"
                 />
                 <div v-if="canWrite" class="flex items-center">
                   <Button class="rounded-r-none" @click="showCreateTask = true">
@@ -743,6 +743,8 @@ onMounted(async () => {
                   :is-member="canWrite"
                   :selectable="canWrite"
                   :selected="selectedTasks"
+                  :sort-by="sortBy"
+                  :sort-dir="sortDir"
                   @updated="() => loadTasks(tasksPage)"
                   @toggle-select="toggleTaskSelection"
                 />

@@ -1,27 +1,16 @@
 <script setup lang="ts">
-import { ArrowUpDown, Check, ArrowDown, ArrowUp, RotateCcw } from "lucide-vue-next";
+import { ArrowUpDown, Check, ArrowDown, ArrowUp } from "lucide-vue-next";
 import type { SortKey, SortDir } from "~/types";
 
-const props = withDefaults(
-  defineProps<{
-    sortBy: SortKey;
-    sortDir: SortDir;
-    // The default sort to reset back to (matches the server's fallback).
-    defaultSortBy?: SortKey;
-    defaultSortDir?: SortDir;
-  }>(),
-  { defaultSortBy: "created_at", defaultSortDir: "desc" }
-);
+defineProps<{
+  sortBy: SortKey;
+  sortDir: SortDir;
+}>();
 
 const emit = defineEmits<{
   "update:sortBy": [value: SortKey];
   "update:sortDir": [value: SortDir];
-  reset: [];
 }>();
-
-const isDefault = computed(
-  () => props.sortBy === props.defaultSortBy && props.sortDir === props.defaultSortDir
-);
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "created_at", label: "Created date" },
@@ -73,12 +62,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
         </span>
         <Check v-if="sortDir === 'desc'" class="size-3.5 text-primary" />
       </DropdownMenuItem>
-      <template v-if="!isDefault">
-        <DropdownMenuSeparator />
-        <DropdownMenuItem class="text-muted-foreground" @click="emit('reset')">
-          <RotateCcw class="mr-2 size-3.5" /> Reset to default
-        </DropdownMenuItem>
-      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

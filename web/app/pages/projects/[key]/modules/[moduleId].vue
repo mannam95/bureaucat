@@ -8,6 +8,7 @@ import {
   Copy,
   Pencil,
   CalendarDays,
+  UserX,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ModuleStatus, ModuleTask } from "~/types";
@@ -51,6 +52,7 @@ const deleting = ref(false);
 // back the narrowed list. The tasks actually shown are whatever it emits.
 const visibleTasks = ref<ModuleTask[]>([]);
 const anyFilterActive = ref(false);
+const sortState = ref<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
 
 useHead({
   title: computed(
@@ -119,6 +121,12 @@ const assignees = computed(() => {
       `${x.first_name} ${x.last_name}`.localeCompare(`${y.first_name} ${y.last_name}`)
   );
 });
+
+// Tasks in this module with nobody assigned, shown as an "Unassigned" row in the
+// sidebar so the assignee breakdown accounts for every task.
+const unassignedCount = computed(
+  () => tasks.value.filter((t) => (t.assignees?.length ?? 0) === 0).length
+);
 
 async function loadAll() {
   loading.value = true;
@@ -364,6 +372,7 @@ watch(moduleId, async () => {
                   :state-buckets="metrics?.state_breakdown"
                   @update:filtered="(list) => (visibleTasks = list as ModuleTask[])"
                   @update:active="anyFilterActive = $event"
+                  @update:sort="(s) => (sortState = s)"
                 />
 
                 <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
@@ -395,6 +404,8 @@ watch(moduleId, async () => {
                 :project-key="projectKey"
                 :is-admin="isAdmin"
                 show-cycle
+                :sort-key="sortState.key"
+                :sort-dir="sortState.dir"
                 remove-label="Remove from module:"
                 @remove="handleRemoveTask"
               />
@@ -411,7 +422,7 @@ watch(moduleId, async () => {
 
               <!-- Assignees -->
               <section
-                v-if="assignees.length"
+                v-if="assignees.length || unassignedCount > 0"
                 class="rounded-lg border p-4"
               >
                 <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -438,6 +449,18 @@ watch(moduleId, async () => {
                     </span>
                     <span class="font-medium tabular-nums text-muted-foreground">
                       {{ a.task_count }}
+                    </span>
+                  </li>
+                  <li
+                    v-if="unassignedCount > 0"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                  >
+                    <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+                      <UserX class="size-3.5" />
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-muted-foreground">Unassigned</span>
+                    <span class="font-medium tabular-nums text-muted-foreground">
+                      {{ unassignedCount }}
                     </span>
                   </li>
                 </ul>
