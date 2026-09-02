@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Maximize2 } from "lucide-vue-next";
 import type { Task, ProjectState, ProjectMember, ProjectLabel } from "~/types";
-import { PRIORITY_LABELS } from "~/types";
 
 const props = withDefaults(
   defineProps<{
@@ -23,7 +22,6 @@ const draggable = computed(() => props.canDrag ?? props.isMember);
 
 const emit = defineEmits<{ refresh: [] }>();
 
-const priorityInfo = computed(() => PRIORITY_LABELS[props.task.priority] || PRIORITY_LABELS[0]);
 const isDragging = ref(false);
 const detailOpen = ref(false);
 
@@ -77,18 +75,10 @@ function toggleDetail(open: boolean) {
             <Maximize2 class="size-3 shrink-0 opacity-50" />
             <span class="font-mono text-xs">{{ task.task_id }}</span>
           </NuxtLink>
-          <div class="flex items-center gap-1.5">
-            <PriorityRating
-              v-if="(task.priority_rating ?? 0) > 0"
-              :model-value="task.priority_rating"
-            />
-            <div
-              v-if="task.priority > 0"
-              class="size-2 rounded-full"
-              :style="{ backgroundColor: priorityInfo.color }"
-              :title="priorityInfo.label"
-            />
-          </div>
+          <PriorityRating
+            v-if="(task.priority_rating ?? 0) > 0"
+            :model-value="task.priority_rating"
+          />
         </div>
 
         <!-- Title -->

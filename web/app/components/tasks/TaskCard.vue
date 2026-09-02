@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Circle, CircleDot, CheckCircle2, XCircle, Clock, MessageSquare, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
 import type { Task, ProjectState } from "~/types";
-import { PRIORITY_LABELS } from "~/types";
 
 const props = withDefaults(
   defineProps<{
@@ -78,8 +77,6 @@ const stateIcon = computed(() => {
       return Circle;
   }
 });
-
-const priorityInfo = computed(() => PRIORITY_LABELS[props.task.priority] || PRIORITY_LABELS[0]);
 
 interface Person {
   id: string;
@@ -180,19 +177,9 @@ const assignedTo = computed<Person[]>(() =>
         </div>
       </div>
 
-      <!-- Col 4: Priority label + star rating -->
-      <div class="flex items-center gap-1.5 justify-self-end">
-        <PriorityRating
-          v-if="(task.priority_rating ?? 0) > 0"
-          :model-value="task.priority_rating"
-        />
-        <div class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit">
-          <span
-            class="size-2.5 shrink-0 rounded-full ring-1.5 ring-offset-1 ring-offset-background"
-            :style="{ backgroundColor: priorityInfo.color, '--tw-ring-color': priorityInfo.color }"
-          />
-          <span class="text-xs text-muted-foreground whitespace-nowrap">{{ priorityInfo.label }}</span>
-        </div>
+      <!-- Col 4: Priority rating (the coarse priority label is deferred for now) -->
+      <div class="flex items-center justify-end">
+        <PriorityRating :model-value="task.priority_rating ?? 0" />
       </div>
 
       <!-- Col 5: Created by (always a single person) -->

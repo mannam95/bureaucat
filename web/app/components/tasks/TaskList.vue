@@ -98,7 +98,7 @@ function subtaskAsTask(sub: Subtask): Task {
       <span>ID</span>
       <span>Title</span>
       <span class="justify-self-end">State</span>
-      <span class="justify-self-end">Priority</span>
+      <span class="justify-self-end">Priority ★</span>
       <span class="justify-self-end">Created</span>
       <span class="justify-self-end">Assigned</span>
       <span class="justify-self-end">Comments</span>
