@@ -67,8 +67,8 @@ async function toggleModule(module: Module) {
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-2">
-    <p class="shrink-0 text-xs text-muted-foreground">Modules</p>
+  <div class="flex items-start justify-between gap-2">
+    <p class="shrink-0 pt-0.5 text-xs text-muted-foreground">Modules</p>
 
     <div class="flex min-w-0 items-center gap-1">
       <NuxtLink
@@ -122,19 +122,19 @@ async function toggleModule(module: Module) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <template v-else-if="modules.length">
+      <!-- Read-only: each module as its own pill link (a task can be in several,
+           so collapsing to first + "+N" hid the rest). -->
+      <span v-else-if="modules.length" class="flex min-w-0 flex-wrap justify-end gap-1">
         <NuxtLink
-          :to="`/projects/${projectKey}/modules/${modules[0]!.id}`"
-          class="min-w-0 truncate font-medium hover:underline"
-          :class="dense ? 'text-xs' : 'text-sm'"
-          :title="modules.map((m) => m.title).join(', ')"
+          v-for="m in modules"
+          :key="m.id"
+          :to="`/projects/${projectKey}/modules/${m.id}`"
+          class="max-w-full truncate rounded-md border bg-muted/50 px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+          :title="m.title"
         >
-          {{ modules[0]!.title }}
+          {{ m.title }}
         </NuxtLink>
-        <span v-if="modules.length > 1" class="shrink-0 text-xs text-muted-foreground">
-          +{{ modules.length - 1 }}
-        </span>
-      </template>
+      </span>
       <span
         v-else-if="!canEdit"
         class="text-muted-foreground"
