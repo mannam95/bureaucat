@@ -33,7 +33,7 @@ const router = useRouter();
 const projectKey = computed(() => route.params.key as string);
 
 // Valid tab values
-const validTabs = ["tasks", "board", "pages", "cycles", "modules", "views", "members", "settings"] as const;
+const validTabs = ["tasks", "board", "cycles", "modules", "members", "pages", "views", "settings"] as const;
 type TabValue = (typeof validTabs)[number];
 
 const activeTab = computed({
@@ -580,10 +580,6 @@ onMounted(async () => {
                   <Kanban class="size-4" />
                   Board
                 </TabsTrigger>
-                <TabsTrigger value="pages" class="gap-2">
-                  <FileText class="size-4" />
-                  Pages
-                </TabsTrigger>
                 <TabsTrigger value="cycles" class="gap-2">
                   <Repeat class="size-4" />
                   Cycles
@@ -595,6 +591,10 @@ onMounted(async () => {
                 <TabsTrigger value="members" class="gap-2">
                   <Users class="size-4" />
                   Members
+                </TabsTrigger>
+                <TabsTrigger value="pages" class="gap-2">
+                  <FileText class="size-4" />
+                  Pages
                 </TabsTrigger>
                 <TabsTrigger value="views" class="gap-2">
                   <Eye class="size-4" />
