@@ -91,6 +91,7 @@ const projectCycles = ref<CycleSibling[]>([]);
 const {
   tree,
   setTree,
+  addPredicate,
   clearTreeAndView,
   resetAll,
   sortBy,
@@ -315,6 +316,31 @@ function setPageInUrl(page: number) {
   });
 }
 
+// Pick the cycle the Tasks/Board views default to: the active one (today is in
+// its window), else the most recently started cycle.
+function pickDefaultCycle(): CycleSibling | null {
+  const cycles = projectCycles.value;
+  if (!cycles.length) return null;
+  const active = cycles.find((c) => c.status === "active");
+  if (active) return active;
+  return (
+    [...cycles].sort((a, b) => (b.start_date || "").localeCompare(a.start_date || ""))[0] ??
+    null
+  );
+}
+
+// On a fresh landing (no filter, no saved view, no search) default the Tasks and
+// Board views to the current cycle, so a large backlog doesn't render all at
+// once. It's an ordinary removable chip — users can change or clear it.
+function applyDefaultCycleFilter() {
+  if (tree.value.children.length > 0) return;
+  if (activeViewSlug.value) return;
+  if (searchQuery.value) return;
+  const cycle = pickDefaultCycle();
+  if (!cycle) return;
+  addPredicate({ field: "cycle", op: "in", value: [cycle.id] });
+}
+
 async function loadProject() {
   loading.value = true;
   error.value = null;
@@ -351,6 +377,9 @@ async function loadProject() {
       setActiveView(null);
     }
   }
+
+  // Default to the current cycle when the user arrived with nothing applied.
+  applyDefaultCycleFilter();
 
   await loadTasks(currentPageFromUrl.value);
   loading.value = false;

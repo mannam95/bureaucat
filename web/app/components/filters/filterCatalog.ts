@@ -47,7 +47,45 @@ export interface FieldDef {
   ops: OpDef[];
 }
 
+// Order matters: this is the order fields appear in the "+ Filter" picker.
+// The four most-used come first (Cycle, State, Assignees, Title); the rest
+// follow in a roughly most-to-least common order.
 export const FILTER_CATALOG: FieldDef[] = [
+  {
+    field: "cycle",
+    label: "Cycle",
+    icon: Repeat,
+    entityKind: "cycle",
+    ops: [
+      { op: "in", label: "is any of", valueKind: "uuid-array" },
+      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "has no cycle", valueKind: "none" },
+      { op: "is_set", label: "in a cycle", valueKind: "none" },
+    ],
+  },
+  {
+    field: "state",
+    label: "State",
+    icon: Tag,
+    entityKind: "state",
+    ops: [
+      { op: "in", label: "is any of", valueKind: "uuid-array" },
+      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
+    ],
+  },
+  {
+    field: "assignees",
+    label: "Assignees",
+    icon: Users,
+    entityKind: "member",
+    ops: [
+      { op: "has_any", label: "include any of", valueKind: "uuid-array" },
+      { op: "has_all", label: "include all of", valueKind: "uuid-array" },
+      { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "is unassigned", valueKind: "none" },
+      { op: "is_set", label: "has any assignee", valueKind: "none" },
+    ],
+  },
   {
     field: "title",
     label: "Title",
@@ -59,27 +97,6 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "is_not", label: "is not", valueKind: "text" },
       { op: "is_empty", label: "is empty", valueKind: "none" },
       { op: "is_set", label: "is set", valueKind: "none" },
-    ],
-  },
-  {
-    field: "description",
-    label: "Description",
-    icon: FileText,
-    ops: [
-      { op: "contains", label: "contains", valueKind: "text" },
-      { op: "not_contains", label: "does not contain", valueKind: "text" },
-      { op: "is_empty", label: "is empty", valueKind: "none" },
-      { op: "is_set", label: "is set", valueKind: "none" },
-    ],
-  },
-  {
-    field: "state",
-    label: "State",
-    icon: Tag,
-    entityKind: "state",
-    ops: [
-      { op: "in", label: "is any of", valueKind: "uuid-array" },
-      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
     ],
   },
   {
@@ -105,16 +122,16 @@ export const FILTER_CATALOG: FieldDef[] = [
     ],
   },
   {
-    field: "assignees",
-    label: "Assignees",
-    icon: Users,
-    entityKind: "member",
+    field: "labels",
+    label: "Labels",
+    icon: Tag,
+    entityKind: "label",
     ops: [
       { op: "has_any", label: "include any of", valueKind: "uuid-array" },
       { op: "has_all", label: "include all of", valueKind: "uuid-array" },
       { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
-      { op: "is_empty", label: "is unassigned", valueKind: "none" },
-      { op: "is_set", label: "has any assignee", valueKind: "none" },
+      { op: "is_empty", label: "has no labels", valueKind: "none" },
+      { op: "is_set", label: "has any label", valueKind: "none" },
     ],
   },
   {
@@ -130,39 +147,13 @@ export const FILTER_CATALOG: FieldDef[] = [
     ],
   },
   {
-    field: "labels",
-    label: "Labels",
-    icon: Tag,
-    entityKind: "label",
+    field: "description",
+    label: "Description",
+    icon: FileText,
     ops: [
-      { op: "has_any", label: "include any of", valueKind: "uuid-array" },
-      { op: "has_all", label: "include all of", valueKind: "uuid-array" },
-      { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
-      { op: "is_empty", label: "has no labels", valueKind: "none" },
-      { op: "is_set", label: "has any label", valueKind: "none" },
-    ],
-  },
-  {
-    field: "cycle",
-    label: "Cycle",
-    icon: Repeat,
-    entityKind: "cycle",
-    ops: [
-      { op: "in", label: "is any of", valueKind: "uuid-array" },
-      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
-      { op: "is_empty", label: "has no cycle", valueKind: "none" },
-      { op: "is_set", label: "in a cycle", valueKind: "none" },
-    ],
-  },
-  {
-    field: "start_date",
-    label: "Start date",
-    icon: CalendarIcon,
-    ops: [
-      { op: "before", label: "is before", valueKind: "date" },
-      { op: "after", label: "is after", valueKind: "date" },
-      { op: "between", label: "is between", valueKind: "date-range" },
-      { op: "is_empty", label: "is unset", valueKind: "none" },
+      { op: "contains", label: "contains", valueKind: "text" },
+      { op: "not_contains", label: "does not contain", valueKind: "text" },
+      { op: "is_empty", label: "is empty", valueKind: "none" },
       { op: "is_set", label: "is set", valueKind: "none" },
     ],
   },
@@ -175,6 +166,18 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "after", label: "is after", valueKind: "date" },
       { op: "between", label: "is between", valueKind: "date-range" },
       { op: "overdue", label: "is overdue", valueKind: "none" },
+      { op: "is_empty", label: "is unset", valueKind: "none" },
+      { op: "is_set", label: "is set", valueKind: "none" },
+    ],
+  },
+  {
+    field: "start_date",
+    label: "Start date",
+    icon: CalendarIcon,
+    ops: [
+      { op: "before", label: "is before", valueKind: "date" },
+      { op: "after", label: "is after", valueKind: "date" },
+      { op: "between", label: "is between", valueKind: "date-range" },
       { op: "is_empty", label: "is unset", valueKind: "none" },
       { op: "is_set", label: "is set", valueKind: "none" },
     ],
