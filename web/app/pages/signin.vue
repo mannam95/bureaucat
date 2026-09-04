@@ -75,8 +75,8 @@ async function handleSubmit() {
           <CardDescription>Sign in to your account to continue</CardDescription>
         </CardHeader>
         <CardContent>
-          <!-- SSO Buttons -->
-          <div v-if="hasSSOProviders" class="space-y-3">
+          <!-- SSO Buttons - HIDDEN (self-host): re-enable by restoring v-if="hasSSOProviders" -->
+          <div v-if="false" class="space-y-3">
             <Button
               v-if="ssoProviders.google"
               variant="outline"

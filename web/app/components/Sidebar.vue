@@ -106,8 +106,9 @@ onMounted(() => {
         <Timer class="size-4.5" />
       </NuxtLink>
 
+      <!-- Send feedback (to bureaucat.org) - HIDDEN (self-host): re-enable by restoring v-if="feedbackPublic.send_to_main_enabled" -->
       <button
-        v-if="feedbackPublic.send_to_main_enabled"
+        v-if="false"
         type="button"
         title="Feedback"
         aria-label="Send feedback"
@@ -146,6 +147,7 @@ onMounted(() => {
       </NuxtLink>
     </div>
 
-    <FeedbackDialog v-model:open="showFeedback" />
+    <!-- HIDDEN (self-host): upstream feedback dialog, re-enable with the sidebar button above -->
+    <FeedbackDialog v-if="false" v-model:open="showFeedback" />
   </aside>
 </template>

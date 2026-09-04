@@ -317,6 +317,78 @@ func (h *AuthHandler) Me(c *echo.Context) error {
 	})
 }
 
+// UpdateAvatarRequest is the body for PUT /me/avatar. An empty avatar_url
+// removes the current photo.
+type UpdateAvatarRequest struct {
+	AvatarURL string `json:"avatar_url"`
+}
+
+// UpdateMyAvatar sets or clears the signed-in user's own avatar. A non-empty
+// value must be a same-origin upload path (/api/v1/uploads/<uuid>) produced by
+// POST /uploads, so the avatar can't be pointed at an arbitrary external URL.
+//
+//	@Summary		Update my avatar
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		UpdateAvatarRequest	true	"Avatar"
+//	@Success		200		{object}	UserResponse
+//	@Security		BearerAuth
+//	@Router			/me/avatar [put]
+func (h *AuthHandler) UpdateMyAvatar(c *echo.Context) error {
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	var req UpdateAvatarRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	url := strings.TrimSpace(req.AvatarURL)
+	avatar := pgtype.Text{}
+	if url != "" {
+		if !isUploadPath(url) {
+			return echo.NewHTTPError(http.StatusBadRequest, "avatar_url must be an uploaded file path")
+		}
+		avatar = pgtype.Text{String: url, Valid: true}
+	}
+
+	ctx := c.Request().Context()
+	if err := h.store.UpdateUserAvatarURL(ctx, store.UpdateUserAvatarURLParams{
+		ID:        userID,
+		AvatarUrl: avatar,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update avatar")
+	}
+
+	user, err := h.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+	return c.JSON(http.StatusOK, UserResponse{
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		UserType:  user.UserType,
+		AvatarURL: textToStringPtr(user.AvatarUrl),
+		CreatedAt: user.CreatedAt.Time,
+	})
+}
+
+// isUploadPath reports whether s is a same-origin uploaded-file path of the
+// form /api/v1/uploads/<uuid>.
+func isUploadPath(s string) bool {
+	const prefix = "/api/v1/uploads/"
+	if !strings.HasPrefix(s, prefix) {
+		return false
+	}
+	_, err := uuid.Parse(strings.TrimPrefix(s, prefix))
+	return err == nil
+}
+
 // GetUserProfile returns a user's public profile by ID.
 //
 //	@Summary		Get user profile

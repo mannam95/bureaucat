@@ -169,6 +169,20 @@ export function useAuth() {
     state.isLoading = false;
   }
 
+  // Re-fetch the current user (e.g. after a profile-photo change) and update
+  // state so the navbar and other avatar spots reflect it immediately.
+  async function refreshUser(): Promise<void> {
+    if (!state.accessToken) return;
+    try {
+      const response = await fetch("/api/v1/me", { headers: { ...getAuthHeader() } });
+      if (response.ok) {
+        state.user = await response.json();
+      }
+    } catch {
+      // keep the existing user on a transient failure
+    }
+  }
+
   function getAuthHeader(): Record<string, string> {
     if (!state.accessToken) {
       return {};
@@ -230,5 +244,6 @@ export function useAuth() {
     refreshToken,
     initAuth,
     getAuthHeader,
+    refreshUser,
   };
 }

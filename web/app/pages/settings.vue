@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock } from "lucide-vue-next";
+import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock, UserCircle } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,81 @@ definePageMeta({
 useSeoMeta({ title: "Settings" });
 
 const { listTokens, createToken, updateTokenScope, deleteToken } = usePAT();
-const { changePassword, logout } = useAuth();
+const { user, changePassword, logout, getAuthHeader, refreshUser } = useAuth();
+
+// ---- Profile photo ----
+const avatarInput = ref<HTMLInputElement | null>(null);
+const avatarBusy = ref(false);
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+
+const avatarInitials = computed(() => {
+  const u = user.value;
+  if (!u) return "";
+  return ((u.first_name?.[0] ?? "") + (u.last_name?.[0] ?? "")).toUpperCase();
+});
+
+function pickAvatar() {
+  avatarInput.value?.click();
+}
+
+async function setAvatar(avatarUrl: string): Promise<boolean> {
+  const res = await fetch("/api/v1/me/avatar", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    body: JSON.stringify({ avatar_url: avatarUrl }),
+  });
+  if (!res.ok) return false;
+  await refreshUser();
+  return true;
+}
+
+async function onAvatarSelected(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ""; // allow re-selecting the same file
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    toast.error("Please choose an image file");
+    return;
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    toast.error("Image must be 5 MB or smaller");
+    return;
+  }
+  avatarBusy.value = true;
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const up = await fetch("/api/v1/uploads", {
+      method: "POST",
+      headers: { ...getAuthHeader() },
+      body: form,
+    });
+    if (!up.ok) {
+      toast.error("Upload failed");
+      return;
+    }
+    const { url } = await up.json();
+    if (await setAvatar(url)) toast.success("Profile photo updated");
+    else toast.error("Could not update photo");
+  } catch {
+    toast.error("Network error");
+  } finally {
+    avatarBusy.value = false;
+  }
+}
+
+async function removeAvatar() {
+  avatarBusy.value = true;
+  try {
+    if (await setAvatar("")) toast.success("Profile photo removed");
+    else toast.error("Could not remove photo");
+  } catch {
+    toast.error("Network error");
+  } finally {
+    avatarBusy.value = false;
+  }
+}
 
 // Change-password form. Changing the password revokes every session, so on
 // success we sign out and send the user back to the sign-in page.
@@ -224,6 +298,58 @@ onMounted(() => {
           <p class="mt-2 text-muted-foreground">
             Manage your account settings
           </p>
+        </div>
+
+        <!-- Profile Photo Section -->
+        <div class="mb-10">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <UserCircle class="size-5" />
+              Profile photo
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Upload a photo to personalize your account. It appears next to your
+              name across the app.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent class="flex flex-wrap items-center gap-6 pt-6">
+              <Avatar class="size-20">
+                <AvatarImage v-if="user?.avatar_url" :src="user.avatar_url" />
+                <AvatarFallback class="text-lg" :seed="user?.id">
+                  {{ avatarInitials }}
+                </AvatarFallback>
+              </Avatar>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                  <Button size="sm" :disabled="avatarBusy" @click="pickAvatar">
+                    <Loader2 v-if="avatarBusy" class="mr-2 size-4 animate-spin" />
+                    Upload photo
+                  </Button>
+                  <Button
+                    v-if="user?.avatar_url"
+                    variant="outline"
+                    size="sm"
+                    :disabled="avatarBusy"
+                    @click="removeAvatar"
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  JPG, PNG or GIF, up to 5 MB.
+                </p>
+              </div>
+              <input
+                ref="avatarInput"
+                type="file"
+                accept="image/*"
+                class="hidden"
+                @change="onAvatarSelected"
+              />
+            </CardContent>
+          </Card>
         </div>
 
         <!-- Personal Access Tokens Section -->

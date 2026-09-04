@@ -91,6 +91,7 @@ func (s *Server) registerRoutes() {
 		protected := api.Group("", auth.Middleware(s.authManager, s.store), auth.EnforcePATScope())
 		protected.GET("/me", s.authHandler.Me)
 		protected.POST("/me/password", s.authHandler.ChangePassword)
+		protected.PUT("/me/avatar", s.authHandler.UpdateMyAvatar)
 		protected.GET("/me/tasks", s.authHandler.MyTasks)
 
 		// Per-user preferences (durable, cross-device view/UI settings).

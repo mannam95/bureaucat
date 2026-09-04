@@ -325,8 +325,8 @@ const adminModels = [
           </NuxtLink>
         </div>
 
-        <!-- Data Import -->
-        <div class="mt-12">
+        <!-- Data Import - HIDDEN (self-host): re-enable by removing v-if="false" -->
+        <div v-if="false" class="mt-12">
           <div class="mb-4">
             <h2 class="text-xl font-semibold">Data Import</h2>
             <p class="text-sm text-muted-foreground">
@@ -477,7 +477,7 @@ const adminModels = [
           <div class="mb-4">
             <h2 class="text-xl font-semibold">Authentication</h2>
             <p class="text-sm text-muted-foreground">
-              Configure signup and single sign-on (SSO) providers
+              Configure public signups
             </p>
           </div>
 
@@ -504,8 +504,8 @@ const adminModels = [
               </CardContent>
             </Card>
 
-            <!-- Google SSO -->
-            <Card>
+            <!-- Google SSO - HIDDEN (self-host): re-enable by removing v-if="false" -->
+            <Card v-if="false">
               <CardContent class="pt-6">
                 <div class="space-y-6">
                   <div class="flex items-center justify-between">
@@ -568,8 +568,8 @@ const adminModels = [
               </CardContent>
             </Card>
 
-            <!-- Zitadel SSO -->
-            <Card>
+            <!-- Zitadel SSO - HIDDEN (self-host): re-enable by removing v-if="false" -->
+            <Card v-if="false">
               <CardContent class="pt-6">
                 <div class="space-y-6">
                   <div class="flex items-center justify-between">
@@ -641,8 +641,8 @@ const adminModels = [
               </CardContent>
             </Card>
 
-            <!-- Save SSO button -->
-            <div class="flex justify-end pt-2">
+            <!-- Save SSO button - HIDDEN (self-host): re-enable by removing v-if="false" -->
+            <div v-if="false" class="flex justify-end pt-2">
               <Button @click="handleSaveSSO" :disabled="savingSSO">
                 <Loader2 v-if="savingSSO" class="mr-2 size-4 animate-spin" />
                 Save SSO Settings
@@ -651,8 +651,8 @@ const adminModels = [
           </div>
         </div>
 
-        <!-- Integrations / Mattermost Settings -->
-        <div class="mt-12">
+        <!-- Integrations / Mattermost Settings - HIDDEN (self-host): re-enable by removing v-if="false" -->
+        <div v-if="false" class="mt-12">
           <div class="mb-4">
             <h2 class="text-xl font-semibold">Integrations</h2>
             <p class="text-sm text-muted-foreground">
