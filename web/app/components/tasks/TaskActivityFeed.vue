@@ -46,12 +46,16 @@ const { verifyActivity } = useActivity();
 const verifying = ref(false);
 const verificationResult = ref<{ valid: boolean; message: string } | null>(null);
 
-const SORT_KEY = "bureaucat-activity-sort";
-const newestFirst = ref(localStorage.getItem(SORT_KEY) !== "oldest");
+// Newest/oldest activity ordering, persisted globally through the preference
+// store so it follows the user across tasks and devices.
+const activitySort = usePreferences().globalRef<"newest" | "oldest">(
+  "tasks.detail.activity_sort",
+  "newest",
+);
+const newestFirst = computed(() => activitySort.value === "newest");
 
 function toggleSort() {
-  newestFirst.value = !newestFirst.value;
-  localStorage.setItem(SORT_KEY, newestFirst.value ? "newest" : "oldest");
+  activitySort.value = newestFirst.value ? "oldest" : "newest";
 }
 
 // Icon map for activity types (Partial + a Circle fallback at the call site so

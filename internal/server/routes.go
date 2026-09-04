@@ -93,6 +93,15 @@ func (s *Server) registerRoutes() {
 		protected.POST("/me/password", s.authHandler.ChangePassword)
 		protected.GET("/me/tasks", s.authHandler.MyTasks)
 
+		// Per-user preferences (durable, cross-device view/UI settings).
+		// Global scope lives under /me; project scope lives in the project
+		// group below, which already enforces membership.
+		if s.preferencesHandler != nil {
+			protected.GET("/me/preferences/global", s.preferencesHandler.GetGlobalPreferences)
+			protected.PUT("/me/preferences/global/:key", s.preferencesHandler.PutGlobalPreference)
+			protected.DELETE("/me/preferences/global/:key", s.preferencesHandler.DeleteGlobalPreference)
+		}
+
 		// Per-user in-app notifications
 		if s.notificationsHandler != nil {
 			protected.GET("/me/notifications", s.notificationsHandler.ListNotifications)
@@ -223,6 +232,15 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/views/:slug", s.viewHandler.GetView)
 				projectGroup.PATCH("/views/:slug", s.viewHandler.UpdateView, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/views/:slug", s.viewHandler.DeleteView, auth.ProjectRoleMiddleware("member"))
+			}
+
+			// Per-user preferences scoped to this project. Personal data, so
+			// any project member may read and write their own; the only gate is
+			// project membership.
+			if s.preferencesHandler != nil {
+				projectGroup.GET("/preferences", s.preferencesHandler.GetProjectPreferences)
+				projectGroup.PUT("/preferences/:key", s.preferencesHandler.PutProjectPreference)
+				projectGroup.DELETE("/preferences/:key", s.preferencesHandler.DeleteProjectPreference)
 			}
 
 			// Cycles

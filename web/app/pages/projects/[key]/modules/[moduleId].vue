@@ -57,7 +57,7 @@ const anyFilterActive = ref(false);
 const sortState = ref<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
 
 // Collapsible right-hand overview panel (shared, persisted across detail views).
-const { showDetailPanel } = useDetailPanel();
+const { showDetailPanel } = useDetailPanel("module");
 
 useHead({
   title: computed(

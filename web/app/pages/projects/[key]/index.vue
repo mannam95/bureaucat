@@ -98,34 +98,25 @@ const {
   sortDir,
   groupBy,
   activeViewSlug,
-  setActiveView,
   searchQuery,
   effectiveTree,
-  hydrateFromUrl,
-  encodeTree,
-} = useFilterTree();
+  hydrate,
+  applyView: applyViewState,
+} = useFilterTree(() => (activeTab.value === "board" ? "board" : "tasks"));
 
 const loading = ref(true);
 const error = ref<string | null>(null);
 const isMissing = computed(() => /not found/i.test(error.value || ""));
 
-// Tasks-per-page selection, persisted locally so it survives refreshes.
+// Tasks-per-page selection, persisted globally through the preference store so
+// it follows the user across projects and devices.
 const PER_PAGE_OPTIONS = [20, 50, 100] as const;
-const PER_PAGE_STORAGE_KEY = "bureaucat:tasksPerPage";
-const perPage = ref(20);
-
-onMounted(() => {
-  const stored = parseInt(localStorage.getItem(PER_PAGE_STORAGE_KEY) ?? "", 10);
-  if (PER_PAGE_OPTIONS.includes(stored as (typeof PER_PAGE_OPTIONS)[number])) {
-    perPage.value = stored;
-  }
-});
+const perPage = usePreferences().globalRef<number>("tasks.list.page_size", 20);
 
 function handlePerPageChange(value: unknown) {
   const next = parseInt(String(value), 10);
   if (!PER_PAGE_OPTIONS.includes(next as (typeof PER_PAGE_OPTIONS)[number])) return;
   perPage.value = next;
-  localStorage.setItem(PER_PAGE_STORAGE_KEY, String(next));
   clearSelection();
   setPageInUrl(1);
   loadTasks(1);
@@ -363,20 +354,8 @@ async function loadProject() {
     }),
   ]);
 
-  // If the URL referenced a saved view but carried no ?f=, hydrate the filters
-  // from the stored view so the chip row and group-by match what's running.
-  if (activeViewSlug.value && tree.value.children.length === 0) {
-    const res = await getView(projectKey.value, activeViewSlug.value);
-    if (res.success && res.data) {
-      setTree(res.data.filter_tree);
-      sortBy.value = res.data.sort_by;
-      sortDir.value = res.data.sort_dir;
-      groupBy.value = res.data.group_by;
-    } else {
-      // View disappeared or became inaccessible — drop the stale slug.
-      setActiveView(null);
-    }
-  }
+  // The stored view state already carries the filter/sort/group and the active
+  // view slug, so there's nothing to re-hydrate from a saved view here.
 
   // Default to the current cycle when the user arrived with nothing applied.
   applyDefaultCycleFilter();
@@ -453,40 +432,11 @@ function nextPage() {
 async function applyView(slug: string) {
   const res = await getView(projectKey.value, slug);
   if (!res.success || !res.data) return;
-  const v: ProjectView = res.data;
-
-  // Build all query params in one go to avoid race conditions from
-  // multiple router.replace() calls overwriting each other.
-  const q: Record<string, string | undefined> = { ...route.query };
-
-  // View slug
-  q.view = v.slug;
-
-  // Filter tree
-  if (v.filter_tree && v.filter_tree.children.length > 0) {
-    q.f = encodeTree(v.filter_tree);
-  } else {
-    delete q.f;
-  }
-
-  // Sort
-  q.sort_by = v.sort_by === "created_at" ? undefined : v.sort_by;
-  q.sort_dir = v.sort_dir === "desc" ? undefined : v.sort_dir;
-
-  // Group by
-  q.group_by = v.group_by === "state" ? undefined : v.group_by;
-
-  // Switch to the view's default tab
-  const targetTab = v.default_tab || "tasks";
-  q.tab = targetTab === "tasks" ? undefined : targetTab;
-
-  // Reset page
-  delete q.page;
-
-  await router.replace({ query: q });
-
-  // Sync local tree state after the route has updated
-  setTree(v.filter_tree, { resetPage: false });
+  // Write the view into the target tab's stored view state, then navigate there;
+  // the reload watcher fetches the matching tasks.
+  const targetTab = applyViewState(res.data);
+  setPageInUrl(1);
+  activeTab.value = targetTab;
 }
 
 function openRenameView(view: ProjectView) {
@@ -518,37 +468,30 @@ watch(currentPageFromUrl, (newPage) => {
   }
 });
 
-// Reload tasks when effective filter, sort, or active view changes.
-// Page reset is handled by the individual URL writers (setTree, searchQuery,
-// sortBy/sortDir) in a single router.replace each — issuing another replace
-// here would race and clobber the just-written ?f= (dropping the filter from
-// the URL, so it would vanish on browser back).
+// Reload when the tab, filter, sort, or active view changes. Tasks and Board
+// now keep separate stored view states, so switching tabs also changes
+// effectiveTree — one watcher covers both tab switches and filter edits.
 watch(
-  [effectiveTree, sortBy, sortDir, activeViewSlug],
+  [activeTab, effectiveTree, sortBy, sortDir, activeViewSlug],
   () => {
     if (loading.value) return;
-    // Refresh whichever view is on screen; the other reloads on tab switch.
-    if (activeTab.value === "board") loadBoardTasks();
-    else loadTasks(1);
+    if (activeTab.value === "board") {
+      loadBoardTasks();
+    } else if (activeTab.value === "tasks") {
+      // A filter/sort/tab change starts back at page 1.
+      setPageInUrl(1);
+      loadTasks(1);
+    }
   },
   { deep: true }
 );
 
-// Switching to the board needs the full task set (not just the list's current
-// page); switching back to the list refreshes its current page.
-watch(activeTab, (tab) => {
-  if (loading.value) return;
-  if (tab === "board") loadBoardTasks();
-  else if (tab === "tasks") loadTasks(tasksPage.value);
-});
-
 const existingMemberIds = computed(() => members.value.map((m) => m.user_id));
 
 onMounted(async () => {
-  await hydrateFromUrl();
-  // loadProject hydrates a saved-view filter (?view= with no ?f=), so it must
-  // finish before the board builds its full-set fetch — otherwise the board
-  // would load unfiltered.
+  // Load this project's stored view state before anything reads the filters, so
+  // the toolbar and the first fetch reflect the saved filter, not the default.
+  await hydrate();
   await loadProject();
   if (activeTab.value === "board") loadBoardTasks();
 });

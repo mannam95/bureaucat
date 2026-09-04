@@ -12,9 +12,21 @@ const { modules, loading, total, page, totalPages, listModules, listTasksInNoMod
 
 const showCreate = ref(false);
 const perPage = 12;
-const filters = ref<ModuleListFilters>({ sort_by: "created_at", sort_dir: "desc" });
+// Overview sort + status/lead filters, persisted per project through the
+// preference store (the project page hydrates prefs before this tab renders).
+const MODULES_OVERVIEW_DEFAULT: ModuleListFilters = { sort_by: "created_at", sort_dir: "desc" };
+const prefs = usePreferences();
+const filters = computed<ModuleListFilters>({
+  get: () =>
+    prefs.getProject<ModuleListFilters>(
+      props.projectKey,
+      "modules.overview.view_state",
+      MODULES_OVERVIEW_DEFAULT,
+    ),
+  set: (v) => prefs.setProject(props.projectKey, "modules.overview.view_state", v),
+});
 // Card (tile) vs flat list view; persisted so it sticks across visits.
-const viewMode = useViewMode("bc:modules-view");
+const viewMode = useViewMode("modules.overview.view_mode");
 
 // How many top-level tasks aren't in any module, for the backlog card that opens
 // the "Tasks Without an Epic" view. Only shown to admins (adding is admin-only).

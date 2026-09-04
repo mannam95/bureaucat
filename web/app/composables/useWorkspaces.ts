@@ -14,7 +14,7 @@ interface WorkspacesState {
   loading: boolean;
 }
 
-const STORAGE_KEY = "bureaucat.currentWorkspaceId";
+const LAST_WORKSPACE_KEY = "navigation.last_workspace_id";
 
 // Singleton state, mirroring useAuth/useProjects.
 const state = reactive<WorkspacesState>({
@@ -24,18 +24,14 @@ const state = reactive<WorkspacesState>({
   loading: false,
 });
 
+// The last active workspace is a durable global preference (a login landing
+// hint), so it follows the user across devices rather than living per-browser.
 function persistCurrent(id: string | null) {
-  if (typeof window === "undefined") return;
-  if (id) {
-    localStorage.setItem(STORAGE_KEY, id);
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  usePreferences().setGlobal(LAST_WORKSPACE_KEY, id ?? "");
 }
 
-function readPersistedId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEY);
+function readPersistedId(): string {
+  return usePreferences().getGlobal<string>(LAST_WORKSPACE_KEY, "");
 }
 
 export function useWorkspaces() {
@@ -58,6 +54,10 @@ export function useWorkspaces() {
       const data: PaginatedWorkspacesResponse = await response.json();
       state.workspaces = data.workspaces || [];
 
+      // Selecting the current workspace depends on the durable last-workspace
+      // preference, so make sure global preferences are loaded first (this
+      // awaits the in-flight hydration the auth plugin already kicked off).
+      await usePreferences().hydrateGlobal();
       const persistedId = readPersistedId();
       const match = state.workspaces.find((w) => w.id === persistedId);
       const next = match ?? state.workspaces[0] ?? null;

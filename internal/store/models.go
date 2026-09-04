@@ -566,6 +566,19 @@ type User struct {
 	AvatarUrl      pgtype.Text        `json:"avatar_url"`
 }
 
+type UserPreference struct {
+	ID            int64              `json:"id"`
+	UserID        uuid.UUID          `json:"user_id"`
+	PreferenceKey string             `json:"preference_key"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ProjectID     pgtype.UUID        `json:"project_id"`
+	Value         []byte             `json:"value"`
+	ValueVersion  int32              `json:"value_version"`
+	Revision      int64              `json:"revision"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Workspace struct {
 	ID           uuid.UUID          `json:"id"`
 	WorkspaceKey string             `json:"workspace_key"`

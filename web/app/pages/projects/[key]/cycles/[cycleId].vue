@@ -62,7 +62,7 @@ const visibleTasks = ref<CycleTask[]>([]);
 const anyFilterActive = ref(false);
 
 // Collapsible right-hand overview panel (shared, persisted across detail views).
-const { showDetailPanel } = useDetailPanel();
+const { showDetailPanel } = useDetailPanel("cycle");
 
 // Tasks in this cycle with nobody assigned, shown as an "Unassigned" row in the
 // sidebar so the assignee breakdown accounts for every task.

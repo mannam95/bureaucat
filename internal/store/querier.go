@@ -113,8 +113,10 @@ type Querier interface {
 	DeleteAttachment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	DeleteAttachmentsByEntity(ctx context.Context, arg DeleteAttachmentsByEntityParams) error
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
+	DeleteGlobalPreference(ctx context.Context, arg DeleteGlobalPreferenceParams) error
 	DeletePersonalAccessToken(ctx context.Context, arg DeletePersonalAccessTokenParams) error
 	DeleteProjectLabel(ctx context.Context, id uuid.UUID) error
+	DeleteProjectPreference(ctx context.Context, arg DeleteProjectPreferenceParams) error
 	DeleteProjectState(ctx context.Context, id uuid.UUID) error
 	DeleteTaskCycleLinks(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskModuleLinks(ctx context.Context, taskID uuid.UUID) error
@@ -199,6 +201,14 @@ type Querier interface {
 	ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]ListCycleAssigneesRow, error)
 	ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) ([]ListCycleTasksRow, error)
 	ListDeletedProjects(ctx context.Context, arg ListDeletedProjectsParams) ([]ListDeletedProjectsRow, error)
+	// ==================== USER PREFERENCES ====================
+	//
+	// Rows hold only user overrides; a missing row means "use the registry
+	// default". Reads return the whole set for a scope so the API can fold in
+	// defaults. Writes are revision-aware (optimistic concurrency): the caller
+	// passes the revision it last saw, and the update only applies when the stored
+	// revision still matches. A brand-new row is created at revision 1 regardless.
+	ListGlobalPreferences(ctx context.Context, userID uuid.UUID) ([]ListGlobalPreferencesRow, error)
 	ListLabelsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListLabelsForTasksRow, error)
 	ListModuleMembers(ctx context.Context, moduleID uuid.UUID) ([]ListModuleMembersRow, error)
 	// Used for hydrating the list view with member avatars. Returns up to 4 members
@@ -221,6 +231,7 @@ type Querier interface {
 	// Optional case-insensitive search over the title and the page's visible text
 	// (HTML tags stripped from content so markup/attributes don't produce matches).
 	ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error)
+	ListProjectPreferences(ctx context.Context, arg ListProjectPreferencesParams) ([]ListProjectPreferencesRow, error)
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
 	// Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
@@ -349,6 +360,11 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserType(ctx context.Context, arg UpdateUserTypeParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
+	// On a matching revision the row is bumped; on a stale revision no row is
+	// returned (the handler maps that to 409). A first write (no existing row)
+	// inserts at revision 1.
+	UpsertGlobalPreference(ctx context.Context, arg UpsertGlobalPreferenceParams) (UpsertGlobalPreferenceRow, error)
+	UpsertProjectPreference(ctx context.Context, arg UpsertProjectPreferenceParams) (UpsertProjectPreferenceRow, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) (Setting, error)
 	UserExistsByEmailOrUsername(ctx context.Context, arg UserExistsByEmailOrUsernameParams) (bool, error)
 	VerifyActivityChain(ctx context.Context, taskID uuid.UUID) ([]ActivityLog, error)

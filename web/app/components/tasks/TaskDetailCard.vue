@@ -335,17 +335,17 @@ const {
   attachAll: attachCommentFiles,
 } = usePendingAttachments();
 
-// Sort preference is shared with the task page's activity feed for consistency.
-const SORT_KEY = "bureaucat-activity-sort";
-const newestFirst = ref(
-  typeof localStorage !== "undefined" ? localStorage.getItem(SORT_KEY) !== "oldest" : true
+// Sort preference is shared with the task page's activity feed for consistency,
+// persisted globally through the preference store (both surfaces read the same
+// key, so they now stay in sync live, not just across reloads).
+const activitySort = usePreferences().globalRef<"newest" | "oldest">(
+  "tasks.detail.activity_sort",
+  "newest",
 );
+const newestFirst = computed(() => activitySort.value === "newest");
 
 function toggleCommentSort() {
-  newestFirst.value = !newestFirst.value;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(SORT_KEY, newestFirst.value ? "newest" : "oldest");
-  }
+  activitySort.value = newestFirst.value ? "oldest" : "newest";
 }
 
 const sortedComments = computed(() =>

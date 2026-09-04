@@ -13,7 +13,7 @@ const showCreate = ref(false);
 const perPage = 12;
 // Card (tile) vs flat list view; persisted so it sticks across visits. Cycles
 // are listed latest-first server-side in both views.
-const viewMode = useViewMode("bc:cycles-view");
+const viewMode = useViewMode("cycles.overview.view_mode");
 
 // How many top-level tasks aren't in any cycle, for the backlog card that opens
 // the "Tasks Without a Cycle" view. Only shown to admins (adding is admin-only).

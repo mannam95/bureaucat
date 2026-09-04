@@ -2,9 +2,12 @@ export default defineNuxtPlugin(async () => {
   const { initAuth, isAuthenticated } = useAuth();
   await initAuth();
 
-  // Populate the workspace switcher once we know the user is signed in.
+  // Once we know the user is signed in, populate the workspace switcher and
+  // hydrate durable preferences from the server before preference-dependent
+  // screens render. Both are independent, so run them together.
   if (isAuthenticated.value) {
     const { listWorkspaces } = useWorkspaces();
-    await listWorkspaces();
+    const { hydrateGlobal } = usePreferences();
+    await Promise.all([listWorkspaces(), hydrateGlobal()]);
   }
 });

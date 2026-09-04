@@ -57,6 +57,7 @@ export function useAuth() {
       const authResponse: AuthResponse = await response.json();
       setAuthState(authResponse);
       scheduleTokenRefresh();
+      await usePreferences().hydrateGlobal(true);
       await useWorkspaces().listWorkspaces();
       return { success: true };
     } catch (e) {
@@ -83,6 +84,7 @@ export function useAuth() {
       const authResponse: AuthResponse = await response.json();
       setAuthState(authResponse);
       scheduleTokenRefresh();
+      await usePreferences().hydrateGlobal(true);
       await useWorkspaces().listWorkspaces();
       return { success: true };
     } catch (e) {
@@ -101,6 +103,8 @@ export function useAuth() {
     }
     clearAuthState();
     useWorkspaces().clearWorkspaces();
+    usePreferences().clearAll();
+    useSessionSearch().clearAll();
   }
 
   // Changing the password revokes every session server-side, so the caller is

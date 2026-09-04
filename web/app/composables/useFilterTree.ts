@@ -1,18 +1,19 @@
 /**
- * useFilterTree owns the current filter document for a project view and
- * synchronises it with the URL.
+ * useFilterTree owns the current view state (filter tree, sort, group-by, and
+ * the active saved view) for a project's Tasks or Board surface.
  *
- * URL contract:
- *   ?f=<base64url(JSON(FilterTree))>   authoritative filter
- *   ?view=<slug>                        active saved view (informational)
- *   ?group_by=<key>                     only meaningful on ?tab=board
- *   ?sort_by=<key>&sort_dir=<asc|desc>
+ * It is backed by the durable preference store at project scope, NOT the URL.
+ * Tasks and Board have separate stored view states:
+ *   tasks.list.view_state   { filter, sortBy, sortDir, groupBy, viewSlug }
+ *   board.view_state        { filter, sortBy, sortDir, groupBy, viewSlug }
+ * The surface is passed as a getter so a single instance can follow the active
+ * tab: switching tabs swaps which stored state is read and written.
  *
- * Legacy URLs containing ?state_id=, ?priority=, ?assigned_to=, ?q=,
- * ?from_date=, ?to_date= are detected and migrated on first load.
+ * Free-text search is deliberately NOT part of the stored view state — it is
+ * session-only and kept in memory here, per surface (durable session storage is
+ * layered on in a later step).
  */
 
-import type { LocationQueryRaw } from "vue-router";
 import type {
   FilterTree,
   FilterNode,
@@ -20,342 +21,149 @@ import type {
   SortKey,
   SortDir,
   ViewGroupBy,
+  ProjectView,
 } from "~/types";
-
-// Old ?state_id=…&priority=… style params that get migrated to a ?f= tree on
-// mount. NOTE: ?q= is deliberately NOT listed here — free-text search is a live,
-// first-class param (read directly by the searchQuery computed), not a legacy
-// one. Listing it caused hydrateFromUrl to treat it as legacy and strip it,
-// which lost the search on browser back.
-const LEGACY_PARAMS = [
-  "state_id",
-  "state_type",
-  "created_by",
-  "assigned_to",
-  "priority",
-  "from_date",
-  "to_date",
-] as const;
 
 const DEFAULT_SORT_BY: SortKey = "created_at";
 const DEFAULT_SORT_DIR: SortDir = "desc";
 const DEFAULT_GROUP_BY: ViewGroupBy = "state";
 
-// Query params that make up the "filter state" of a project view. These are
-// persisted to localStorage per project so that navigating back to the project
-// (e.g. via the breadcrumb, which carries no query) restores the last filters.
-const PERSIST_KEYS = ["f", "q", "view", "sort_by", "sort_dir", "group_by"] as const;
+export type FilterSurface = "tasks" | "board";
 
-function filterStorageKey(projectKey: string): string {
-  return `bureaucat:filters:${projectKey}`;
+// The JSON shape stored per surface. Mirrors the backend registry default.
+interface ViewState {
+  filter: FilterTree | null;
+  sortBy: SortKey;
+  sortDir: SortDir;
+  groupBy: ViewGroupBy;
+  viewSlug: string | null;
+}
+
+function defaultViewState(): ViewState {
+  return {
+    filter: null,
+    sortBy: DEFAULT_SORT_BY,
+    sortDir: DEFAULT_SORT_DIR,
+    groupBy: DEFAULT_GROUP_BY,
+    viewSlug: null,
+  };
 }
 
 function emptyTree(): FilterTree {
   return { children: [] };
 }
 
-// ---- base64url helpers (no padding) ----
-
-function encodeBase64Url(json: string): string {
-  // Use the UTF-8-safe trick to encode arbitrary JSON.
-  const bytes = new TextEncoder().encode(json);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function surfaceKey(surface: FilterSurface): string {
+  return surface === "board" ? "board.view_state" : "tasks.list.view_state";
 }
 
-function decodeBase64Url(s: string): string {
-  const padded = s.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(padded);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
-
-function encodeTree(tree: FilterTree): string {
-  return encodeBase64Url(JSON.stringify(tree));
-}
-
-function decodeTree(raw: string): FilterTree | null {
-  try {
-    const parsed = JSON.parse(decodeBase64Url(raw));
-    if (!parsed || !Array.isArray(parsed.children)) return null;
-    return parsed as FilterTree;
-  } catch {
-    return null;
-  }
-}
-
-function hasAnyLegacyParam(query: Record<string, unknown>): boolean {
-  return LEGACY_PARAMS.some((k) => query[k]);
-}
-
-/**
- * migrateLegacyQuery converts the old ?state_id=...&priority=... shape to an
- * equivalent FilterTree so that historic bookmarks continue to work.
- */
-function migrateLegacyQuery(query: Record<string, unknown>): FilterTree {
-  const children: FilterNode[] = [];
-  const s = (k: string) => (typeof query[k] === "string" ? (query[k] as string) : "");
-
-  if (s("state_id")) {
-    children.push({ predicate: { field: "state", op: "in", value: [s("state_id")] } });
-  }
-  if (s("state_type")) {
-    children.push({ predicate: { field: "state_type", op: "in", value: [s("state_type")] } });
-  }
-  if (s("created_by")) {
-    children.push({ predicate: { field: "created_by", op: "in", value: [s("created_by")] } });
-  }
-  if (s("assigned_to")) {
-    children.push({ predicate: { field: "assignees", op: "has_any", value: [s("assigned_to")] } });
-  }
-  if (s("priority")) {
-    const n = parseInt(s("priority"), 10);
-    if (!isNaN(n)) {
-      children.push({ predicate: { field: "priority", op: "in", value: [n] } });
-    }
-  }
-  // Note: legacy ?q= is preserved as a separate ?q= param, not as a chip.
-  if (s("from_date")) {
-    children.push({ predicate: { field: "created_at", op: "after", value: s("from_date") } });
-  }
-  if (s("to_date")) {
-    children.push({ predicate: { field: "created_at", op: "before", value: s("to_date") } });
-  }
-  return { children };
-}
-
-/**
- * structurally compare two FilterTrees for equality. Used to flag whether the
- * live tree has drifted from the active saved view's tree.
- */
-export function filterTreesEqual(a: FilterTree | null, b: FilterTree | null): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-export function useFilterTree() {
+export function useFilterTree(getSurface: () => FilterSurface) {
   const route = useRoute();
-  const router = useRouter();
+  const prefs = usePreferences();
 
-  // The live tree — reactive; synced from the URL on mount and whenever ?f= changes.
-  const tree = ref<FilterTree>(emptyTree());
+  const projectKey = () => (typeof route.params.key === "string" ? route.params.key : "");
+  const currentKey = () => surfaceKey(getSurface());
 
-  const projectKey = () =>
-    typeof route.params.key === "string" ? route.params.key : "";
+  // Free-text search: session-only (survives a same-tab reload, not a new tab or
+  // session), stored per surface so Tasks and Board don't share it. Never
+  // written to the durable view state.
+  const sessionSearch = useSessionSearch();
+  const tasksSearch = sessionSearch.searchRef("tasks", projectKey);
+  const boardSearch = sessionSearch.searchRef("board", projectKey);
+  const searchQuery = computed<string>({
+    get: () => (getSurface() === "board" ? boardSearch.value : tasksSearch.value),
+    set: (v) => {
+      if (getSurface() === "board") boardSearch.value = v;
+      else tasksSearch.value = v;
+    },
+  });
 
-  // Distinguishes URL writes we initiate (filter mutations, sort/group/search,
-  // view selection) from query changes we did NOT cause (breadcrumb to the bare
-  // project URL, browser back/forward). Internal writes persist the new state;
-  // external ones that land on the empty project URL restore saved filters
-  // instead of being mistaken for a "clear".
-  let internalWrite = false;
-  function replaceQuery(query: LocationQueryRaw) {
-    internalWrite = true;
-    return router.replace({ query });
+  // The live view state for the active surface, read reactively from the store.
+  const vs = computed<ViewState>(() => {
+    const pk = projectKey();
+    if (!pk) return defaultViewState();
+    return prefs.getProject<ViewState>(pk, currentKey(), defaultViewState());
+  });
+
+  // Merge a partial change into the active surface's stored view state.
+  function writeVS(patch: Partial<ViewState>) {
+    const pk = projectKey();
+    if (!pk) return;
+    const cur = prefs.getProject<ViewState>(pk, currentKey(), defaultViewState());
+    prefs.setProject(pk, currentKey(), { ...cur, ...patch });
   }
 
-  // Persist the filter-related query params for the current project. Called
-  // whenever any of them change. Cleared filters store as {} so they don't get
-  // re-applied on the next visit.
-  function persistFilters() {
-    if (!import.meta.client) return;
-    const key = projectKey();
-    if (!key) return;
-    // Only persist filter changes made on the overview page itself. (Callers
-    // gate this via the internalWrite flag, so this only runs for our own URL
-    // writes, which always happen here — but the guard keeps it safe.)
-    if (route.path !== `/projects/${key}`) return;
-    const data: Record<string, string> = {};
-    for (const k of PERSIST_KEYS) {
-      const v = route.query[k];
-      if (typeof v === "string" && v) data[k] = v;
-    }
-    try {
-      localStorage.setItem(filterStorageKey(key), JSON.stringify(data));
-    } catch {
-      // ignore quota / unavailable storage
-    }
-  }
+  const tree = computed<FilterTree>(() => vs.value.filter ?? emptyTree());
 
-  function readPersistedFilters(): Record<string, string> | null {
-    if (!import.meta.client) return null;
-    const key = projectKey();
-    if (!key) return null;
-    try {
-      const raw = localStorage.getItem(filterStorageKey(key));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
+  function setTree(next: FilterTree) {
+    writeVS({ filter: next.children.length > 0 ? next : null });
   }
-
-  // Decode the tree sitting in the URL, if any.
-  function readFromUrl(): FilterTree {
-    const raw = route.query.f;
-    if (typeof raw === "string" && raw) {
-      return decodeTree(raw) ?? emptyTree();
-    }
-    return emptyTree();
-  }
-
-  // Push the current tree back into the URL under ?f= (omits when empty).
-  function writeToUrl(next: FilterTree, opts: { resetPage?: boolean } = {}) {
-    const q = { ...route.query };
-    if (next.children.length === 0) {
-      delete q.f;
-    } else {
-      q.f = encodeTree(next);
-    }
-    if (opts.resetPage) delete q.page;
-    void replaceQuery(q);
-  }
-
-  function setTree(next: FilterTree, opts?: { resetPage?: boolean }) {
-    tree.value = next;
-    writeToUrl(next, { resetPage: true, ...opts });
-  }
-
   function clearTree() {
     setTree(emptyTree());
   }
-
-  /**
-   * Empty the filter tree AND drop the active saved-view association in a
-   * single URL write (free-text search is preserved). Used when the user
-   * removes the last filter chip: without dropping ?view=, the server would
-   * fall back to the view's saved filter and the "clear" would be undone — both
-   * immediately (server re-hydration) and on the next visit (view re-applied
-   * from the persisted params).
-   */
-  function clearTreeAndView() {
-    tree.value = emptyTree();
-    const q = { ...route.query };
-    delete q.f;
-    delete q.view;
-    delete q.page;
-    void replaceQuery(q);
-  }
-
-  /**
-   * Clear everything that scopes the task list — filter tree, free-text search
-   * and the active saved view — in a single router.replace so the writes can't
-   * race and strand stale params in the URL.
-   */
-  function clearAll() {
-    tree.value = emptyTree();
-    const q = { ...route.query };
-    delete q.f;
-    delete q.q;
-    delete q.view;
-    delete q.page;
-    void replaceQuery(q);
-  }
-
   function addPredicate(p: Predicate) {
     setTree({ children: [...tree.value.children, { predicate: p }] });
   }
-
   function replacePredicateAt(index: number, p: Predicate) {
     const next = [...tree.value.children];
     next[index] = { predicate: p };
     setTree({ children: next });
   }
-
   function removeNodeAt(index: number) {
-    const next = tree.value.children.filter((_, i) => i !== index);
-    setTree({ children: next });
+    setTree({ children: tree.value.children.filter((_, i) => i !== index) });
   }
 
-  // Sort and group-by accessors backed by URL query.
   const sortBy = computed<SortKey>({
-    get: () => ((route.query.sort_by as SortKey) ?? DEFAULT_SORT_BY),
-    set: (v) => {
-      const q = { ...route.query };
-      if (!v || v === DEFAULT_SORT_BY) delete q.sort_by;
-      else q.sort_by = v;
-      delete q.page;
-      void replaceQuery(q);
-    },
+    get: () => vs.value.sortBy ?? DEFAULT_SORT_BY,
+    set: (v) => writeVS({ sortBy: v }),
   });
   const sortDir = computed<SortDir>({
-    get: () => ((route.query.sort_dir as SortDir) ?? DEFAULT_SORT_DIR),
-    set: (v) => {
-      const q = { ...route.query };
-      if (!v || v === DEFAULT_SORT_DIR) delete q.sort_dir;
-      else q.sort_dir = v;
-      delete q.page;
-      void replaceQuery(q);
-    },
+    get: () => vs.value.sortDir ?? DEFAULT_SORT_DIR,
+    set: (v) => writeVS({ sortDir: v }),
   });
-  // Reset sort to the default in a SINGLE query write. Setting sortBy and
-  // sortDir separately races: each reads route.query before the other's
-  // router.replace lands, so the second clobbers the first (leaving a stale
-  // sort_by in the URL).
-  function resetSort() {
-    const q = { ...route.query };
-    delete q.sort_by;
-    delete q.sort_dir;
-    delete q.page;
-    void replaceQuery(q);
-  }
-
-  // Reset everything the toolbar owns — filters, search and sort — in ONE query
-  // write. Calling clearAll() then resetSort() races the same way (the second
-  // reads the pre-clear query and writes the search/filters back), so the
-  // single unified "Reset" button must clear them together here.
-  function resetAll() {
-    tree.value = emptyTree();
-    const q = { ...route.query };
-    delete q.f;
-    delete q.q;
-    delete q.view;
-    delete q.sort_by;
-    delete q.sort_dir;
-    delete q.page;
-    void replaceQuery(q);
-  }
-
   const groupBy = computed<ViewGroupBy>({
-    get: () => ((route.query.group_by as ViewGroupBy) ?? DEFAULT_GROUP_BY),
-    set: (v) => {
-      const q = { ...route.query };
-      if (!v || v === DEFAULT_GROUP_BY) delete q.group_by;
-      else q.group_by = v;
-      void replaceQuery(q);
-    },
+    get: () => vs.value.groupBy ?? DEFAULT_GROUP_BY,
+    set: (v) => writeVS({ groupBy: v }),
   });
+  function resetSort() {
+    writeVS({ sortBy: DEFAULT_SORT_BY, sortDir: DEFAULT_SORT_DIR });
+  }
 
-  const activeViewSlug = computed(() => {
-    const v = route.query.view;
-    return typeof v === "string" && v ? v : null;
-  });
+  const activeViewSlug = computed(() => vs.value.viewSlug ?? null);
+  function setActiveView(slug: string | null) {
+    writeVS({ viewSlug: slug });
+  }
 
-  /** Free-text search bound to ?q= — kept out of the chip tree by design. */
-  const searchQuery = computed<string>({
-    get: () => (typeof route.query.q === "string" ? (route.query.q as string) : ""),
-    set: (v) => {
-      const q = { ...route.query };
-      if (v) q.q = v;
-      else delete q.q;
-      delete q.page;
-      void replaceQuery(q);
-    },
-  });
+  // Empty the filter AND drop the active view association (search preserved).
+  function clearTreeAndView() {
+    writeVS({ filter: null, viewSlug: null });
+  }
+
+  // Clear everything that scopes the list — filter, active view, and search.
+  function clearAll() {
+    writeVS({ filter: null, viewSlug: null });
+    searchQuery.value = "";
+  }
+
+  // Reset everything the toolbar owns — filter, view, sort, and search.
+  function resetAll() {
+    writeVS({
+      filter: null,
+      viewSlug: null,
+      sortBy: DEFAULT_SORT_BY,
+      sortDir: DEFAULT_SORT_DIR,
+    });
+    searchQuery.value = "";
+  }
 
   /**
-   * effectiveTree is what the API actually receives. The free-text search
-   * box is emitted as a single `search contains X` predicate — the server
-   * expands that opcode to match both title and description internally.
+   * effectiveTree is what the API actually receives. The free-text search box is
+   * emitted as a single `search contains X` predicate — the server expands that
+   * to match title and description.
    *
-   * Default view: with no explicit filters, no search, and no active saved
-   * view, completed/cancelled tasks are hidden via an implicit `state_type
-   * not_in` predicate. The moment the user sets any filter (or applies a
-   * view), that implicit exclusion drops and all matching tasks are shown.
+   * Default view: with no explicit filter, no search, and no active saved view,
+   * completed/cancelled tasks are hidden via an implicit `state_type not_in`
+   * predicate. Any filter (or an applied view) drops that implicit exclusion.
    */
   const effectiveTree = computed<FilterTree>(() => {
     const children: FilterNode[] = [];
@@ -382,79 +190,33 @@ export function useFilterTree() {
     return { children };
   });
 
-  function setActiveView(slug: string | null) {
-    const q = { ...route.query };
-    if (slug) q.view = slug;
-    else delete q.view;
-    void replaceQuery(q);
-  }
-
   /**
-   * Run once on mount. Detects legacy URL params and rewrites to ?f=, then
-   * hydrates the live tree from the URL. If the URL carries no filter params
-   * at all (e.g. arriving via the breadcrumb), the last-used filters for this
-   * project are restored from localStorage.
+   * Apply a saved view: writes its filter/sort/group/slug into the stored view
+   * state of the tab the view targets, and returns that tab so the caller can
+   * navigate there. Writing the target surface directly (rather than the active
+   * one) avoids a race with the tab switch.
    */
-  async function hydrateFromUrl() {
-    if (hasAnyLegacyParam(route.query)) {
-      const migrated = migrateLegacyQuery(route.query as Record<string, unknown>);
-      const q = { ...route.query };
-      for (const k of LEGACY_PARAMS) delete q[k];
-      if (migrated.children.length > 0) {
-        q.f = encodeTree(migrated);
-      }
-      await replaceQuery(q);
-      tree.value = migrated;
-      return;
+  function applyView(v: ProjectView): FilterSurface {
+    const targetTab: FilterSurface = v.default_tab === "board" ? "board" : "tasks";
+    const pk = projectKey();
+    if (pk) {
+      const next: ViewState = {
+        filter: v.filter_tree && v.filter_tree.children.length > 0 ? v.filter_tree : null,
+        sortBy: v.sort_by,
+        sortDir: v.sort_dir,
+        groupBy: v.group_by,
+        viewSlug: v.slug,
+      };
+      prefs.setProject(pk, surfaceKey(targetTab), next);
     }
-
-    // No filter params in the URL → try restoring the project's saved filters.
-    const hasFilterParam = PERSIST_KEYS.some((k) => route.query[k]);
-    if (!hasFilterParam) {
-      const saved = readPersistedFilters();
-      if (saved && Object.keys(saved).length > 0) {
-        await replaceQuery({ ...route.query, ...saved });
-        tree.value = saved.f ? decodeTree(saved.f) ?? emptyTree() : emptyTree();
-        return;
-      }
-    }
-
-    tree.value = readFromUrl();
+    return targetTab;
   }
 
-  // Keep the local tree in sync if the URL changes externally (back/forward).
-  watch(
-    () => route.query.f,
-    () => {
-      tree.value = readFromUrl();
-    }
-  );
-
-  // React to filter-param changes. Our own writes persist the new state; a
-  // change we didn't make that lands on the bare project URL (breadcrumb,
-  // back/forward) restores the saved filters instead of losing them.
-  watch(
-    () => PERSIST_KEYS.map((k) => route.query[k]),
-    () => {
-      if (internalWrite) {
-        // A change we made — persist it. An empty state is stored as {} so an
-        // explicit clear is remembered and not re-applied on the next visit.
-        internalWrite = false;
-        persistFilters();
-        return;
-      }
-      // A navigation we didn't initiate. If we've landed on the project overview
-      // with no filter params, restore the last-used filters.
-      const key = projectKey();
-      if (!key || route.path !== `/projects/${key}`) return;
-      if (PERSIST_KEYS.some((k) => route.query[k])) return;
-      const saved = readPersistedFilters();
-      if (saved && Object.keys(saved).length > 0) {
-        void replaceQuery({ ...route.query, ...saved });
-        tree.value = saved.f ? decodeTree(saved.f) ?? emptyTree() : emptyTree();
-      }
-    }
-  );
+  /** Ensure this project's preferences are loaded before reading view state. */
+  async function hydrate() {
+    const pk = projectKey();
+    if (pk) await prefs.hydrateProject(pk);
+  }
 
   return {
     tree: computed(() => tree.value),
@@ -472,10 +234,9 @@ export function useFilterTree() {
     groupBy,
     activeViewSlug,
     setActiveView,
+    applyView,
     searchQuery,
     effectiveTree,
-    hydrateFromUrl,
-    encodeTree,
-    decodeTree,
+    hydrate,
   };
 }

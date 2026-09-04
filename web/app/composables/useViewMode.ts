@@ -1,13 +1,10 @@
 export type ViewMode = "card" | "list";
 
-// Persisted card/list view preference for an overview (modules, cycles). Keyed
-// so each overview remembers its own choice across visits.
-export function useViewMode(key: string, initial: ViewMode = "card") {
-  const mode = ref<ViewMode>(initial);
-  if (import.meta.client) {
-    const saved = localStorage.getItem(key);
-    if (saved === "card" || saved === "list") mode.value = saved;
-    watch(mode, (v) => localStorage.setItem(key, v));
-  }
-  return mode;
+// Card/list view preference for an overview (cycles, modules). Backed by the
+// durable preference store at global scope, so the choice follows the user
+// across devices and reloads. `key` is the canonical preference key, e.g.
+// "cycles.overview.view_mode". Returns a v-model-friendly ref: reading gives the
+// effective value, writing persists in the background.
+export function useViewMode(key: string, fallback: ViewMode = "card") {
+  return usePreferences().globalRef<ViewMode>(key, fallback);
 }

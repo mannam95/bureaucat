@@ -47,6 +47,7 @@ type Server struct {
 	pageHandler          *handlers.PageHandler
 	taskHandler          *handlers.TaskHandler
 	viewHandler          *handlers.ViewHandler
+	preferencesHandler   *handlers.PreferencesHandler
 	commentHandler       *handlers.CommentHandler
 	attachmentHandler    *handlers.AttachmentHandler
 	cycleHandler         *handlers.CycleHandler
@@ -164,6 +165,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		srv.pageHandler = handlers.NewPageHandler(srv.store)
 		srv.taskHandler = handlers.NewTaskHandler(srv.store, srv.pool, store.NewFilterRunner(srv.pool), srv.activityService, srv.notificationService)
 		srv.viewHandler = handlers.NewViewHandler(srv.store)
+		srv.preferencesHandler = handlers.NewPreferencesHandler(srv.store)
 		srv.commentHandler = handlers.NewCommentHandler(srv.store, srv.activityService, srv.notificationService)
 		srv.attachmentHandler = handlers.NewAttachmentHandler(srv.store, uploadService, srv.activityService)
 		srv.cycleHandler = handlers.NewCycleHandler(srv.store, srv.activityService)
