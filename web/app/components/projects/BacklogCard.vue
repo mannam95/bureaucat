@@ -4,16 +4,43 @@
 // its detail page.
 import { Inbox, ArrowRight } from "lucide-vue-next";
 
-defineProps<{
-  title: string;
-  subtitle: string;
-  count: number;
-  to: string;
-}>();
+withDefaults(
+  defineProps<{
+    title: string;
+    subtitle: string;
+    count: number;
+    to: string;
+    // "card" is the grid tile; "row" is a compact banner for the list view.
+    variant?: "card" | "row";
+  }>(),
+  { variant: "card" }
+);
 </script>
 
 <template>
-  <NuxtLink :to="to">
+  <!-- Compact banner for the list view -->
+  <NuxtLink
+    v-if="variant === 'row'"
+    :to="to"
+    class="group flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 bg-background/50 px-4 py-3 transition-colors hover:border-amber-500/40 hover:bg-muted/40"
+  >
+    <div class="flex min-w-0 items-center gap-2.5">
+      <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-amber-500/10">
+        <Inbox class="size-4 text-muted-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-500" />
+      </div>
+      <div class="min-w-0">
+        <p class="truncate text-sm font-semibold">{{ title }}</p>
+        <p class="truncate text-xs text-muted-foreground">
+          {{ count }} task{{ count === 1 ? "" : "s" }} · {{ subtitle }}
+        </p>
+      </div>
+    </div>
+    <span class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
+      Open <ArrowRight class="size-3.5" />
+    </span>
+  </NuxtLink>
+
+  <NuxtLink v-else :to="to">
     <Card
       class="group h-full cursor-pointer border-dashed border-border/60 bg-background/50 transition-all hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5"
     >

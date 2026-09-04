@@ -29,6 +29,7 @@ interface FormShape {
   endDate: DateValue | undefined;
   leadId: string | null;
   memberIds: string[];
+  priorityRating: number;
 }
 
 function emptyForm(): FormShape {
@@ -40,6 +41,7 @@ function emptyForm(): FormShape {
     endDate: undefined,
     leadId: null,
     memberIds: [],
+    priorityRating: 0,
   };
 }
 
@@ -76,6 +78,7 @@ function hydrateFrom(module: Module | null | undefined) {
     endDate: isoToCalendar(module.end_date),
     leadId: module.lead?.user_id ?? null,
     memberIds: (module.members ?? []).map((m) => m.user_id),
+    priorityRating: module.priority_rating ?? 0,
   };
 }
 
@@ -113,6 +116,7 @@ async function handleSubmit() {
     end_date: calendarToIso(end),
     lead_id: leadID,
     member_ids: memberIds,
+    priority_rating: form.value.priorityRating,
   };
 
   const result = isEdit.value
@@ -188,6 +192,11 @@ async function handleSubmit() {
             :members="(projectMembers as ProjectMember[])"
             :disabled="loading"
           />
+        </div>
+
+        <div class="space-y-2">
+          <Label>Priority rating</Label>
+          <PriorityRating editable v-model="form.priorityRating" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">

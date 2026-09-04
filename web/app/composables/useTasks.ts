@@ -518,6 +518,30 @@ export function useTasks() {
     }
   }
 
+  // Promote a sub-task to a stand-alone top-level task (keeps its own fields and
+  // carries over the parent's cycle/module).
+  async function promoteSubtask(
+    projectKey: string,
+    taskNum: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/promote`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to promote sub-task" };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   function clearCurrentTask() {
     state.currentTask = null;
   }
@@ -557,6 +581,7 @@ export function useTasks() {
 
     // Subtasks
     listSubtasks,
+    promoteSubtask,
     listSubtaskCandidates,
     attachSubtasks,
 

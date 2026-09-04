@@ -19,6 +19,13 @@ export interface Task {
   creator_first_name: string;
   creator_last_name: string;
   creator_avatar_url?: string;
+  /** Originator/Requester: whose need the task represents (defaults to creator).
+   *  Present on the task detail response; omitted in list responses. */
+  originator_id?: string;
+  originator_username?: string;
+  originator_first_name?: string;
+  originator_last_name?: string;
+  originator_avatar_url?: string;
   assignees?: TaskAssignee[];
   labels?: TaskLabel[];
   comment_count: number;
@@ -140,6 +147,9 @@ export interface CreateTaskRequest {
   figma_link?: string;
   branch?: string;
   pull_request?: string;
+  // Originator/Requester (user id). The create form requires it and defaults it
+  // to the current user; the backend also defaults to the creator if omitted.
+  originator?: string;
   // When set, creates this task as a subtask of the given (project-local)
   // parent task number. One level of nesting only.
   parent_task_number?: number;
@@ -158,6 +168,8 @@ export interface UpdateTaskRequest {
   figma_link?: string;
   branch?: string;
   pull_request?: string;
+  // Originator/Requester (user id). Omit to leave unchanged.
+  originator?: string;
 }
 
 /** @deprecated — retained so legacy URL migration can parse old bookmarks. */
@@ -307,4 +319,5 @@ export const STATE_TYPE_COLORS: Record<string, string> = {
   started: "#10B981",
   completed: "#22C55E",
   cancelled: "#9CA3AF",
+  archived: "#78716C",
 };

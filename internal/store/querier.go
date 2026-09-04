@@ -82,7 +82,7 @@ type Querier interface {
 	// The handler is responsible for defaulting `status` to 'backlog' when the
 	// caller doesn't supply one, so the SQL can keep the arg non-nullable. This
 	// sidesteps sqlc's handling of nullable enum args under a string override.
-	CreateModule(ctx context.Context, arg CreateModuleParams) (Module, error)
+	CreateModule(ctx context.Context, arg CreateModuleParams) (CreateModuleRow, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error)
 	CreatePage(ctx context.Context, arg CreatePageParams) (Page, error)
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
@@ -97,6 +97,8 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSSOUser(ctx context.Context, arg CreateSSOUserParams) (CreateSSOUserRow, error)
 	// ==================== TASKS ====================
+	// originator_id defaults to the creator ($7) when the caller doesn't supply one,
+	// so self-raised tickets need no extra input while the field is always set.
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
 	// ==================== TASK TEMPLATES ====================
 	CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplateParams) (TaskTemplate, error)
@@ -331,7 +333,7 @@ type Querier interface {
 	UpdateCycle(ctx context.Context, arg UpdateCycleParams) (Cycle, error)
 	// `status` is passed as plain text; when empty string, no change. Avoids narg
 	// around the enum type under the string override.
-	UpdateModule(ctx context.Context, arg UpdateModuleParams) (Module, error)
+	UpdateModule(ctx context.Context, arg UpdateModuleParams) (UpdateModuleRow, error)
 	UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, error)
 	UpdatePersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdatePersonalAccessTokenScope(ctx context.Context, arg UpdatePersonalAccessTokenScopeParams) (UpdatePersonalAccessTokenScopeRow, error)

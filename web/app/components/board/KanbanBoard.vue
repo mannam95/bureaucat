@@ -30,13 +30,14 @@ const emit = defineEmits<{
 const { updateTask, addAssignee, removeAssignee, addLabel, removeLabel } = useTasks();
 const updating = ref(false);
 
-const STATE_TYPE_ORDER = ["backlog", "unstarted", "started", "completed", "cancelled"] as const;
+const STATE_TYPE_ORDER = ["backlog", "unstarted", "started", "completed", "cancelled", "archived"] as const;
 const STATE_TYPE_LABELS: Record<string, string> = {
   backlog: "Backlog",
   unstarted: "To Do",
   started: "In Progress",
   completed: "Done",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
 
 const columns = computed<BoardColumn[]>(() => {
@@ -140,7 +141,12 @@ function dueBucketColumns(tasks: Task[]): BoardColumn[] {
       continue;
     }
     const ts = new Date(t.due_date).getTime();
-    if (ts < startOfToday && t.state_type !== "completed" && t.state_type !== "cancelled") {
+    if (
+      ts < startOfToday &&
+      t.state_type !== "completed" &&
+      t.state_type !== "cancelled" &&
+      t.state_type !== "archived"
+    ) {
       buckets.overdue.push(t);
     } else if (ts < startOfTomorrow) {
       buckets.today.push(t);

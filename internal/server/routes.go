@@ -196,7 +196,7 @@ func (s *Server) registerRoutes() {
 
 			// Project labels
 			projectGroup.GET("/labels", s.projectHandler.ListLabels)
-			projectGroup.POST("/labels", s.projectHandler.CreateLabel, auth.ProjectRoleMiddleware("member"))
+			projectGroup.POST("/labels", s.projectHandler.CreateLabel, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.PATCH("/labels/:labelId", s.projectHandler.UpdateLabel, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("/labels/:labelId", s.projectHandler.DeleteLabel, auth.ProjectRoleMiddleware("admin"))
 
@@ -276,6 +276,8 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/tasks/:taskNum/subtasks/candidates", s.taskHandler.ListSubtaskCandidates)
 				// Attach existing tasks as subtasks (re-parenting allowed).
 				projectGroup.POST("/tasks/:taskNum/subtasks", s.taskHandler.AttachSubtasks, auth.ProjectRoleMiddleware("member"))
+				// Promote a sub-task to a stand-alone top-level task.
+				projectGroup.POST("/tasks/:taskNum/promote", s.taskHandler.PromoteSubtask, auth.ProjectRoleMiddleware("member"))
 
 				// Task assignees
 				projectGroup.POST("/tasks/:taskNum/assignees", s.taskHandler.AddAssignee, auth.ProjectRoleMiddleware("member"))

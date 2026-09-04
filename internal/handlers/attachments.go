@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 
+	"bereaucat/internal/activity"
 	"bereaucat/internal/auth"
 	"bereaucat/internal/store"
 	"bereaucat/internal/uploads"
@@ -17,15 +18,17 @@ import (
 
 // AttachmentHandler handles file attachment endpoints.
 type AttachmentHandler struct {
-	store         store.Querier
-	uploadService *uploads.Service
+	store           store.Querier
+	uploadService   *uploads.Service
+	activityService *activity.Service
 }
 
 // NewAttachmentHandler creates a new attachment handler.
-func NewAttachmentHandler(store store.Querier, uploadService *uploads.Service) *AttachmentHandler {
+func NewAttachmentHandler(store store.Querier, uploadService *uploads.Service, activityService *activity.Service) *AttachmentHandler {
 	return &AttachmentHandler{
-		store:         store,
-		uploadService: uploadService,
+		store:           store,
+		uploadService:   uploadService,
+		activityService: activityService,
 	}
 }
 
@@ -84,6 +87,13 @@ func (h *AttachmentHandler) AttachToTask(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get upload info")
 	}
 
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.AttachmentAdded,
+		ActorID:      userID,
+		NewValue:     map[string]interface{}{"filename": upload.Filename},
+	})
+
 	return c.JSON(http.StatusCreated, AttachmentResponse{
 		ID:        attachment.ID,
 		UploadID:  attachment.UploadID,
@@ -137,12 +147,26 @@ func (h *AttachmentHandler) DeleteTaskAttachment(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid attachment ID")
 	}
+	task, err := h.resolveTask(c)
+	if err != nil {
+		return err
+	}
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
+	}
 
 	ctx := c.Request().Context()
 
 	if err := h.deleteAttachment(ctx, attachmentID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
 	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.AttachmentRemoved,
+		ActorID:      userID,
+	})
 
 	return c.NoContent(http.StatusNoContent)
 }

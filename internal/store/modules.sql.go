@@ -102,7 +102,7 @@ func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModul
 
 const createModule = `-- name: CreateModule :one
 
-INSERT INTO modules (project_id, title, description, status, start_date, end_date, lead_id, created_by)
+INSERT INTO modules (project_id, title, description, status, start_date, end_date, lead_id, created_by, priority_rating)
 VALUES (
     $1,
     $2,
@@ -111,28 +111,46 @@ VALUES (
     $5,
     $6,
     $7,
-    $8
+    $8,
+    COALESCE($9, 0)
 )
 RETURNING id, project_id, title, description, status, start_date, end_date,
-          lead_id, created_by, created_at, updated_at, deleted_at
+          lead_id, created_by, priority_rating, created_at, updated_at, deleted_at
 `
 
 type CreateModuleParams struct {
-	ProjectID   uuid.UUID   `json:"project_id"`
-	Title       string      `json:"title"`
-	Description pgtype.Text `json:"description"`
-	Status      string      `json:"status"`
-	StartDate   pgtype.Date `json:"start_date"`
-	EndDate     pgtype.Date `json:"end_date"`
-	LeadID      pgtype.UUID `json:"lead_id"`
-	CreatedBy   uuid.UUID   `json:"created_by"`
+	ProjectID      uuid.UUID   `json:"project_id"`
+	Title          string      `json:"title"`
+	Description    pgtype.Text `json:"description"`
+	Status         string      `json:"status"`
+	StartDate      pgtype.Date `json:"start_date"`
+	EndDate        pgtype.Date `json:"end_date"`
+	LeadID         pgtype.UUID `json:"lead_id"`
+	CreatedBy      uuid.UUID   `json:"created_by"`
+	PriorityRating interface{} `json:"priority_rating"`
+}
+
+type CreateModuleRow struct {
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	Status         string             `json:"status"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	LeadID         pgtype.UUID        `json:"lead_id"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	PriorityRating int32              `json:"priority_rating"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 // ==================== MODULES ====================
 // The handler is responsible for defaulting `status` to 'backlog' when the
 // caller doesn't supply one, so the SQL can keep the arg non-nullable. This
 // sidesteps sqlc's handling of nullable enum args under a string override.
-func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Module, error) {
+func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (CreateModuleRow, error) {
 	row := q.db.QueryRow(ctx, createModule,
 		arg.ProjectID,
 		arg.Title,
@@ -142,8 +160,9 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Mod
 		arg.EndDate,
 		arg.LeadID,
 		arg.CreatedBy,
+		arg.PriorityRating,
 	)
-	var i Module
+	var i CreateModuleRow
 	err := row.Scan(
 		&i.ID,
 		&i.ProjectID,
@@ -154,6 +173,7 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Mod
 		&i.EndDate,
 		&i.LeadID,
 		&i.CreatedBy,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -163,7 +183,7 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Mod
 
 const getModuleByID = `-- name: GetModuleByID :one
 SELECT m.id, m.project_id, m.title, m.description, m.status,
-       m.start_date, m.end_date, m.lead_id,
+       m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at, m.deleted_at,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
@@ -196,6 +216,7 @@ type GetModuleByIDRow struct {
 	StartDate      pgtype.Date        `json:"start_date"`
 	EndDate        pgtype.Date        `json:"end_date"`
 	LeadID         pgtype.UUID        `json:"lead_id"`
+	PriorityRating int32              `json:"priority_rating"`
 	CreatedBy      uuid.UUID          `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
@@ -226,6 +247,7 @@ func (q *Queries) GetModuleByID(ctx context.Context, id uuid.UUID) (GetModuleByI
 		&i.StartDate,
 		&i.EndDate,
 		&i.LeadID,
+		&i.PriorityRating,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -249,7 +271,8 @@ SELECT
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
-    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled
+    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
+    COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived
 FROM module_tasks mt
 JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id
@@ -262,6 +285,7 @@ type GetModuleMetricsRow struct {
 	InProgress int32 `json:"in_progress"`
 	Todo       int32 `json:"todo"`
 	Cancelled  int32 `json:"cancelled"`
+	Archived   int32 `json:"archived"`
 }
 
 func (q *Queries) GetModuleMetrics(ctx context.Context, moduleID uuid.UUID) (GetModuleMetricsRow, error) {
@@ -273,6 +297,7 @@ func (q *Queries) GetModuleMetrics(ctx context.Context, moduleID uuid.UUID) (Get
 		&i.InProgress,
 		&i.Todo,
 		&i.Cancelled,
+		&i.Archived,
 	)
 	return i, err
 }
@@ -360,6 +385,7 @@ SELECT m.id, m.project_id, m.title, m.description, m.status,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
        COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -371,7 +397,8 @@ JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
 LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -397,6 +424,7 @@ type ListActiveModulesForUserRow struct {
 	ProjectName    string             `json:"project_name"`
 	TotalTasks     int32              `json:"total_tasks"`
 	CompletedTasks int32              `json:"completed_tasks"`
+	ArchivedTasks  int32              `json:"archived_tasks"`
 	LeadUsername   string             `json:"lead_username"`
 	LeadFirstName  string             `json:"lead_first_name"`
 	LeadLastName   string             `json:"lead_last_name"`
@@ -432,6 +460,7 @@ func (q *Queries) ListActiveModulesForUser(ctx context.Context, userID uuid.UUID
 			&i.ProjectName,
 			&i.TotalTasks,
 			&i.CompletedTasks,
+			&i.ArchivedTasks,
 			&i.LeadUsername,
 			&i.LeadFirstName,
 			&i.LeadLastName,
@@ -656,10 +685,11 @@ func (q *Queries) ListModuleTasks(ctx context.Context, arg ListModuleTasksParams
 
 const listProjectModules = `-- name: ListProjectModules :many
 SELECT m.id, m.project_id, m.title, m.description, m.status,
-       m.start_date, m.end_date, m.lead_id,
+       m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
        COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -669,7 +699,8 @@ FROM modules m
 LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -693,6 +724,14 @@ ORDER BY
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END DESC NULLS LAST,
+    CASE WHEN $8::text = 'priority_rating' AND $9::text = 'asc'
+         THEN m.priority_rating END ASC NULLS LAST,
+    CASE WHEN $8::text = 'priority_rating' AND $9::text = 'desc'
+         THEN m.priority_rating END DESC NULLS LAST,
+    CASE WHEN $8::text = 'title' AND $9::text = 'asc'
+         THEN m.title END ASC NULLS LAST,
+    CASE WHEN $8::text = 'title' AND $9::text = 'desc'
+         THEN m.title END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -718,11 +757,13 @@ type ListProjectModulesRow struct {
 	StartDate      pgtype.Date        `json:"start_date"`
 	EndDate        pgtype.Date        `json:"end_date"`
 	LeadID         pgtype.UUID        `json:"lead_id"`
+	PriorityRating int32              `json:"priority_rating"`
 	CreatedBy      uuid.UUID          `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	TotalTasks     int32              `json:"total_tasks"`
 	CompletedTasks int32              `json:"completed_tasks"`
+	ArchivedTasks  int32              `json:"archived_tasks"`
 	LeadUsername   string             `json:"lead_username"`
 	LeadFirstName  string             `json:"lead_first_name"`
 	LeadLastName   string             `json:"lead_last_name"`
@@ -758,11 +799,13 @@ func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModules
 			&i.StartDate,
 			&i.EndDate,
 			&i.LeadID,
+			&i.PriorityRating,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TotalTasks,
 			&i.CompletedTasks,
+			&i.ArchivedTasks,
 			&i.LeadUsername,
 			&i.LeadFirstName,
 			&i.LeadLastName,
@@ -1023,10 +1066,11 @@ SET title       = COALESCE($2,       title),
                     WHEN $9::bool THEN NULL
                     ELSE COALESCE($10, lead_id)
                   END,
+    priority_rating = COALESCE($11, priority_rating),
     updated_at  = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_id, title, description, status, start_date, end_date,
-          lead_id, created_by, created_at, updated_at, deleted_at
+          lead_id, created_by, priority_rating, created_at, updated_at, deleted_at
 `
 
 type UpdateModuleParams struct {
@@ -1040,11 +1084,28 @@ type UpdateModuleParams struct {
 	EndDate        pgtype.Date `json:"end_date"`
 	ClearLead      bool        `json:"clear_lead"`
 	LeadID         pgtype.UUID `json:"lead_id"`
+	PriorityRating pgtype.Int4 `json:"priority_rating"`
+}
+
+type UpdateModuleRow struct {
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	Status         string             `json:"status"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	LeadID         pgtype.UUID        `json:"lead_id"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	PriorityRating int32              `json:"priority_rating"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 // `status` is passed as plain text; when empty string, no change. Avoids narg
 // around the enum type under the string override.
-func (q *Queries) UpdateModule(ctx context.Context, arg UpdateModuleParams) (Module, error) {
+func (q *Queries) UpdateModule(ctx context.Context, arg UpdateModuleParams) (UpdateModuleRow, error) {
 	row := q.db.QueryRow(ctx, updateModule,
 		arg.ID,
 		arg.Title,
@@ -1056,8 +1117,9 @@ func (q *Queries) UpdateModule(ctx context.Context, arg UpdateModuleParams) (Mod
 		arg.EndDate,
 		arg.ClearLead,
 		arg.LeadID,
+		arg.PriorityRating,
 	)
-	var i Module
+	var i UpdateModuleRow
 	err := row.Scan(
 		&i.ID,
 		&i.ProjectID,
@@ -1068,6 +1130,7 @@ func (q *Queries) UpdateModule(ctx context.Context, arg UpdateModuleParams) (Mod
 		&i.EndDate,
 		&i.LeadID,
 		&i.CreatedBy,
+		&i.PriorityRating,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

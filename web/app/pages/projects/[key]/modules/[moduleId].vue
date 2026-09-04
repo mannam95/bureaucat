@@ -9,6 +9,8 @@ import {
   Pencil,
   CalendarDays,
   UserX,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ModuleStatus, ModuleTask } from "~/types";
@@ -53,6 +55,9 @@ const deleting = ref(false);
 const visibleTasks = ref<ModuleTask[]>([]);
 const anyFilterActive = ref(false);
 const sortState = ref<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
+
+// Collapsible right-hand overview panel (shared, persisted across detail views).
+const { showDetailPanel } = useDetailPanel();
 
 useHead({
   title: computed(
@@ -216,7 +221,7 @@ watch(moduleId, async () => {
   <div class="flex min-h-screen flex-col">
     <Navbar />
     <main id="main-content" class="flex-1">
-      <div class="mx-auto max-w-6xl px-6 py-8">
+      <div class="mx-auto max-w-7xl px-6 py-8">
         <nav class="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
           <ChevronLeft class="size-4" />
           <NuxtLink to="/projects" class="hover:text-foreground">Projects</NuxtLink>
@@ -360,7 +365,10 @@ watch(moduleId, async () => {
             </div>
           </header>
 
-          <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div
+            class="grid gap-6"
+            :class="showDetailPanel ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : 'lg:grid-cols-1'"
+          >
             <!-- LEFT: Task list -->
             <section class="min-w-0">
               <!-- Toolbar: title, filters, search, add -->
@@ -378,6 +386,18 @@ watch(moduleId, async () => {
                 <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />
                   Add Task
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-9"
+                  :class="{ 'ml-auto': !isAdmin }"
+                  :title="showDetailPanel ? 'Hide overview panel' : 'Show overview panel'"
+                  @click="showDetailPanel = !showDetailPanel"
+                >
+                  <PanelRightClose v-if="showDetailPanel" class="size-4" />
+                  <PanelRightOpen v-else class="size-4" />
+                  <span class="ml-1.5 hidden sm:inline">{{ showDetailPanel ? "Hide panel" : "Overview" }}</span>
                 </Button>
               </div>
 
@@ -411,8 +431,8 @@ watch(moduleId, async () => {
               />
             </section>
 
-            <!-- RIGHT: Overview -->
-            <aside class="space-y-6">
+            <!-- RIGHT: Overview (collapsible on demand) -->
+            <aside v-if="showDetailPanel" class="space-y-6">
               <ProgressCard :metrics="metrics" />
 
               <StateBreakdownCard

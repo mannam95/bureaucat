@@ -15,6 +15,8 @@ export interface Cycle {
   updated_at: string;
   total_tasks: number;
   completed_tasks: number;
+  /** Archived tasks count as complete in progress (shown separately). */
+  archived_tasks?: number;
   project_key?: string;
   project_name?: string;
 }
@@ -67,6 +69,7 @@ export interface CycleMetrics {
   in_progress: number;
   todo: number;
   cancelled: number;
+  archived: number;
   state_breakdown: CycleStateBucket[];
   assignees: CycleAssigneeSummary[];
 }

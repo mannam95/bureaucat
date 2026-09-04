@@ -32,11 +32,13 @@ WHERE id = $1 AND deleted_at IS NULL;
 SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks
+       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
 FROM cycles c
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -62,13 +64,15 @@ SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks
+       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
 FROM cycles c
 JOIN projects p ON c.project_id = p.id AND p.deleted_at IS NULL
 JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -136,7 +140,8 @@ SELECT
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
-    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled
+    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
+    COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived
 FROM cycle_tasks ct
 JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id

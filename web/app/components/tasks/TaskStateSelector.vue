@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CheckCircle2, XCircle, Clock, ChevronDown } from "lucide-vue-next";
+import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Archive, ChevronDown } from "lucide-vue-next";
 import type { ProjectState } from "~/types";
 
 const props = withDefaults(
@@ -31,6 +31,8 @@ function getStateIcon(stateType: string) {
       return CheckCircle2;
     case "cancelled":
       return XCircle;
+    case "archived":
+      return Archive;
     default:
       return Circle;
   }
@@ -44,6 +46,7 @@ const groupedStates = computed(() => {
     started: [],
     completed: [],
     cancelled: [],
+    archived: [],
   };
   for (const state of props.states) {
     if (groups[state.state_type]) {

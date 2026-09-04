@@ -15,6 +15,10 @@ import {
   MessageSquare,
   Circle,
   ArrowUpDown,
+  Repeat,
+  Layers,
+  Paperclip,
+  AtSign,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ActivityLogEntry, ActivityType, Comment, ProjectMember } from "~/types";
@@ -50,19 +54,28 @@ function toggleSort() {
   localStorage.setItem(SORT_KEY, newestFirst.value ? "newest" : "oldest");
 }
 
-// Icon map for activity types
-const iconMap: Record<ActivityType, typeof Plus> = {
+// Icon map for activity types (Partial + a Circle fallback at the call site so
+// new types are safe even before an icon is chosen).
+const iconMap: Partial<Record<ActivityType, typeof Plus>> = {
   task_created: Plus,
   task_updated: Edit2,
   task_deleted: Trash2,
+  task_moved: ArrowUpDown,
   assignee_added: UserPlus,
   assignee_removed: UserMinus,
   label_added: Tag,
   label_removed: Tags,
   state_changed: ArrowRight,
+  cycle_added: Repeat,
+  cycle_removed: Repeat,
+  module_added: Layers,
+  module_removed: Layers,
+  attachment_added: Paperclip,
+  attachment_removed: Paperclip,
   comment_created: MessageSquare,
   comment_updated: Edit2,
   comment_deleted: Trash2,
+  mentioned: AtSign,
 };
 
 type FeedItem =

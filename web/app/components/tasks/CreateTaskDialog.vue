@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Check, ChevronsUpDown, Search } from "lucide-vue-next";
+import { Loader2, Check, ChevronsUpDown, Search, Info } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type {
   Project,
@@ -50,7 +50,7 @@ const emit = defineEmits<{
   created: [];
 }>();
 
-const { getAuthHeader } = useAuth();
+const { user, getAuthHeader } = useAuth();
 const { currentWorkspace } = useWorkspaces();
 const { createTask, listSubtaskCandidates, attachSubtasks } = useTasks();
 // Files picked in the description toolbar before the task exists; linked to it
@@ -132,6 +132,9 @@ const form = ref({
   figma_link: "",
   branch: "",
   pull_request: "",
+  // Originator/Requester (user id). Defaults to the current user (self-raised),
+  // and is required — see handleSubmit.
+  originator: "" as string,
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -179,6 +182,8 @@ function resetForm() {
     figma_link: "",
     branch: "",
     pull_request: "",
+    // Self-raised by default: pre-fill the originator with the current user.
+    originator: user.value?.id || "",
   };
   selectedTemplateId.value = "";
   error.value = null;
@@ -227,10 +232,12 @@ function focusTemplateField() {
 // Redirect the dialog's initial focus to the Template field when a project is
 // already chosen; otherwise keep reka-ui's default focus handling.
 function handleOpenAutoFocus(event: Event) {
-  if (!focusTemplateOnOpen.value) return;
+  // Land the initial focus on the Title field, nowhere else.
   event.preventDefault();
   focusTemplateOnOpen.value = false;
-  focusTemplateField();
+  nextTick(() => {
+    (document.getElementById("title") as HTMLInputElement | null)?.focus();
+  });
 }
 
 // Set when a project is picked from the popover, so its close-auto-focus lands
@@ -308,6 +315,10 @@ async function handleSubmit() {
     error.value = "Please select a project";
     return;
   }
+  if (!form.value.originator) {
+    error.value = "Please choose an originator / requester";
+    return;
+  }
 
   loading.value = true;
   error.value = null;
@@ -322,6 +333,7 @@ async function handleSubmit() {
     figma_link: form.value.figma_link.trim() || undefined,
     branch: form.value.branch.trim() || undefined,
     pull_request: form.value.pull_request.trim() || undefined,
+    originator: form.value.originator,
     parent_task_number: props.parentTaskNumber,
   });
 
@@ -736,6 +748,22 @@ function removeLabel(labelId: string) {
           </div>
 
           <div class="space-y-2">
+            <Label>
+              Originator / Requester <span class="text-destructive">*</span>
+            </Label>
+            <MemberSelector
+              v-model="form.originator"
+              :members="effMembers"
+              add-label="Pick"
+              empty-label="Choose who this request is from"
+              :disabled="loading"
+            />
+            <p class="text-xs text-muted-foreground">
+              Whose need this is — defaults to you; required.
+            </p>
+          </div>
+
+          <div class="space-y-2">
             <Label>Assignees</Label>
             <TokenSelect
               :selected="selectedAssignees"
@@ -769,7 +797,16 @@ function removeLabel(labelId: string) {
 
           <div class="space-y-2">
             <Label>Labels</Label>
+            <!-- Labels are admin-defined; with none yet, show a hint not a picker. -->
+            <div
+              v-if="effLabels.length === 0"
+              class="flex items-start gap-1.5 text-xs text-muted-foreground"
+            >
+              <Info class="mt-0.5 size-3.5 shrink-0" />
+              <span>No labels yet. An admin can add label categories in project settings.</span>
+            </div>
             <TokenSelect
+              v-else
               :selected="selectedLabels"
               :available="availableLabels"
               :get-key="(l) => l.id"
@@ -778,7 +815,7 @@ function removeLabel(labelId: string) {
               :chip-class="() => 'pl-2 pr-1 font-medium'"
               :disabled="loading"
               placeholder="Add labels..."
-              empty-text="No labels found"
+              empty-text="No matching labels"
               @add="(l) => addLabel(l.id)"
               @remove="(l) => removeLabel(l.id)"
             >
@@ -834,7 +871,7 @@ function removeLabel(labelId: string) {
           >
             Cancel
           </Button>
-          <Button type="submit" :disabled="loading || !form.title || !effectiveProjectKey">
+          <Button type="submit" :disabled="loading || !form.title || !form.originator || !effectiveProjectKey">
             <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
             {{ isSubtaskMode ? "Create Subtask" : "Create Task" }}
           </Button>

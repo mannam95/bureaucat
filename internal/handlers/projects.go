@@ -1130,7 +1130,7 @@ func (h *ProjectHandler) CreateState(c *echo.Context) error {
 	}
 
 	// Validate state type
-	validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true}
+	validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true, "archived": true}
 	if !validTypes[req.StateType] {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid state_type")
 	}
@@ -1748,6 +1748,11 @@ func stringToPgtypeUUID(s *string) pgtype.UUID {
 		return pgtype.UUID{Valid: false}
 	}
 	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
+// uuidPtr returns a pointer to a copy of id, safe to embed in a response struct.
+func uuidPtr(id uuid.UUID) *uuid.UUID {
+	return &id
 }
 
 func pgtypeUUIDToURL(u pgtype.UUID) *string {

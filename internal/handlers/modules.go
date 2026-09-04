@@ -11,18 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v5"
 
+	"bereaucat/internal/activity"
 	"bereaucat/internal/auth"
 	"bereaucat/internal/store"
 )
 
 // ModuleHandler handles module-related endpoints.
 type ModuleHandler struct {
-	store store.Querier
+	store           store.Querier
+	activityService *activity.Service
 }
 
 // NewModuleHandler creates a new module handler.
-func NewModuleHandler(s store.Querier) *ModuleHandler {
-	return &ModuleHandler{store: s}
+func NewModuleHandler(s store.Querier, activityService *activity.Service) *ModuleHandler {
+	return &ModuleHandler{store: s, activityService: activityService}
 }
 
 const moduleDateLayout = "2006-01-02"
@@ -63,31 +65,37 @@ type ModuleResponse struct {
 	UpdatedAt      time.Time         `json:"updated_at"`
 	TotalTasks     int               `json:"total_tasks"`
 	CompletedTasks int               `json:"completed_tasks"`
-	ProjectKey     string            `json:"project_key,omitempty"`
-	ProjectName    string            `json:"project_name,omitempty"`
+	// Archived tasks count as complete in progress, shown separately.
+	ArchivedTasks  int               `json:"archived_tasks"`
+	// 1-10 star priority rating (0 = unset), for reprioritising epics in the list.
+	PriorityRating int    `json:"priority_rating"`
+	ProjectKey     string `json:"project_key,omitempty"`
+	ProjectName    string `json:"project_name,omitempty"`
 }
 
 // CreateModuleRequest is the request body for creating a module.
 type CreateModuleRequest struct {
-	Title       string   `json:"title"`
-	Description *string  `json:"description"`
-	Status      *string  `json:"status"`
-	StartDate   *string  `json:"start_date"`
-	EndDate     *string  `json:"end_date"`
-	LeadID      *string  `json:"lead_id"`
-	MemberIDs   []string `json:"member_ids"`
+	Title          string   `json:"title"`
+	Description    *string  `json:"description"`
+	Status         *string  `json:"status"`
+	StartDate      *string  `json:"start_date"`
+	EndDate        *string  `json:"end_date"`
+	LeadID         *string  `json:"lead_id"`
+	MemberIDs      []string `json:"member_ids"`
+	PriorityRating *int     `json:"priority_rating"`
 }
 
 // UpdateModuleRequest allows partial updates. Nil = leave unchanged. For the
 // nullable fields (dates, lead), an explicit JSON null is represented by the
 // Clear* flags below, because a nil pointer already means "don't touch."
 type UpdateModuleRequest struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Status      *string `json:"status"`
-	StartDate   *string `json:"start_date"`
-	EndDate     *string `json:"end_date"`
-	LeadID      *string `json:"lead_id"`
+	Title          *string `json:"title"`
+	Description    *string `json:"description"`
+	Status         *string `json:"status"`
+	StartDate      *string `json:"start_date"`
+	EndDate        *string `json:"end_date"`
+	LeadID         *string `json:"lead_id"`
+	PriorityRating *int    `json:"priority_rating"`
 
 	ClearStartDate bool `json:"clear_start_date"`
 	ClearEndDate   bool `json:"clear_end_date"`
@@ -149,6 +157,7 @@ type ModuleMetricsResponse struct {
 	InProgress     int                 `json:"in_progress"`
 	Todo           int                 `json:"todo"`
 	Cancelled      int                 `json:"cancelled"`
+	Archived       int                 `json:"archived"`
 	StateBreakdown []ModuleStateBucket `json:"state_breakdown"`
 }
 
@@ -356,15 +365,20 @@ func (h *ModuleHandler) CreateModule(c *echo.Context) error {
 		}
 	}
 
+	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
+		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
+	}
+
 	created, err := h.store.CreateModule(ctx, store.CreateModuleParams{
-		ProjectID:   projectID,
-		Title:       req.Title,
-		Description: stringToPgtypeText(req.Description),
-		Status:      statusStr,
-		StartDate:   start,
-		EndDate:     end,
-		LeadID:      leadParam,
-		CreatedBy:   userID,
+		ProjectID:      projectID,
+		Title:          req.Title,
+		Description:    stringToPgtypeText(req.Description),
+		Status:         statusStr,
+		StartDate:      start,
+		EndDate:        end,
+		LeadID:         leadParam,
+		CreatedBy:      userID,
+		PriorityRating: intToPgtypeInt4(req.PriorityRating),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create module")
@@ -461,6 +475,7 @@ func (h *ModuleHandler) GetModule(c *echo.Context) error {
 		UpdatedAt:      m.UpdatedAt.Time,
 		TotalTasks:     int(m.TotalTasks),
 		CompletedTasks: int(m.CompletedTasks),
+		PriorityRating: int(m.PriorityRating),
 		ProjectKey:     m.ProjectKey,
 		ProjectName:    m.ProjectName,
 	})
@@ -521,7 +536,7 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 	// Sort
 	sortBy := strings.TrimSpace(c.QueryParam("sort_by"))
 	switch sortBy {
-	case "created_at", "end_date", "progress":
+	case "created_at", "end_date", "progress", "priority_rating", "title":
 		// ok
 	default:
 		sortBy = "created_at"
@@ -598,6 +613,8 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 			UpdatedAt:      r.UpdatedAt.Time,
 			TotalTasks:     int(r.TotalTasks),
 			CompletedTasks: int(r.CompletedTasks),
+			ArchivedTasks:  int(r.ArchivedTasks),
+			PriorityRating: int(r.PriorityRating),
 			ProjectKey:     projectKey,
 		}
 		if modules[i].Members == nil {
@@ -709,6 +726,10 @@ func (h *ModuleHandler) UpdateModule(c *echo.Context) error {
 		}
 	}
 
+	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
+		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
+	}
+
 	updated, err := h.store.UpdateModule(ctx, store.UpdateModuleParams{
 		ID:             moduleID,
 		Title:          titleParam,
@@ -717,6 +738,7 @@ func (h *ModuleHandler) UpdateModule(c *echo.Context) error {
 		StartDate:      startParam,
 		EndDate:        endParam,
 		LeadID:         leadParam,
+		PriorityRating: intToPgtypeInt4(req.PriorityRating),
 		ClearStartDate: req.ClearStartDate,
 		ClearEndDate:   req.ClearEndDate,
 		ClearLead:      req.ClearLead,
@@ -762,6 +784,7 @@ func (h *ModuleHandler) UpdateModule(c *echo.Context) error {
 		UpdatedAt:      m.UpdatedAt.Time,
 		TotalTasks:     int(m.TotalTasks),
 		CompletedTasks: int(m.CompletedTasks),
+		PriorityRating: int(m.PriorityRating),
 	})
 }
 
@@ -915,6 +938,7 @@ func (h *ModuleHandler) DuplicateModule(c *echo.Context) error {
 		UpdatedAt:      m.UpdatedAt.Time,
 		TotalTasks:     int(m.TotalTasks),
 		CompletedTasks: int(m.CompletedTasks),
+		PriorityRating: int(m.PriorityRating),
 		ProjectKey:     m.ProjectKey,
 		ProjectName:    m.ProjectName,
 	})
@@ -1059,6 +1083,15 @@ func (h *ModuleHandler) AddModuleTasks(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to seed members from tasks")
 	}
 
+	for _, id := range taskIDs {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       id,
+			ActivityType: activity.ModuleAdded,
+			ActorID:      userID,
+			NewValue:     map[string]interface{}{"module_id": moduleID.String(), "title": existing.Title},
+		})
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{"added": len(taskIDs)})
 }
 
@@ -1077,6 +1110,11 @@ func (h *ModuleHandler) RemoveModuleTask(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
 	}
+	userIDStr := c.Request().Header.Get(auth.HeaderUserID)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
 
 	ctx := c.Request().Context()
 	existing, err := h.store.GetModuleByID(ctx, moduleID)
@@ -1090,6 +1128,14 @@ func (h *ModuleHandler) RemoveModuleTask(c *echo.Context) error {
 	}); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove task from module")
 	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       taskID,
+		ActivityType: activity.ModuleRemoved,
+		ActorID:      userID,
+		OldValue:     map[string]interface{}{"module_id": moduleID.String(), "title": existing.Title},
+	})
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "task removed from module"})
 }
 
@@ -1366,6 +1412,7 @@ func (h *ModuleHandler) ListActiveModules(c *echo.Context) error {
 			UpdatedAt:      r.UpdatedAt.Time,
 			TotalTasks:     int(r.TotalTasks),
 			CompletedTasks: int(r.CompletedTasks),
+			ArchivedTasks:  int(r.ArchivedTasks),
 			ProjectKey:     r.ProjectKey,
 			ProjectName:    r.ProjectName,
 		}
@@ -1417,6 +1464,7 @@ func (h *ModuleHandler) GetModuleMetrics(c *echo.Context) error {
 		InProgress:     int(m.InProgress),
 		Todo:           int(m.Todo),
 		Cancelled:      int(m.Cancelled),
+		Archived:       int(m.Archived),
 		StateBreakdown: buckets,
 	})
 }

@@ -135,6 +135,10 @@ function selectLead(o: LeadOption) {
       <SelectContent>
         <SelectItem value="created_at:desc">Newest first</SelectItem>
         <SelectItem value="created_at:asc">Oldest first</SelectItem>
+        <SelectItem value="priority_rating:desc">Priority ★ · highest</SelectItem>
+        <SelectItem value="priority_rating:asc">Priority ★ · lowest</SelectItem>
+        <SelectItem value="title:asc">Title · A–Z</SelectItem>
+        <SelectItem value="title:desc">Title · Z–A</SelectItem>
         <SelectItem value="end_date:asc">End date · soonest</SelectItem>
         <SelectItem value="end_date:desc">End date · latest</SelectItem>
         <SelectItem value="progress:desc">Progress · highest</SelectItem>

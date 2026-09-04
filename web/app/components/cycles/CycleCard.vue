@@ -25,9 +25,11 @@ const statusStyles: Record<string, string> = {
     "border-muted-foreground/30 bg-muted text-muted-foreground",
 };
 
+// Archived counts as complete, matching the detail Progress card.
 const progressPct = computed(() => {
   if (props.cycle.total_tasks === 0) return 0;
-  return Math.round((props.cycle.completed_tasks / props.cycle.total_tasks) * 100);
+  const done = props.cycle.completed_tasks + (props.cycle.archived_tasks ?? 0);
+  return Math.round((done / props.cycle.total_tasks) * 100);
 });
 
 function formatDate(d: string): string {
@@ -87,7 +89,9 @@ function formatRange(a: string, b: string): string {
       <CardContent class="pt-0">
         <div class="mb-2 flex items-center justify-between text-xs">
           <span class="text-muted-foreground">
-            {{ cycle.completed_tasks }} / {{ cycle.total_tasks }} done
+            {{ cycle.completed_tasks }} done<template
+              v-if="(cycle.archived_tasks ?? 0) > 0"
+            > · {{ cycle.archived_tasks }} archived</template> · {{ cycle.total_tasks }} total
           </span>
           <span class="font-semibold tabular-nums">{{ progressPct }}%</span>
         </div>

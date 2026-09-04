@@ -45,6 +45,10 @@ export interface Module {
   updated_at: string;
   total_tasks: number;
   completed_tasks: number;
+  /** Archived tasks count as complete in progress (shown separately). */
+  archived_tasks?: number;
+  /** 1-10 star priority rating; 0 = unset. Used to reprioritise epics in the list. */
+  priority_rating?: number;
   project_key?: string;
   project_name?: string;
 }
@@ -90,6 +94,7 @@ export interface ModuleMetrics {
   in_progress: number;
   todo: number;
   cancelled: number;
+  archived: number;
   state_breakdown: ModuleStateBucket[];
 }
 
@@ -101,6 +106,7 @@ export interface CreateModuleRequest {
   end_date?: string;
   lead_id?: string;
   member_ids?: string[];
+  priority_rating?: number;
 }
 
 export interface UpdateModuleRequest {
@@ -110,6 +116,7 @@ export interface UpdateModuleRequest {
   start_date?: string;
   end_date?: string;
   lead_id?: string;
+  priority_rating?: number;
   clear_start_date?: boolean;
   clear_end_date?: boolean;
   clear_lead?: boolean;
@@ -127,6 +134,6 @@ export interface ModuleListFilters {
   lead_id?: string;
   start_after?: string;
   end_before?: string;
-  sort_by?: "created_at" | "end_date" | "progress";
+  sort_by?: "created_at" | "end_date" | "progress" | "priority_rating" | "title";
   sort_dir?: "asc" | "desc";
 }

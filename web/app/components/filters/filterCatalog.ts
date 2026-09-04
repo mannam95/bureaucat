@@ -238,6 +238,8 @@ export function stateTypeLabel(kind: string): string {
       return "Done";
     case "cancelled":
       return "Cancelled";
+    case "archived":
+      return "Archived";
     default:
       return kind;
   }
@@ -249,6 +251,7 @@ export const STATE_TYPE_OPTIONS = [
   { id: "started", label: "In Progress" },
   { id: "completed", label: "Done" },
   { id: "cancelled", label: "Cancelled" },
+  { id: "archived", label: "Archived" },
 ];
 
 export const PRIORITY_OPTIONS = [

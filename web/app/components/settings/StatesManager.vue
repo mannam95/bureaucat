@@ -33,6 +33,7 @@ const stateTypes: { value: StateType; label: string }[] = [
   { value: "started", label: "Started" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "archived", label: "Archived" },
 ];
 
 const presetColors = [

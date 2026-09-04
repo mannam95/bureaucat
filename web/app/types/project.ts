@@ -54,7 +54,7 @@ export interface ProjectState {
   created_at: string;
 }
 
-export type StateType = "backlog" | "unstarted" | "started" | "completed" | "cancelled";
+export type StateType = "backlog" | "unstarted" | "started" | "completed" | "cancelled" | "archived";
 
 export interface ProjectLabel {
   id: string;

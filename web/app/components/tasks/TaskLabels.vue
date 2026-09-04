@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Info } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { TaskLabel, ProjectLabel } from "~/types";
 
@@ -64,9 +65,19 @@ async function handleRemove(labelId: string) {
   <div class="space-y-2">
     <p class="text-xs text-muted-foreground">Labels</p>
 
-    <!-- Editable: Gmail-style token input -->
+    <!-- No labels defined for this project yet: labels are admin-defined, so a
+         member sees a hint rather than an empty picker. -->
+    <div
+      v-if="isMember && projectLabels.length === 0"
+      class="flex items-start gap-1.5 text-xs text-muted-foreground"
+    >
+      <Info class="mt-0.5 size-3.5 shrink-0" />
+      <span>No labels yet. An admin can add label categories in project settings.</span>
+    </div>
+
+    <!-- Editable: Gmail-style token input (pick from admin-defined labels only) -->
     <TokenSelect
-      v-if="isMember"
+      v-else-if="isMember"
       :selected="selectedTokens"
       :available="availableTokens"
       :get-key="(l) => l.id"
@@ -75,7 +86,7 @@ async function handleRemove(labelId: string) {
       :chip-class="() => 'pl-2 pr-1 font-medium'"
       :pending-key="loading"
       placeholder="Add labels..."
-      empty-text="No labels found"
+      empty-text="No matching labels"
       @add="(l) => handleAdd(l.id)"
       @remove="(l) => handleRemove(l.id)"
     >

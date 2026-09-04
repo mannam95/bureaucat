@@ -103,40 +103,48 @@ func NewTaskHandler(s store.Querier, pool *pgxpool.Pool, filterRunner *store.Fil
 
 // TaskResponse represents a task in API responses.
 type TaskResponse struct {
-	ID               uuid.UUID          `json:"id"`
-	ProjectKey       string             `json:"project_key"`
-	TaskNumber       int                `json:"task_number"`
-	TaskID           string             `json:"task_id"` // e.g., "DEVOP-123"
-	Title            string             `json:"title"`
-	Description      *string            `json:"description,omitempty"`
-	StateID          uuid.UUID          `json:"state_id"`
-	StateName        string             `json:"state_name"`
-	StateType        string             `json:"state_type"`
-	StateColor       string             `json:"state_color"`
-	Priority         int                `json:"priority"`
-	PriorityRating   int                `json:"priority_rating"`
-	StartDate        *time.Time         `json:"start_date,omitempty"`
-	DueDate          *time.Time         `json:"due_date,omitempty"`
-	CreatedBy        uuid.UUID          `json:"created_by"`
-	CreatorUsername  string             `json:"creator_username"`
-	CreatorFirstName string             `json:"creator_first_name"`
-	CreatorLastName  string             `json:"creator_last_name"`
-	CreatorAvatarURL *string            `json:"creator_avatar_url,omitempty"`
-	Assignees        []AssigneeResponse `json:"assignees,omitempty"`
-	Labels           []TaskLabelInfo    `json:"labels,omitempty"`
-	CommentCount     int                `json:"comment_count"`
-	ParentTaskID     *uuid.UUID         `json:"parent_task_id,omitempty"`
-	ParentTaskNumber *int               `json:"parent_task_number,omitempty"`
-	ParentTaskTitle  *string            `json:"parent_task_title,omitempty"`
-	SubtaskCount     int                `json:"subtask_count"`
-	CycleID          *uuid.UUID         `json:"cycle_id,omitempty"`
-	CycleTitle       *string            `json:"cycle_title,omitempty"`
-	Modules          []TaskModuleInfo   `json:"modules,omitempty"`
-	FigmaLink        *string            `json:"figma_link,omitempty"`
-	Branch           *string            `json:"branch,omitempty"`
-	PullRequest      *string            `json:"pull_request,omitempty"`
-	CreatedAt        time.Time          `json:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	ID               uuid.UUID  `json:"id"`
+	ProjectKey       string     `json:"project_key"`
+	TaskNumber       int        `json:"task_number"`
+	TaskID           string     `json:"task_id"` // e.g., "DEVOP-123"
+	Title            string     `json:"title"`
+	Description      *string    `json:"description,omitempty"`
+	StateID          uuid.UUID  `json:"state_id"`
+	StateName        string     `json:"state_name"`
+	StateType        string     `json:"state_type"`
+	StateColor       string     `json:"state_color"`
+	Priority         int        `json:"priority"`
+	PriorityRating   int        `json:"priority_rating"`
+	StartDate        *time.Time `json:"start_date,omitempty"`
+	DueDate          *time.Time `json:"due_date,omitempty"`
+	CreatedBy        uuid.UUID  `json:"created_by"`
+	CreatorUsername  string     `json:"creator_username"`
+	CreatorFirstName string     `json:"creator_first_name"`
+	CreatorLastName  string     `json:"creator_last_name"`
+	CreatorAvatarURL *string    `json:"creator_avatar_url,omitempty"`
+	// Originator/Requester: whose need the task represents (distinct from the
+	// creator). Populated on the detail/create/update responses; omitted in list
+	// responses. Defaults to the creator.
+	OriginatorID        *uuid.UUID         `json:"originator_id,omitempty"`
+	OriginatorUsername  string             `json:"originator_username,omitempty"`
+	OriginatorFirstName string             `json:"originator_first_name,omitempty"`
+	OriginatorLastName  string             `json:"originator_last_name,omitempty"`
+	OriginatorAvatarURL *string            `json:"originator_avatar_url,omitempty"`
+	Assignees           []AssigneeResponse `json:"assignees,omitempty"`
+	Labels              []TaskLabelInfo    `json:"labels,omitempty"`
+	CommentCount        int                `json:"comment_count"`
+	ParentTaskID        *uuid.UUID         `json:"parent_task_id,omitempty"`
+	ParentTaskNumber    *int               `json:"parent_task_number,omitempty"`
+	ParentTaskTitle     *string            `json:"parent_task_title,omitempty"`
+	SubtaskCount        int                `json:"subtask_count"`
+	CycleID             *uuid.UUID         `json:"cycle_id,omitempty"`
+	CycleTitle          *string            `json:"cycle_title,omitempty"`
+	Modules             []TaskModuleInfo   `json:"modules,omitempty"`
+	FigmaLink           *string            `json:"figma_link,omitempty"`
+	Branch              *string            `json:"branch,omitempty"`
+	PullRequest         *string            `json:"pull_request,omitempty"`
+	CreatedAt           time.Time          `json:"created_at"`
+	UpdatedAt           time.Time          `json:"updated_at"`
 }
 
 // AssigneeResponse represents a task assignee.
@@ -177,6 +185,9 @@ type CreateTaskRequest struct {
 	FigmaLink      *string    `json:"figma_link"`
 	Branch         *string    `json:"branch"`
 	PullRequest    *string    `json:"pull_request"`
+	// Originator/Requester (user id). Optional over the wire — defaults to the
+	// creator when omitted — but the UI requires it, keeping it always recorded.
+	Originator *string `json:"originator"`
 	// ParentTaskNumber, when set, creates this task as a subtask of the given
 	// (project-local) parent task. One level only: the parent must not itself
 	// be a subtask.
@@ -197,6 +208,8 @@ type UpdateTaskRequest struct {
 	FigmaLink   *string `json:"figma_link"`
 	Branch      *string `json:"branch"`
 	PullRequest *string `json:"pull_request"`
+	// Originator/Requester (user id). Omitted = leave unchanged.
+	Originator *string `json:"originator"`
 }
 
 // PaginatedTasksResponse represents a paginated list of tasks.
@@ -514,6 +527,18 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
 	}
 
+	// Originator/Requester: optional over the wire; default it to the creator so
+	// it is always a valid, non-null reference (self-raised tickets stay one
+	// click, and the DB never receives a null here).
+	originatorParam := pgtype.UUID{Bytes: userID, Valid: true}
+	if req.Originator != nil && *req.Originator != "" {
+		oid, err := uuid.Parse(*req.Originator)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid originator")
+		}
+		originatorParam = pgtype.UUID{Bytes: oid, Valid: true}
+	}
+
 	task, err := h.store.CreateTask(ctx, store.CreateTaskParams{
 		ProjectID:      projectID,
 		TaskNumber:     int32(nextNumber),
@@ -523,6 +548,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		Priority:       priority,
 		PriorityRating: intToPgtypeInt4(req.PriorityRating),
 		CreatedBy:      userID,
+		OriginatorID:   originatorParam,
 		StartDate:      timePtrToTimestamptz(req.StartDate),
 		DueDate:        timePtrToTimestamptz(req.DueDate),
 		ParentTaskID:   parentTaskID,
@@ -674,36 +700,41 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	labels := h.getTaskLabels(ctx, task.ID)
 
 	return c.JSON(http.StatusCreated, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(fullTask.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Assignees:        assignees,
-		Labels:           labels,
-		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
-		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
-		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
-		SubtaskCount:     int(fullTask.SubtaskCount),
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(fullTask.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		Priority:            int(fullTask.Priority),
+		PriorityRating:      int(fullTask.PriorityRating),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		OriginatorID:        uuidPtr(fullTask.OriginatorID),
+		OriginatorUsername:  fullTask.OriginatorUsername,
+		OriginatorFirstName: fullTask.OriginatorFirstName,
+		OriginatorLastName:  fullTask.OriginatorLastName,
+		OriginatorAvatarURL: textToStringPtr(fullTask.OriginatorAvatarUrl),
+		Assignees:           assignees,
+		Labels:              labels,
+		ParentTaskID:        pgUUIDToUUIDPtr(fullTask.ParentTaskID),
+		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
+		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
+		SubtaskCount:        int(fullTask.SubtaskCount),
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 
@@ -758,39 +789,44 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               task.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(task.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
-		Title:            task.Title,
-		Description:      textToStringPtr(task.Description),
-		StateID:          task.StateID,
-		StateName:        task.StateName,
-		StateType:        task.StateType,
-		StateColor:       textToString(task.StateColor, "#6B7280"),
-		Priority:         int(task.Priority),
-		PriorityRating:   int(task.PriorityRating),
-		StartDate:        timestamptzToTimePtr(task.StartDate),
-		DueDate:          timestamptzToTimePtr(task.DueDate),
-		CreatedBy:        task.CreatedBy,
-		CreatorUsername:  task.CreatorUsername,
-		CreatorFirstName: task.CreatorFirstName,
-		CreatorLastName:  task.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(task.CreatorAvatarUrl),
-		Assignees:        assignees,
-		Labels:           labels,
-		ParentTaskID:     pgUUIDToUUIDPtr(task.ParentTaskID),
-		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
-		ParentTaskTitle:  textToStringPtr(task.ParentTaskTitle),
-		SubtaskCount:     int(task.SubtaskCount),
-		CycleID:          cycleID,
-		CycleTitle:       cycleTitle,
-		Modules:          h.getTaskModules(ctx, linkTaskID),
-		FigmaLink:        textToStringPtr(task.FigmaLink),
-		Branch:           textToStringPtr(task.Branch),
-		PullRequest:      textToStringPtr(task.PullRequest),
-		CreatedAt:        task.CreatedAt.Time,
-		UpdatedAt:        task.UpdatedAt.Time,
+		ID:                  task.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(task.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
+		Title:               task.Title,
+		Description:         textToStringPtr(task.Description),
+		StateID:             task.StateID,
+		StateName:           task.StateName,
+		StateType:           task.StateType,
+		StateColor:          textToString(task.StateColor, "#6B7280"),
+		Priority:            int(task.Priority),
+		PriorityRating:      int(task.PriorityRating),
+		StartDate:           timestamptzToTimePtr(task.StartDate),
+		DueDate:             timestamptzToTimePtr(task.DueDate),
+		CreatedBy:           task.CreatedBy,
+		CreatorUsername:     task.CreatorUsername,
+		CreatorFirstName:    task.CreatorFirstName,
+		CreatorLastName:     task.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(task.CreatorAvatarUrl),
+		OriginatorID:        uuidPtr(task.OriginatorID),
+		OriginatorUsername:  task.OriginatorUsername,
+		OriginatorFirstName: task.OriginatorFirstName,
+		OriginatorLastName:  task.OriginatorLastName,
+		OriginatorAvatarURL: textToStringPtr(task.OriginatorAvatarUrl),
+		Assignees:           assignees,
+		Labels:              labels,
+		ParentTaskID:        pgUUIDToUUIDPtr(task.ParentTaskID),
+		ParentTaskNumber:    pgInt4ToIntPtr(task.ParentTaskNumber),
+		ParentTaskTitle:     textToStringPtr(task.ParentTaskTitle),
+		SubtaskCount:        int(task.SubtaskCount),
+		CycleID:             cycleID,
+		CycleTitle:          cycleTitle,
+		Modules:             h.getTaskModules(ctx, linkTaskID),
+		FigmaLink:           textToStringPtr(task.FigmaLink),
+		Branch:              textToStringPtr(task.Branch),
+		PullRequest:         textToStringPtr(task.PullRequest),
+		CreatedAt:           task.CreatedAt.Time,
+		UpdatedAt:           task.UpdatedAt.Time,
 	})
 }
 
@@ -925,6 +961,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		FigmaLink:       stringToPgtypeText(req.FigmaLink),
 		Branch:          stringToPgtypeText(req.Branch),
 		PullRequest:     stringToPgtypeText(req.PullRequest),
+		OriginatorID:    stringToPgtypeUUID(req.Originator),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update task")
@@ -1006,6 +1043,46 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 			})
 		}
 	}
+	if req.PriorityRating != nil && int32(*req.PriorityRating) != oldTask.PriorityRating {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       task.ID,
+			ActivityType: activity.TaskUpdated,
+			ActorID:      userID,
+			FieldName:    activity.StringPtr("priority_rating"),
+			OldValue:     oldTask.PriorityRating,
+			NewValue:     *req.PriorityRating,
+		})
+	}
+	oldFigma := textToStringPtr(oldTask.FigmaLink)
+	if req.FigmaLink != nil && (oldFigma == nil || *req.FigmaLink != *oldFigma) {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID: task.ID, ActivityType: activity.TaskUpdated, ActorID: userID,
+			FieldName: activity.StringPtr("figma_link"), OldValue: oldFigma, NewValue: *req.FigmaLink,
+		})
+	}
+	oldBranch := textToStringPtr(oldTask.Branch)
+	if req.Branch != nil && (oldBranch == nil || *req.Branch != *oldBranch) {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID: task.ID, ActivityType: activity.TaskUpdated, ActorID: userID,
+			FieldName: activity.StringPtr("branch"), OldValue: oldBranch, NewValue: *req.Branch,
+		})
+	}
+	oldPR := textToStringPtr(oldTask.PullRequest)
+	if req.PullRequest != nil && (oldPR == nil || *req.PullRequest != *oldPR) {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID: task.ID, ActivityType: activity.TaskUpdated, ActorID: userID,
+			FieldName: activity.StringPtr("pull_request"), OldValue: oldPR, NewValue: *req.PullRequest,
+		})
+	}
+	if req.Originator != nil && *req.Originator != "" {
+		if oid, perr := uuid.Parse(*req.Originator); perr == nil && oid != oldTask.OriginatorID {
+			h.activityService.LogActivity(ctx, activity.LogActivityParams{
+				TaskID: task.ID, ActivityType: activity.TaskUpdated, ActorID: userID,
+				FieldName: activity.StringPtr("originator"),
+				OldValue:  oldTask.OriginatorID.String(), NewValue: oid.String(),
+			})
+		}
+	}
 
 	// Send mention notifications for newly added mentions in description
 	if h.notificationService != nil && req.Description != nil {
@@ -1060,32 +1137,37 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	labels := h.getTaskLabels(ctx, task.ID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(fullTask.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Assignees:        assignees,
-		Labels:           labels,
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(fullTask.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		Priority:            int(fullTask.Priority),
+		PriorityRating:      int(fullTask.PriorityRating),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		OriginatorID:        uuidPtr(fullTask.OriginatorID),
+		OriginatorUsername:  fullTask.OriginatorUsername,
+		OriginatorFirstName: fullTask.OriginatorFirstName,
+		OriginatorLastName:  fullTask.OriginatorLastName,
+		OriginatorAvatarURL: textToStringPtr(fullTask.OriginatorAvatarUrl),
+		Assignees:           assignees,
+		Labels:              labels,
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 
@@ -1420,6 +1502,78 @@ func (h *TaskHandler) AttachSubtasks(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]int{"attached": len(childIDs)})
+}
+
+// PromoteSubtask detaches a sub-task from its parent so it becomes a stand-alone
+// top-level task. The task's own data (originator, assignees, labels, state,
+// dates, custom fields...) stays put; the parent's cycle and module links are
+// copied onto it, since a sub-task shows the parent's links but holds none of
+// its own — so the promoted task keeps showing the same cycle/epic.
+func (h *TaskHandler) PromoteSubtask(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	ctx := c.Request().Context()
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	if !task.ParentTaskID.Valid {
+		return echo.NewHTTPError(http.StatusBadRequest, "task is not a sub-task")
+	}
+	parentID := uuid.UUID(task.ParentTaskID.Bytes)
+
+	// Capture the parent's cycle + modules before detaching.
+	parentCycleID, cycleErr := h.store.GetTaskCycleID(ctx, parentID)
+	parentModules, _ := h.store.ListTaskModules(ctx, parentID)
+
+	// Detach: clear the parent, making this a top-level task.
+	if err := h.store.SetTaskParent(ctx, store.SetTaskParentParams{
+		ID:           task.ID,
+		ParentTaskID: pgtype.UUID{Valid: false},
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to promote sub-task")
+	}
+
+	// Carry over the parent's cycle and modules (best-effort).
+	if cycleErr == nil {
+		_ = h.store.AddTasksToCycle(ctx, store.AddTasksToCycleParams{
+			CycleID: parentCycleID,
+			TaskIds: []uuid.UUID{task.ID},
+			AddedBy: userID,
+		})
+	}
+	for _, m := range parentModules {
+		_ = h.store.AddModuleTasksBulk(ctx, store.AddModuleTasksBulkParams{
+			ModuleID: m.ID,
+			TaskIds:  []uuid.UUID{task.ID},
+			AddedBy:  userID,
+		})
+	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.TaskUpdated,
+		ActorID:      userID,
+		FieldName:    activity.StringPtr("parent"),
+		OldValue:     parentID.String(),
+		NewValue:     nil,
+	})
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "sub-task promoted to top-level task"})
 }
 
 // AddAssigneeRequest represents the request to add an assignee.
@@ -2088,32 +2242,37 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 	labels := h.getTaskLabels(ctx, task.ID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       dest.ProjectKey,
-		TaskNumber:       int(newNumber),
-		TaskID:           dest.ProjectKey + "-" + strconv.Itoa(int(newNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Assignees:        assignees,
-		Labels:           labels,
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          dest.ProjectKey,
+		TaskNumber:          int(newNumber),
+		TaskID:              dest.ProjectKey + "-" + strconv.Itoa(int(newNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		Priority:            int(fullTask.Priority),
+		PriorityRating:      int(fullTask.PriorityRating),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		OriginatorID:        uuidPtr(fullTask.OriginatorID),
+		OriginatorUsername:  fullTask.OriginatorUsername,
+		OriginatorFirstName: fullTask.OriginatorFirstName,
+		OriginatorLastName:  fullTask.OriginatorLastName,
+		OriginatorAvatarURL: textToStringPtr(fullTask.OriginatorAvatarUrl),
+		Assignees:           assignees,
+		Labels:              labels,
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 

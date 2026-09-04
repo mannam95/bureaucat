@@ -13,6 +13,8 @@ const { modules, loading, total, page, totalPages, listModules, listTasksInNoMod
 const showCreate = ref(false);
 const perPage = 12;
 const filters = ref<ModuleListFilters>({ sort_by: "created_at", sort_dir: "desc" });
+// Card (tile) vs flat list view; persisted so it sticks across visits.
+const viewMode = useViewMode("bc:modules-view");
 
 // How many top-level tasks aren't in any module, for the backlog card that opens
 // the "Tasks Without an Epic" view. Only shown to admins (adding is admin-only).
@@ -67,10 +69,13 @@ watch(
           for repeating workflows.
         </p>
       </div>
-      <Button v-if="isAdmin" @click="showCreate = true">
-        <Plus class="mr-2 size-4" />
-        New Module
-      </Button>
+      <div class="flex items-center gap-2">
+        <ViewModeToggle v-model="viewMode" />
+        <Button v-if="isAdmin" @click="showCreate = true">
+          <Plus class="mr-2 size-4" />
+          New Module
+        </Button>
+      </div>
     </div>
 
     <ModuleFiltersBar v-model="filters" :project-key="projectKey" />
@@ -98,7 +103,7 @@ watch(
     </div>
 
     <template v-else>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-if="viewMode === 'card'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <BacklogCard
           v-if="showBacklogCard && page === 1"
           title="Tasks Without an Epic"
@@ -113,6 +118,19 @@ watch(
           :to="`/projects/${projectKey}/modules/${m.id}`"
         />
       </div>
+
+      <template v-else>
+        <div v-if="showBacklogCard && page === 1" class="mb-3">
+          <BacklogCard
+            variant="row"
+            title="Tasks Without an Epic"
+            subtitle="not in any epic yet"
+            :count="backlogCount"
+            :to="`/projects/${projectKey}/modules/backlog`"
+          />
+        </div>
+        <ModuleListView :modules="modules" :project-key="projectKey" />
+      </template>
 
       <div
         v-if="totalPages > 1"

@@ -26,9 +26,11 @@ const statusStyles: Record<string, string> = {
   cancelled:   "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
 };
 
+// Archived counts as complete, matching the detail Progress card.
 const progressPct = computed(() => {
   if (props.module.total_tasks === 0) return 0;
-  return Math.round((props.module.completed_tasks / props.module.total_tasks) * 100);
+  const done = props.module.completed_tasks + (props.module.archived_tasks ?? 0);
+  return Math.round((done / props.module.total_tasks) * 100);
 });
 
 const visibleMembers = computed(() => (props.module.members ?? []).slice(0, 3));
@@ -98,6 +100,9 @@ function initials(first: string, last: string, username: string): string {
           <CalendarDays class="size-3.5" />
           <span>{{ formatRange(module.start_date, module.end_date) }}</span>
         </div>
+        <div v-if="(module.priority_rating ?? 0) > 0" class="mt-2">
+          <PriorityRating :model-value="module.priority_rating ?? 0" />
+        </div>
       </CardHeader>
       <CardContent class="pt-0">
         <div class="mb-3 flex items-center justify-between gap-2">
@@ -133,7 +138,9 @@ function initials(first: string, last: string, username: string): string {
         </div>
         <div class="mb-2 flex items-center justify-between text-xs">
           <span class="text-muted-foreground">
-            {{ module.completed_tasks }} / {{ module.total_tasks }} done
+            {{ module.completed_tasks }} done<template
+              v-if="(module.archived_tasks ?? 0) > 0"
+            > · {{ module.archived_tasks }} archived</template> · {{ module.total_tasks }} total
           </span>
           <span class="font-semibold tabular-nums">{{ progressPct }}%</span>
         </div>

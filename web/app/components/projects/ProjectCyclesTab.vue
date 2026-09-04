@@ -11,6 +11,9 @@ const { cycles, loading, total, page, totalPages, listCycles, listUnassignedTask
 
 const showCreate = ref(false);
 const perPage = 12;
+// Card (tile) vs flat list view; persisted so it sticks across visits. Cycles
+// are listed latest-first server-side in both views.
+const viewMode = useViewMode("bc:cycles-view");
 
 // How many top-level tasks aren't in any cycle, for the backlog card that opens
 // the "Tasks Without a Cycle" view. Only shown to admins (adding is admin-only).
@@ -59,10 +62,13 @@ watch(
           and end dates.
         </p>
       </div>
-      <Button v-if="isAdmin" @click="showCreate = true">
-        <Plus class="mr-2 size-4" />
-        New Cycle
-      </Button>
+      <div class="flex items-center gap-2">
+        <ViewModeToggle v-model="viewMode" />
+        <Button v-if="isAdmin" @click="showCreate = true">
+          <Plus class="mr-2 size-4" />
+          New Cycle
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -87,7 +93,7 @@ watch(
     </div>
 
     <template v-else>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-if="viewMode === 'card'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <BacklogCard
           v-if="showBacklogCard && page === 1"
           title="Tasks Without a Cycle"
@@ -102,6 +108,19 @@ watch(
           :to="`/projects/${projectKey}/cycles/${c.id}`"
         />
       </div>
+
+      <template v-else>
+        <div v-if="showBacklogCard && page === 1" class="mb-3">
+          <BacklogCard
+            variant="row"
+            title="Tasks Without a Cycle"
+            subtitle="not in any cycle yet"
+            :count="backlogCount"
+            :to="`/projects/${projectKey}/cycles/backlog`"
+          />
+        </div>
+        <CycleListView :cycles="cycles" :project-key="projectKey" />
+      </template>
 
       <div
         v-if="totalPages > 1"

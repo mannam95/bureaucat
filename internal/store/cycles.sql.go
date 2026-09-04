@@ -165,7 +165,8 @@ SELECT
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
-    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled
+    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
+    COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived
 FROM cycle_tasks ct
 JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id
@@ -178,6 +179,7 @@ type GetCycleMetricsRow struct {
 	InProgress int32 `json:"in_progress"`
 	Todo       int32 `json:"todo"`
 	Cancelled  int32 `json:"cancelled"`
+	Archived   int32 `json:"archived"`
 }
 
 func (q *Queries) GetCycleMetrics(ctx context.Context, cycleID uuid.UUID) (GetCycleMetricsRow, error) {
@@ -189,6 +191,7 @@ func (q *Queries) GetCycleMetrics(ctx context.Context, cycleID uuid.UUID) (GetCy
 		&i.InProgress,
 		&i.Todo,
 		&i.Cancelled,
+		&i.Archived,
 	)
 	return i, err
 }
@@ -257,13 +260,15 @@ SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks
+       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
 FROM cycles c
 JOIN projects p ON c.project_id = p.id AND p.deleted_at IS NULL
 JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -288,6 +293,7 @@ type ListActiveCyclesForUserRow struct {
 	ProjectName    string             `json:"project_name"`
 	TotalTasks     int32              `json:"total_tasks"`
 	CompletedTasks int32              `json:"completed_tasks"`
+	ArchivedTasks  int32              `json:"archived_tasks"`
 }
 
 func (q *Queries) ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID) ([]ListActiveCyclesForUserRow, error) {
@@ -313,6 +319,7 @@ func (q *Queries) ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID)
 			&i.ProjectName,
 			&i.TotalTasks,
 			&i.CompletedTasks,
+			&i.ArchivedTasks,
 		); err != nil {
 			return nil, err
 		}
@@ -456,11 +463,13 @@ const listProjectCycles = `-- name: ListProjectCycles :many
 SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks
+       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
 FROM cycles c
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -489,6 +498,7 @@ type ListProjectCyclesRow struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	TotalTasks     int32              `json:"total_tasks"`
 	CompletedTasks int32              `json:"completed_tasks"`
+	ArchivedTasks  int32              `json:"archived_tasks"`
 }
 
 func (q *Queries) ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error) {
@@ -512,6 +522,7 @@ func (q *Queries) ListProjectCycles(ctx context.Context, arg ListProjectCyclesPa
 			&i.UpdatedAt,
 			&i.TotalTasks,
 			&i.CompletedTasks,
+			&i.ArchivedTasks,
 		); err != nil {
 			return nil, err
 		}

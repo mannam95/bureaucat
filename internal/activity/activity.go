@@ -21,18 +21,24 @@ const SeedChecksum = "0000000000000000000000000000000000000000000000000000000000
 type ActivityType string
 
 const (
-	TaskCreated     ActivityType = "task_created"
-	TaskUpdated     ActivityType = "task_updated"
-	TaskDeleted     ActivityType = "task_deleted"
-	TaskMoved       ActivityType = "task_moved"
-	AssigneeAdded   ActivityType = "assignee_added"
-	AssigneeRemoved ActivityType = "assignee_removed"
-	LabelAdded      ActivityType = "label_added"
-	LabelRemoved    ActivityType = "label_removed"
-	StateChanged    ActivityType = "state_changed"
-	CommentCreated  ActivityType = "comment_created"
-	CommentUpdated  ActivityType = "comment_updated"
-	CommentDeleted  ActivityType = "comment_deleted"
+	TaskCreated       ActivityType = "task_created"
+	TaskUpdated       ActivityType = "task_updated"
+	TaskDeleted       ActivityType = "task_deleted"
+	TaskMoved         ActivityType = "task_moved"
+	AssigneeAdded     ActivityType = "assignee_added"
+	AssigneeRemoved   ActivityType = "assignee_removed"
+	LabelAdded        ActivityType = "label_added"
+	LabelRemoved      ActivityType = "label_removed"
+	StateChanged      ActivityType = "state_changed"
+	CommentCreated    ActivityType = "comment_created"
+	CommentUpdated    ActivityType = "comment_updated"
+	CommentDeleted    ActivityType = "comment_deleted"
+	CycleAdded        ActivityType = "cycle_added"
+	CycleRemoved      ActivityType = "cycle_removed"
+	ModuleAdded       ActivityType = "module_added"
+	ModuleRemoved     ActivityType = "module_removed"
+	AttachmentAdded   ActivityType = "attachment_added"
+	AttachmentRemoved ActivityType = "attachment_removed"
 )
 
 // Notifier fans out a logged activity to per-user notifications. It is defined

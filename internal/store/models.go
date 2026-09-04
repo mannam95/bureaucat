@@ -15,18 +15,25 @@ import (
 type ActivityType string
 
 const (
-	ActivityTypeTaskCreated     ActivityType = "task_created"
-	ActivityTypeTaskUpdated     ActivityType = "task_updated"
-	ActivityTypeTaskDeleted     ActivityType = "task_deleted"
-	ActivityTypeAssigneeAdded   ActivityType = "assignee_added"
-	ActivityTypeAssigneeRemoved ActivityType = "assignee_removed"
-	ActivityTypeLabelAdded      ActivityType = "label_added"
-	ActivityTypeLabelRemoved    ActivityType = "label_removed"
-	ActivityTypeStateChanged    ActivityType = "state_changed"
-	ActivityTypeCommentCreated  ActivityType = "comment_created"
-	ActivityTypeCommentUpdated  ActivityType = "comment_updated"
-	ActivityTypeCommentDeleted  ActivityType = "comment_deleted"
-	ActivityTypeMentioned       ActivityType = "mentioned"
+	ActivityTypeTaskCreated       ActivityType = "task_created"
+	ActivityTypeTaskUpdated       ActivityType = "task_updated"
+	ActivityTypeTaskDeleted       ActivityType = "task_deleted"
+	ActivityTypeAssigneeAdded     ActivityType = "assignee_added"
+	ActivityTypeAssigneeRemoved   ActivityType = "assignee_removed"
+	ActivityTypeLabelAdded        ActivityType = "label_added"
+	ActivityTypeLabelRemoved      ActivityType = "label_removed"
+	ActivityTypeStateChanged      ActivityType = "state_changed"
+	ActivityTypeCommentCreated    ActivityType = "comment_created"
+	ActivityTypeCommentUpdated    ActivityType = "comment_updated"
+	ActivityTypeCommentDeleted    ActivityType = "comment_deleted"
+	ActivityTypeMentioned         ActivityType = "mentioned"
+	ActivityTypeTaskMoved         ActivityType = "task_moved"
+	ActivityTypeCycleAdded        ActivityType = "cycle_added"
+	ActivityTypeCycleRemoved      ActivityType = "cycle_removed"
+	ActivityTypeModuleAdded       ActivityType = "module_added"
+	ActivityTypeModuleRemoved     ActivityType = "module_removed"
+	ActivityTypeAttachmentAdded   ActivityType = "attachment_added"
+	ActivityTypeAttachmentRemoved ActivityType = "attachment_removed"
 )
 
 func (e *ActivityType) Scan(src interface{}) error {
@@ -162,6 +169,7 @@ const (
 	StateTypeStarted   StateType = "started"
 	StateTypeCompleted StateType = "completed"
 	StateTypeCancelled StateType = "cancelled"
+	StateTypeArchived  StateType = "archived"
 )
 
 func (e *StateType) Scan(src interface{}) error {
@@ -344,18 +352,19 @@ type Feedback struct {
 }
 
 type Module struct {
-	ID          uuid.UUID          `json:"id"`
-	ProjectID   uuid.UUID          `json:"project_id"`
-	Title       string             `json:"title"`
-	Description pgtype.Text        `json:"description"`
-	Status      string             `json:"status"`
-	StartDate   pgtype.Date        `json:"start_date"`
-	EndDate     pgtype.Date        `json:"end_date"`
-	LeadID      pgtype.UUID        `json:"lead_id"`
-	CreatedBy   uuid.UUID          `json:"created_by"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	ID             uuid.UUID          `json:"id"`
+	ProjectID      uuid.UUID          `json:"project_id"`
+	Title          string             `json:"title"`
+	Description    pgtype.Text        `json:"description"`
+	Status         string             `json:"status"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	LeadID         pgtype.UUID        `json:"lead_id"`
+	CreatedBy      uuid.UUID          `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	PriorityRating int32              `json:"priority_rating"`
 }
 
 type ModuleMember struct {
@@ -503,6 +512,7 @@ type Task struct {
 	Branch         pgtype.Text        `json:"branch"`
 	PullRequest    pgtype.Text        `json:"pull_request"`
 	PriorityRating int32              `json:"priority_rating"`
+	OriginatorID   uuid.UUID          `json:"originator_id"`
 }
 
 type TaskAssignee struct {

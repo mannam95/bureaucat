@@ -10,18 +10,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v5"
 
+	"bereaucat/internal/activity"
 	"bereaucat/internal/auth"
 	"bereaucat/internal/store"
 )
 
 // CycleHandler handles cycle-related endpoints.
 type CycleHandler struct {
-	store store.Querier
+	store           store.Querier
+	activityService *activity.Service
 }
 
 // NewCycleHandler creates a new cycle handler.
-func NewCycleHandler(s store.Querier) *CycleHandler {
-	return &CycleHandler{store: s}
+func NewCycleHandler(s store.Querier, activityService *activity.Service) *CycleHandler {
+	return &CycleHandler{store: s, activityService: activityService}
 }
 
 const cycleDateLayout = "2006-01-02"
@@ -40,6 +42,8 @@ type CycleResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 	TotalTasks     int       `json:"total_tasks"`
 	CompletedTasks int       `json:"completed_tasks"`
+	// Archived tasks count as complete in progress, shown separately.
+	ArchivedTasks  int       `json:"archived_tasks"`
 	ProjectKey     string    `json:"project_key,omitempty"`
 	ProjectName    string    `json:"project_name,omitempty"`
 }
@@ -94,6 +98,7 @@ type CycleMetricsResponse struct {
 	InProgress     int                    `json:"in_progress"`
 	Todo           int                    `json:"todo"`
 	Cancelled      int                    `json:"cancelled"`
+	Archived       int                    `json:"archived"`
 	StateBreakdown []CycleStateBucket     `json:"state_breakdown"`
 	Assignees      []CycleAssigneeSummary `json:"assignees"`
 }
@@ -287,6 +292,7 @@ func (h *CycleHandler) ListCycles(c *echo.Context) error {
 			UpdatedAt:      r.UpdatedAt.Time,
 			TotalTasks:     int(r.TotalTasks),
 			CompletedTasks: int(r.CompletedTasks),
+			ArchivedTasks:  int(r.ArchivedTasks),
 			ProjectKey:     projectKey,
 		}
 	}
@@ -621,6 +627,7 @@ func (h *CycleHandler) GetCycleMetrics(c *echo.Context) error {
 		InProgress:     int(m.InProgress),
 		Todo:           int(m.Todo),
 		Cancelled:      int(m.Cancelled),
+		Archived:       int(m.Archived),
 		StateBreakdown: buckets,
 		Assignees:      summaries,
 	})
@@ -674,6 +681,15 @@ func (h *CycleHandler) AddCycleTasks(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, "one or more tasks are already in a cycle")
 	}
 
+	for _, id := range ids {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       id,
+			ActivityType: activity.CycleAdded,
+			ActorID:      userID,
+			NewValue:     map[string]interface{}{"cycle_id": cycleID.String(), "title": existing.Title},
+		})
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{"added": len(ids)})
 }
 
@@ -692,6 +708,11 @@ func (h *CycleHandler) RemoveCycleTask(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
 	}
+	userIDStr := c.Request().Header.Get(auth.HeaderUserID)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
 
 	ctx := c.Request().Context()
 	existing, err := h.store.GetCycleByID(ctx, cycleID)
@@ -705,6 +726,14 @@ func (h *CycleHandler) RemoveCycleTask(c *echo.Context) error {
 	}); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove task from cycle")
 	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       taskID,
+		ActivityType: activity.CycleRemoved,
+		ActorID:      userID,
+		OldValue:     map[string]interface{}{"cycle_id": cycleID.String(), "title": existing.Title},
+	})
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "task removed from cycle"})
 }
 
@@ -820,6 +849,7 @@ func (h *CycleHandler) ListActiveCycles(c *echo.Context) error {
 			UpdatedAt:      r.UpdatedAt.Time,
 			TotalTasks:     int(r.TotalTasks),
 			CompletedTasks: int(r.CompletedTasks),
+			ArchivedTasks:  int(r.ArchivedTasks),
 			ProjectKey:     r.ProjectKey,
 			ProjectName:    r.ProjectName,
 		}

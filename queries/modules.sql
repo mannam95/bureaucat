@@ -4,7 +4,7 @@
 -- The handler is responsible for defaulting `status` to 'backlog' when the
 -- caller doesn't supply one, so the SQL can keep the arg non-nullable. This
 -- sidesteps sqlc's handling of nullable enum args under a string override.
-INSERT INTO modules (project_id, title, description, status, start_date, end_date, lead_id, created_by)
+INSERT INTO modules (project_id, title, description, status, start_date, end_date, lead_id, created_by, priority_rating)
 VALUES (
     sqlc.arg('project_id'),
     sqlc.arg('title'),
@@ -13,17 +13,18 @@ VALUES (
     sqlc.arg('start_date'),
     sqlc.arg('end_date'),
     sqlc.arg('lead_id'),
-    sqlc.arg('created_by')
+    sqlc.arg('created_by'),
+    COALESCE(sqlc.narg('priority_rating'), 0)
 )
 RETURNING id, project_id, title, description, status, start_date, end_date,
-          lead_id, created_by, created_at, updated_at, deleted_at;
+          lead_id, created_by, priority_rating, created_at, updated_at, deleted_at;
 
 -- name: GetModuleByID :one
 -- COALESCE the joined user fields because LEFT JOIN on nullable lead_id would
 -- otherwise trip sqlc's (column-nullability-based) assumption that the fields
 -- are non-null.
 SELECT m.id, m.project_id, m.title, m.description, m.status,
-       m.start_date, m.end_date, m.lead_id,
+       m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at, m.deleted_at,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
@@ -68,10 +69,11 @@ SET title       = COALESCE(sqlc.narg('title'),       title),
                     WHEN sqlc.arg('clear_lead')::bool THEN NULL
                     ELSE COALESCE(sqlc.narg('lead_id'), lead_id)
                   END,
+    priority_rating = COALESCE(sqlc.narg('priority_rating'), priority_rating),
     updated_at  = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_id, title, description, status, start_date, end_date,
-          lead_id, created_by, created_at, updated_at, deleted_at;
+          lead_id, created_by, priority_rating, created_at, updated_at, deleted_at;
 
 -- name: SoftDeleteModule :exec
 UPDATE modules
@@ -80,10 +82,11 @@ WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListProjectModules :many
 SELECT m.id, m.project_id, m.title, m.description, m.status,
-       m.start_date, m.end_date, m.lead_id,
+       m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
        COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -93,7 +96,8 @@ FROM modules m
 LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -117,6 +121,14 @@ ORDER BY
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'priority_rating' AND sqlc.arg('sort_dir')::text = 'asc'
+         THEN m.priority_rating END ASC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'priority_rating' AND sqlc.arg('sort_dir')::text = 'desc'
+         THEN m.priority_rating END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'title' AND sqlc.arg('sort_dir')::text = 'asc'
+         THEN m.title END ASC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'title' AND sqlc.arg('sort_dir')::text = 'desc'
+         THEN m.title END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3;
 
@@ -130,6 +142,7 @@ SELECT m.id, m.project_id, m.title, m.description, m.status,
        p.project_key, p.name AS project_name,
        COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
        COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -141,7 +154,8 @@ JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
 LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -282,7 +296,8 @@ SELECT
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
-    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled
+    COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
+    COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived
 FROM module_tasks mt
 JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 JOIN project_states ps ON t.state_id = ps.id

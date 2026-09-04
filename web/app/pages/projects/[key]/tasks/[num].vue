@@ -6,6 +6,8 @@ import {
   Plus,
   Trash2,
   FolderInput,
+  ArrowUpFromLine,
+  Archive,
   Lock,
   Check,
   X,
@@ -51,7 +53,7 @@ const {
   listLabels,
 } = useProjects();
 
-const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, fetchAllTasks } =
+const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, promoteSubtask, fetchAllTasks } =
   useTasks();
 const { comments, loading: commentsLoading, listComments } = useComments();
 const { activities, loading: activitiesLoading, listActivity } = useActivity();
@@ -111,6 +113,7 @@ const stateIconMap: Record<string, typeof Circle> = {
   started: CircleDot,
   completed: CheckCircle2,
   cancelled: XCircle,
+  archived: Archive,
 };
 
 async function loadData() {
@@ -261,6 +264,32 @@ async function handleRatingChange(rating: number) {
   }
 }
 
+// Editable Originator/Requester. Mirror the task's value into a local model so
+// the member picker can change it, and patch on a new valid selection. Clearing
+// is a no-op here (the field is mandatory) — it re-syncs on the next refresh.
+const originatorModel = ref<string | null>(null);
+watch(
+  () => currentTask.value?.originator_id,
+  (id) => {
+    originatorModel.value = id ?? null;
+  },
+  { immediate: true }
+);
+watch(originatorModel, async (v) => {
+  if (!v || v === currentTask.value?.originator_id) return;
+  updating.value = true;
+  const result = await updateTask(projectKey.value, taskNum.value, { originator: v });
+  updating.value = false;
+  if (result.success) {
+    toast.success("Originator updated");
+    await refreshTask();
+    await listActivity(projectKey.value, taskNum.value);
+  } else {
+    toast.error(result.error || "Failed to update originator");
+    originatorModel.value = currentTask.value?.originator_id ?? null;
+  }
+});
+
 const startDateOpen = ref(false);
 const dueDateOpen = ref(false);
 const startDateDraft = ref<DateValue | undefined>();
@@ -373,6 +402,20 @@ async function handleDelete() {
     router.push(`/projects/${projectKey.value}`);
   } else {
     toast.error(result.error || "Failed to delete task");
+  }
+}
+
+const promoting = ref(false);
+async function handlePromote() {
+  promoting.value = true;
+  const result = await promoteSubtask(projectKey.value, taskNum.value);
+  promoting.value = false;
+  if (result.success) {
+    toast.success("Promoted to a top-level task");
+    await refreshTask();
+    await listActivity(projectKey.value, taskNum.value);
+  } else {
+    toast.error(result.error || "Failed to promote sub-task");
   }
 }
 
@@ -547,6 +590,7 @@ async function handleDescriptionFilesDropped(files: File[]) {
   }
   if (results.length > 0) {
     toast.success(`${results.length} file${results.length > 1 ? "s" : ""} attached`);
+    await listActivity(projectKey.value, taskNum.value);
   }
 }
 
@@ -554,6 +598,7 @@ async function handleDeleteTaskAttachment(attachmentId: string) {
   const result = await deleteAttachment(projectKey.value, taskNum.value, "task", attachmentId);
   if (result.success) {
     taskAttachments.value = taskAttachments.value.filter((a) => a.id !== attachmentId);
+    await listActivity(projectKey.value, taskNum.value);
   }
 }
 
@@ -1202,6 +1247,34 @@ onMounted(() => {
                   />
                 </div>
 
+                <!-- Originator / Requester -->
+                <div class="py-3">
+                  <p class="mb-2 text-xs text-muted-foreground">Originator / Requester</p>
+                  <MemberSelector
+                    v-if="isMember && !isDisabled"
+                    v-model="originatorModel"
+                    :members="members"
+                    add-label="Pick"
+                    empty-label="Not set"
+                    :disabled="updating"
+                  />
+                  <NuxtLink
+                    v-else-if="currentTask.originator_id"
+                    :to="`/profile/${currentTask.originator_id}`"
+                    class="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-2.5 transition-colors hover:bg-muted"
+                  >
+                    <Avatar class="size-6">
+                      <AvatarImage v-if="currentTask.originator_avatar_url" :src="currentTask.originator_avatar_url" />
+                      <AvatarFallback class="text-xs" :seed="currentTask.originator_id">
+                        {{ currentTask.originator_first_name?.[0] }}{{ currentTask.originator_last_name?.[0] }}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span class="text-sm">
+                      {{ currentTask.originator_first_name }} {{ currentTask.originator_last_name }}
+                    </span>
+                  </NuxtLink>
+                </div>
+
                 <!-- Labels -->
                 <div class="py-3">
                   <TaskLabels
@@ -1253,6 +1326,22 @@ onMounted(() => {
                 >
                   <FolderInput class="size-3.5" />
                   Move to project
+                </Button>
+              </div>
+
+              <!-- Promote a sub-task to its own top-level task (keeps its fields;
+                   carries over the parent's cycle/epic) -->
+              <div v-if="isMember && isSubtask && !isDisabled" class="mt-2 border-t border-border pt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="w-full justify-start gap-2"
+                  :disabled="promoting"
+                  @click="handlePromote"
+                >
+                  <Loader2 v-if="promoting" class="size-3.5 animate-spin" />
+                  <ArrowUpFromLine v-else class="size-3.5" />
+                  Promote to top-level task
                 </Button>
               </div>
 
