@@ -1,16 +1,16 @@
-#Requires -Version 5.1
+Requires -Version 5.1
 <#
 .SYNOPSIS
   Windows-native port of the Makefile — no make, bash, openssl, curl, awk or sed needed.
   Only external requirements: Docker Desktop (compose v2), Python (for `seed`), git (for `release`).
 
 .USAGE
-  .\tasks.ps1                  # list all tasks
-  .\tasks.ps1 bootstrap        # one-command setup (dev)
-  .\tasks.ps1 dev-up
-  .\tasks.ps1 dev-logs -S app  # pass -S for a single service
-  .\tasks.ps1 prod-bootstrap
-  .\tasks.ps1 release -Version 1.2.3 -AllowDirty
+  .\WindowsMakeFilePort.ps1                  # list all commands
+  .\WindowsMakeFilePort.ps1 bootstrap        # one-command setup (dev)
+  .\WindowsMakeFilePort.ps1 dev-up
+  .\WindowsMakeFilePort.ps1 dev-logs -S app  # pass -S for a single service
+  .\WindowsMakeFilePort.ps1 prod-bootstrap
+  .\WindowsMakeFilePort.ps1 release -Version 1.2.3 -AllowDirty
 #>
 param(
   [Parameter(Position = 0)] [string]$Task = "help",
@@ -283,7 +283,7 @@ switch ($Task) {
 
   # @ Setup
   "help" { Get-HelpList }
-  "setup"         { New-EnvFile; New-GarageConfig; Write-Host "setup done - next: .\tasks.ps1 bootstrap" }
+  "setup"         { New-EnvFile; New-GarageConfig; Write-Host "setup done - next: .\WindowsMakeFilePort.ps1 bootstrap" }
   "bootstrap"     { Invoke-Bootstrap -Prod $false }
   "dev-bootstrap" { Invoke-Bootstrap -Prod $false }
   "prod-bootstrap"{ Invoke-Bootstrap -Prod $true }
@@ -341,7 +341,7 @@ switch ($Task) {
     if ($dirty -and -not $AllowDirty) {
       $sha = Invoke-NativeQuiet git @("rev-parse", "--short", "HEAD")
       Write-Host "X working tree is dirty, so the sha-$sha tag would not match what you built."
-      Write-Host "  commit first, or override with: .\tasks.ps1 release -AllowDirty"
+      Write-Host "  commit first, or override with: .\WindowsMakeFilePort.ps1 release -AllowDirty"
       exit 1
     }
     $sha = Invoke-NativeQuiet git @("rev-parse", "--short", "HEAD"); if (-not $sha) { $sha = "unknown" }
