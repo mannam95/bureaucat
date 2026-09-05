@@ -223,11 +223,10 @@ async function fetchStatesForMyTasks() {
 }
 
 // Tips
-const { ssoProviders, fetchSSOProviders } = useSettings();
 
 const tips: { id: string; show: () => boolean }[] = [
   {
-    id: "avatar-sso",
+    id: "avatar",
     show: () => !user.value?.avatar_url,
   },
 ];
@@ -238,7 +237,6 @@ onMounted(async () => {
   fetchProjects();
   fetchAllProjects();
   fetchMyTasks();
-  await fetchSSOProviders();
 
   const applicable = tips.filter((t) => t.show());
   if (applicable.length > 0) {
@@ -269,21 +267,20 @@ onMounted(async () => {
           class="mb-8 flex items-center gap-3 rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400"
         >
           <Lightbulb class="size-4 shrink-0" />
-          <span v-if="currentTip === 'avatar-sso'">
-            <span class="font-semibold">Tip:</span> You can set your profile picture on your SSO provider
-            (e.g. <a
-              v-if="ssoProviders.zitadel && ssoProviders.zitadel_url"
-              :href="`${ssoProviders.zitadel_url}/ui/console/users/me?id=general`"
-              target="_blank"
-              rel="noopener noreferrer"
+          <span v-if="currentTip === 'avatar'">
+            <span class="font-semibold">Tip:</span> Add a profile photo in
+            <NuxtLink
+              to="/settings"
               class="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-300"
-            >Zitadel</a><span v-else>Zitadel</span>)
-            to make sure it shows up on your avatar across Bureaucat.
+            >Settings</NuxtLink>
+            so your avatar shows up across Bureaucat.
           </span>
         </div>
 
+        <!-- Your Projects (compact row) on top, Assigned to You below. -->
+        <div class="flex flex-col gap-10">
         <!-- Assigned to You -->
-        <div class="mb-10">
+        <div class="order-2">
           <div class="mb-4 flex items-center justify-between">
             <h2 class="flex items-center gap-2 text-lg font-semibold">
               <ListTodo class="size-5" />
@@ -334,7 +331,7 @@ onMounted(async () => {
         </div>
 
         <!-- Your Projects Section -->
-        <div>
+        <div class="order-1">
           <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-lg font-semibold">Your Projects</h2>
             <div class="flex items-center gap-3">
@@ -391,14 +388,16 @@ onMounted(async () => {
           </div>
 
           <!-- Projects grid -->
-          <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <ProjectCard
               v-for="project in projects"
               :key="project.id"
               :project="project"
               :show-workspace="showAllWorkspaces"
+              compact
             />
           </div>
+        </div>
         </div>
 
         <CreateProjectDialog
