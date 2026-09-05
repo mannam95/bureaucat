@@ -732,6 +732,10 @@ ORDER BY
          THEN m.title END ASC NULLS LAST,
     CASE WHEN $8::text = 'title' AND $9::text = 'desc'
          THEN m.title END DESC NULLS LAST,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc'
+         THEN m.created_at END ASC NULLS LAST,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc'
+         THEN m.created_at END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3
 `

@@ -90,7 +90,7 @@ var (
 		"start_bucket": {}, "created_bucket": {}, "updated_bucket": {},
 	}
 	validSortBy = map[string]struct{}{
-		"created_at": {}, "updated_at": {}, "priority": {},
+		"created_at": {}, "updated_at": {}, "priority": {}, "priority_rating": {},
 		"due_date": {}, "start_date": {}, "title": {},
 	}
 	validSortDir = map[string]struct{}{

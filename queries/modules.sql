@@ -129,6 +129,10 @@ ORDER BY
          THEN m.title END ASC NULLS LAST,
     CASE WHEN sqlc.arg('sort_by')::text = 'title' AND sqlc.arg('sort_dir')::text = 'desc'
          THEN m.title END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'created_at' AND sqlc.arg('sort_dir')::text = 'asc'
+         THEN m.created_at END ASC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_by')::text = 'created_at' AND sqlc.arg('sort_dir')::text = 'desc'
+         THEN m.created_at END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3;
 
