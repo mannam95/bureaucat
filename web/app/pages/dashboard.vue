@@ -233,15 +233,52 @@ const tips: { id: string; show: () => boolean }[] = [
 
 const currentTip = ref<string | null>(null);
 
+// Uniform compact-card width: measure the widest card's natural width (bounded
+// by its own min/max) and apply it to all, so cards line up without leaving
+// extra whitespace for short names. Pure CSS can't size items to the widest
+// sibling's content, so we measure — cheap for a handful of cards, re-run on
+// data/scope change and on window resize.
+const projectsRow = ref<HTMLElement | null>(null);
+const cardWidth = ref("");
+
+async function syncCardWidths() {
+  const row = projectsRow.value;
+  if (!row) return;
+  cardWidth.value = ""; // release to natural width to measure
+  await nextTick();
+  const cards = row.querySelectorAll<HTMLElement>("[data-project-card]");
+  if (!cards.length) return;
+  let max = 0;
+  cards.forEach((c) => {
+    if (c.offsetWidth > max) max = c.offsetWidth;
+  });
+  cardWidth.value = `${max}px`;
+}
+
+watch([projects, showAllWorkspaces], () => nextTick(syncCardWidths));
+
+let resizeFrame = 0;
+function onResize() {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(syncCardWidths);
+}
+
 onMounted(async () => {
   fetchProjects();
   fetchAllProjects();
   fetchMyTasks();
 
+  window.addEventListener("resize", onResize);
+  nextTick(syncCardWidths);
+
   const applicable = tips.filter((t) => t.show());
   if (applicable.length > 0) {
     currentTip.value = applicable[Math.floor(Math.random() * applicable.length)].id;
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", onResize);
 });
 </script>
 
@@ -388,12 +425,13 @@ onMounted(async () => {
           </div>
 
           <!-- Projects grid -->
-          <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div v-else ref="projectsRow" class="flex flex-wrap gap-3">
             <ProjectCard
               v-for="project in projects"
               :key="project.id"
               :project="project"
               :show-workspace="showAllWorkspaces"
+              :width="cardWidth"
               compact
             />
           </div>

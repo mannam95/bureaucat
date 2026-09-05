@@ -9,6 +9,9 @@ const props = defineProps<{
   showWorkspace?: boolean;
   // Compact horizontal card for dense rows (e.g. the dashboard projects strip).
   compact?: boolean;
+  // Uniform width (a CSS length) for compact cards, set by the parent after it
+  // measures the widest card. Empty = natural width (used while measuring).
+  width?: string;
 }>();
 
 const { workspaces } = useWorkspaces();
@@ -34,7 +37,13 @@ const roleBadgeVariant = computed(() => {
 <template>
   <!-- Compact horizontal card: icon | name / key / workspace | chevron. The
        role is shown only for admins, as a small shield (hover reveals "Admin"). -->
-  <NuxtLink v-if="compact" :to="`/projects/${project.project_key}`">
+  <NuxtLink
+    v-if="compact"
+    :to="`/projects/${project.project_key}`"
+    data-project-card
+    :style="width ? { width } : undefined"
+    class="block w-full sm:w-fit sm:min-w-[13rem] sm:max-w-[22rem]"
+  >
     <div
       class="group flex h-full cursor-pointer items-center gap-3 rounded-xl border border-border/50 bg-background/50 p-3 shadow-sm transition-all hover:border-amber-500/30 hover:shadow-md hover:shadow-amber-500/5"
     >
@@ -48,7 +57,7 @@ const roleBadgeVariant = computed(() => {
 
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-1.5">
-          <span class="truncate text-sm font-semibold">{{ project.name }}</span>
+          <span :title="project.name" class="truncate text-sm font-semibold">{{ project.name }}</span>
           <span
             v-if="isAdmin"
             title="Admin"
@@ -58,17 +67,20 @@ const roleBadgeVariant = computed(() => {
             <Shield class="size-3.5" />
           </span>
         </div>
-        <span
-          class="font-mono text-xs text-muted-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-500"
-        >
-          {{ project.project_key }}
-        </span>
-        <div
-          v-if="showWorkspace && workspaceName"
-          class="mt-1 inline-flex w-fit items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-        >
-          <Building2 class="size-3 shrink-0" />
-          {{ workspaceName }}
+        <div class="mt-0.5 flex items-center gap-1.5">
+          <span
+            class="shrink-0 font-mono text-xs text-muted-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-500"
+          >
+            {{ project.project_key }}
+          </span>
+          <span
+            v-if="showWorkspace && workspaceName"
+            :title="workspaceName"
+            class="inline-flex min-w-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+          >
+            <Building2 class="size-3 shrink-0" />
+            <span class="truncate">{{ workspaceName }}</span>
+          </span>
         </div>
       </div>
 
