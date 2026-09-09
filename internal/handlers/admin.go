@@ -35,15 +35,29 @@ type AdminHandler struct {
 	store       store.Querier
 	authManager *auth.Manager
 	devMode     bool
+	// superAdminEmail is the break-glass account's email, taken from the
+	// SUPERADMIN_EMAIL env var. When set, the account matching it cannot be
+	// deleted, demoted, or password-reset through the API/frontend; it can only
+	// be changed at the database level or by pointing the env var elsewhere.
+	superAdminEmail string
 }
 
-// NewAdminHandler creates a new admin handler.
-func NewAdminHandler(store store.Querier, authManager *auth.Manager, devMode bool) *AdminHandler {
+// NewAdminHandler creates a new admin handler. superAdminEmail (may be empty)
+// designates the protected break-glass account.
+func NewAdminHandler(store store.Querier, authManager *auth.Manager, devMode bool, superAdminEmail string) *AdminHandler {
 	return &AdminHandler{
-		store:       store,
-		authManager: authManager,
-		devMode:     devMode,
+		store:           store,
+		authManager:     authManager,
+		devMode:         devMode,
+		superAdminEmail: strings.TrimSpace(superAdminEmail),
 	}
+}
+
+// isSuperAdmin reports whether the given email is the configured break-glass
+// superadmin. The comparison is case-insensitive; an unset env var protects
+// no one.
+func (h *AdminHandler) isSuperAdmin(email string) bool {
+	return h.superAdminEmail != "" && strings.EqualFold(strings.TrimSpace(email), h.superAdminEmail)
 }
 
 // CreateUserRequest represents the admin create user request.
@@ -164,13 +178,14 @@ func (h *AdminHandler) ListUsers(c *echo.Context) error {
 	userResponses := make([]UserResponse, len(users))
 	for i, u := range users {
 		userResponses[i] = UserResponse{
-			ID:        u.ID,
-			Username:  u.Username,
-			Email:     u.Email,
-			FirstName: u.FirstName,
-			LastName:  u.LastName,
-			UserType:  u.UserType,
-			CreatedAt: u.CreatedAt.Time,
+			ID:           u.ID,
+			Username:     u.Username,
+			Email:        u.Email,
+			FirstName:    u.FirstName,
+			LastName:     u.LastName,
+			UserType:     u.UserType,
+			CreatedAt:    u.CreatedAt.Time,
+			IsSuperAdmin: h.isSuperAdmin(u.Email),
 		}
 	}
 
@@ -300,9 +315,14 @@ func (h *AdminHandler) DeleteUser(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Check user exists
-	_, err = h.store.GetUserByID(ctx, userID)
+	targetUser, err := h.store.GetUserByID(ctx, userID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	// Protect the break-glass superadmin: it can only be removed at the DB level.
+	if h.isSuperAdmin(targetUser.Email) {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot delete the break-glass superadmin account")
 	}
 
 	// Delete user (cascade will delete refresh tokens)
@@ -469,6 +489,11 @@ func (h *AdminHandler) UpdateUserRole(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
+	// The break-glass superadmin must stay an admin; only the DB can demote it.
+	if h.isSuperAdmin(user.Email) && req.UserType != "admin" {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot change the role of the break-glass superadmin account")
+	}
+
 	err = h.store.UpdateUserType(ctx, store.UpdateUserTypeParams{
 		ID:       userID,
 		UserType: req.UserType,
@@ -527,9 +552,14 @@ func (h *AdminHandler) ResetUserPassword(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Check user exists
-	_, err = h.store.GetUserByID(ctx, userID)
+	targetUser, err := h.store.GetUserByID(ctx, userID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	// Protect the break-glass superadmin: its password is set at the DB level only.
+	if h.isSuperAdmin(targetUser.Email) {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot reset the password of the break-glass superadmin account")
 	}
 
 	// Hash new password

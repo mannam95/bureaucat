@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock } from "lucide-vue-next";
 
 definePageMeta({
   middleware: ["admin"],
@@ -17,6 +17,8 @@ interface User {
   last_name: string;
   user_type: string;
   created_at: string;
+  // True for the protected break-glass superadmin (from SUPERADMIN_EMAIL).
+  is_super_admin?: boolean;
 }
 
 // State
@@ -291,7 +293,15 @@ onMounted(() => {
                   </TableCell>
                   <TableCell>{{ formatDate(user.created_at) }}</TableCell>
                   <TableCell>
-                    <div class="flex items-center gap-1">
+                    <div
+                      v-if="user.is_super_admin"
+                      class="flex items-center gap-1.5 text-muted-foreground"
+                      title="Protected break-glass account — can only be changed at the database level or via the SUPERADMIN_EMAIL setting"
+                    >
+                      <Lock class="size-3.5" />
+                      <span class="text-xs">Protected</span>
+                    </div>
+                    <div v-else class="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"

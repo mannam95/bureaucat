@@ -50,6 +50,10 @@ type UserResponse struct {
 	UserType  string    `json:"user_type"`
 	AvatarURL *string   `json:"avatar_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// IsSuperAdmin marks the protected break-glass account so the UI can hide
+	// its delete/demote/reset controls. Only set on admin listings; omitted
+	// (false) everywhere else.
+	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
 }
 
 // AuthHandler handles authentication endpoints.

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
@@ -109,8 +110,14 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 
 	// Initialize handlers
 	if srv.store != nil {
+		// The break-glass superadmin (if configured) is identified by email. The
+		// account matching it cannot be deleted, demoted, or password-reset via
+		// the API; only the DB or this env var can change it.
+		superAdminEmail := strings.TrimSpace(os.Getenv("SUPERADMIN_EMAIL"))
+		ensureSuperAdmin(context.Background(), srv.store, superAdminEmail)
+
 		srv.authHandler = handlers.NewAuthHandler(srv.store, srv.authManager, devMode)
-		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.authManager, devMode)
+		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.authManager, devMode, superAdminEmail)
 
 		// Initialize upload service (S3-backed)
 		maxUploadSize := int64(10 * 1024 * 1024) // 10MB default
@@ -213,4 +220,28 @@ func (s *Server) Start(addr string) error {
 // Echo returns the underlying Echo instance
 func (s *Server) Echo() *echo.Echo {
 	return s.echo
+}
+
+// ensureSuperAdmin makes the configured break-glass account an admin at startup
+// if it exists but is not already one. It never creates the account (bootstrap
+// that once by hand) and is a no-op when SUPERADMIN_EMAIL is unset or the
+// account is missing, so a fresh install still boots cleanly.
+func ensureSuperAdmin(ctx context.Context, q store.Querier, email string) {
+	if email == "" {
+		return
+	}
+	user, err := q.GetUserByEmail(ctx, email)
+	if err != nil {
+		log.Printf("superadmin: %q not found yet; create it, then it is protected from deletion", email)
+		return
+	}
+	if user.UserType == "admin" {
+		log.Printf("superadmin: break-glass account %q is protected", email)
+		return
+	}
+	if err := q.UpdateUserType(ctx, store.UpdateUserTypeParams{ID: user.ID, UserType: "admin"}); err != nil {
+		log.Printf("superadmin: failed to promote %q to admin: %v", email, err)
+		return
+	}
+	log.Printf("superadmin: promoted break-glass account %q to admin", email)
 }
