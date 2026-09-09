@@ -425,6 +425,17 @@ func (q *Queries) GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype
 	return password_hash, err
 }
 
+const isUserActive = `-- name: IsUserActive :one
+SELECT is_active FROM users WHERE id = $1
+`
+
+func (q *Queries) IsUserActive(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserActive, id)
+	var is_active bool
+	err := row.Scan(&is_active)
+	return is_active, err
+}
+
 const linkProviderToUser = `-- name: LinkProviderToUser :exec
 UPDATE users
 SET auth_provider = $2, provider_user_id = $3, updated_at = NOW()
@@ -499,7 +510,7 @@ func (q *Queries) ListActiveRefreshTokens(ctx context.Context, arg ListActiveRef
 }
 
 const listUsersPaginated = `-- name: ListUsersPaginated :many
-SELECT id, username, email, first_name, last_name, user_type, created_at, updated_at
+SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
 ORDER BY created_at ASC
 LIMIT $1 OFFSET $2
@@ -517,6 +528,7 @@ type ListUsersPaginatedRow struct {
 	FirstName string             `json:"first_name"`
 	LastName  string             `json:"last_name"`
 	UserType  string             `json:"user_type"`
+	IsActive  bool               `json:"is_active"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
@@ -537,6 +549,7 @@ func (q *Queries) ListUsersPaginated(ctx context.Context, arg ListUsersPaginated
 			&i.FirstName,
 			&i.LastName,
 			&i.UserType,
+			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -573,7 +586,7 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, id uuid.UUID) error {
 }
 
 const searchUsersPaginated = `-- name: SearchUsersPaginated :many
-SELECT id, username, email, first_name, last_name, user_type, created_at, updated_at
+SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
 WHERE username ILIKE '%' || $1 || '%'
    OR email ILIKE '%' || $1 || '%'
@@ -597,6 +610,7 @@ type SearchUsersPaginatedRow struct {
 	FirstName string             `json:"first_name"`
 	LastName  string             `json:"last_name"`
 	UserType  string             `json:"user_type"`
+	IsActive  bool               `json:"is_active"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
@@ -617,6 +631,7 @@ func (q *Queries) SearchUsersPaginated(ctx context.Context, arg SearchUsersPagin
 			&i.FirstName,
 			&i.LastName,
 			&i.UserType,
+			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -628,6 +643,22 @@ func (q *Queries) SearchUsersPaginated(ctx context.Context, arg SearchUsersPagin
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserActive = `-- name: SetUserActive :exec
+UPDATE users
+SET is_active = $2, updated_at = NOW()
+WHERE id = $1
+`
+
+type SetUserActiveParams struct {
+	ID       uuid.UUID `json:"id"`
+	IsActive bool      `json:"is_active"`
+}
+
+func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) error {
+	_, err := q.db.Exec(ctx, setUserActive, arg.ID, arg.IsActive)
+	return err
 }
 
 const updateUserAvatarURL = `-- name: UpdateUserAvatarURL :exec

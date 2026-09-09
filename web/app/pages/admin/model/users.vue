@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX } from "lucide-vue-next";
 
 definePageMeta({
   middleware: ["admin"],
@@ -7,7 +7,7 @@ definePageMeta({
 
 useSeoMeta({ title: "Manage Users" });
 
-const { listUsers, createUser, deleteUser, updateUserRole, resetUserPassword } = useAdmin();
+const { listUsers, createUser, deleteUser, updateUserRole, resetUserPassword, setUserActive } = useAdmin();
 
 interface User {
   id: string;
@@ -19,6 +19,8 @@ interface User {
   created_at: string;
   // True for the protected break-glass superadmin (from SUPERADMIN_EMAIL).
   is_super_admin?: boolean;
+  // True when an admin has deactivated the account (kept, but cannot sign in).
+  is_deactivated?: boolean;
 }
 
 // State
@@ -54,6 +56,11 @@ const userToDelete = ref<User | null>(null);
 const showRoleDialog = ref(false);
 const roleLoading = ref(false);
 const userToToggleRole = ref<User | null>(null);
+
+// Activate/deactivate dialog state
+const showActiveDialog = ref(false);
+const activeLoading = ref(false);
+const userToToggleActive = ref<User | null>(null);
 
 // Password reset dialog state
 const showPasswordDialog = ref(false);
@@ -144,6 +151,29 @@ async function handleToggleRole() {
   } else {
     error.value = result.error || "Failed to update role";
     showRoleDialog.value = false;
+  }
+}
+
+function confirmToggleActive(user: User) {
+  userToToggleActive.value = user;
+  showActiveDialog.value = true;
+}
+
+async function handleToggleActive() {
+  if (!userToToggleActive.value) return;
+
+  activeLoading.value = true;
+  const nextActive = userToToggleActive.value.is_deactivated === true;
+  const result = await setUserActive(userToToggleActive.value.id, nextActive);
+  activeLoading.value = false;
+
+  if (result.success) {
+    showActiveDialog.value = false;
+    userToToggleActive.value = null;
+    await fetchUsers();
+  } else {
+    error.value = result.error || "Failed to update user status";
+    showActiveDialog.value = false;
   }
 }
 
@@ -267,28 +297,37 @@ onMounted(() => {
                   <TableHead>Email</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead class="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow v-if="loading">
-                  <TableCell colspan="6" class="py-8 text-center">
+                  <TableCell colspan="7" class="py-8 text-center">
                     <Loader2 class="mx-auto size-6 animate-spin" />
                   </TableCell>
                 </TableRow>
                 <TableRow v-else-if="users.length === 0">
-                  <TableCell colspan="6" class="py-8 text-center text-muted-foreground">
+                  <TableCell colspan="7" class="py-8 text-center text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
-                <TableRow v-for="user in users" :key="user.id">
+                <TableRow v-for="user in users" :key="user.id" :class="{ 'opacity-60': user.is_deactivated }">
                   <TableCell class="font-medium">{{ user.username }}</TableCell>
                   <TableCell>{{ user.email }}</TableCell>
                   <TableCell>{{ user.first_name }} {{ user.last_name }}</TableCell>
                   <TableCell>
                     <Badge :variant="user.user_type === 'admin' ? 'default' : 'secondary'">
                       {{ user.user_type }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge v-if="user.is_deactivated" variant="outline" class="border-destructive/40 text-destructive">
+                      Deactivated
+                    </Badge>
+                    <Badge v-else variant="outline" class="border-emerald-500/40 text-emerald-600 dark:text-emerald-500">
+                      Active
                     </Badge>
                   </TableCell>
                   <TableCell>{{ formatDate(user.created_at) }}</TableCell>
@@ -311,6 +350,16 @@ onMounted(() => {
                       >
                         <Shield v-if="user.user_type !== 'admin'" class="size-4" />
                         <ShieldOff v-else class="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        :aria-label="user.is_deactivated ? 'Activate user' : 'Deactivate user'"
+                        :title="user.is_deactivated ? 'Activate user' : 'Deactivate user'"
+                        @click="confirmToggleActive(user)"
+                      >
+                        <UserCheck v-if="user.is_deactivated" class="size-4 text-emerald-600 dark:text-emerald-500" />
+                        <UserX v-else class="size-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -430,6 +479,38 @@ onMounted(() => {
               <Button :disabled="roleLoading" @click="handleToggleRole">
                 <Loader2 v-if="roleLoading" class="mr-2 size-4 animate-spin" />
                 {{ userToToggleRole?.user_type === 'admin' ? 'Demote to User' : 'Promote to Admin' }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <!-- Activate / Deactivate Dialog -->
+        <Dialog v-model:open="showActiveDialog">
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{{ userToToggleActive?.is_deactivated ? 'Activate User' : 'Deactivate User' }}</DialogTitle>
+              <DialogDescription>
+                <template v-if="userToToggleActive?.is_deactivated">
+                  Reactivate "{{ userToToggleActive?.username }}"? They will be able to sign in again
+                  with their existing password.
+                </template>
+                <template v-else>
+                  Deactivate "{{ userToToggleActive?.username }}"? They will be signed out and cannot
+                  sign in until reactivated. The account and password are kept, not deleted.
+                </template>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" @click="showActiveDialog = false" :disabled="activeLoading">
+                Cancel
+              </Button>
+              <Button
+                :variant="userToToggleActive?.is_deactivated ? 'default' : 'destructive'"
+                :disabled="activeLoading"
+                @click="handleToggleActive"
+              >
+                <Loader2 v-if="activeLoading" class="mr-2 size-4 animate-spin" />
+                {{ userToToggleActive?.is_deactivated ? 'Activate' : 'Deactivate' }}
               </Button>
             </DialogFooter>
           </DialogContent>

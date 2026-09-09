@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -54,6 +55,10 @@ type UserResponse struct {
 	// its delete/demote/reset controls. Only set on admin listings; omitted
 	// (false) everywhere else.
 	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
+	// IsDeactivated is true when an admin has disabled the account. Only set on
+	// admin listings; omitted (false = active) everywhere else. Expressed as the
+	// negative so active accounts serialize nothing.
+	IsDeactivated bool `json:"is_deactivated,omitempty"`
 }
 
 // AuthHandler handles authentication endpoints.
@@ -621,7 +626,22 @@ func userFromGetByIDRow(u store.GetUserByIDRow) userInfo {
 
 // GenerateTokensAndSetCookies creates access + refresh tokens, stores refresh in DB, and sets cookies.
 // Returns the AuthResponse data without sending it. Used by both normal auth and SSO callback.
+// ErrUserDeactivated is returned by GenerateTokensAndSetCookies when the account
+// has been deactivated by an admin. Every login and refresh path funnels through
+// that function, so this single check blocks password sign-in, SSO sign-in, and
+// token refresh alike.
+var ErrUserDeactivated = errors.New("account is deactivated")
+
 func (h *AuthHandler) GenerateTokensAndSetCookies(c *echo.Context, ctx context.Context, userID uuid.UUID, username, userType string, user userInfo) (*AuthResponse, error) {
+	// Refuse to issue tokens for a deactivated account.
+	active, err := h.store.IsUserActive(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !active {
+		return nil, ErrUserDeactivated
+	}
+
 	// Generate access token
 	accessToken, expiresAt, err := h.authManager.GenerateAccessToken(userID, username, userType)
 	if err != nil {
@@ -671,6 +691,9 @@ func (h *AuthHandler) GenerateTokensAndSetCookies(c *echo.Context, ctx context.C
 func (h *AuthHandler) generateAndSetTokens(c *echo.Context, ctx context.Context, userID uuid.UUID, username, userType string, user userInfo) error {
 	resp, err := h.GenerateTokensAndSetCookies(c, ctx, userID, username, userType, user)
 	if err != nil {
+		if errors.Is(err, ErrUserDeactivated) {
+			return echo.NewHTTPError(http.StatusForbidden, "your account has been deactivated; contact an administrator")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to generate tokens")
 	}
 	return c.JSON(http.StatusOK, resp)

@@ -51,13 +51,13 @@ WHERE user_id = $1 AND revoked_at IS NULL;
 SELECT COUNT(*) FROM users;
 
 -- name: ListUsersPaginated :many
-SELECT id, username, email, first_name, last_name, user_type, created_at, updated_at
+SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
 ORDER BY created_at ASC
 LIMIT $1 OFFSET $2;
 
 -- name: SearchUsersPaginated :many
-SELECT id, username, email, first_name, last_name, user_type, created_at, updated_at
+SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
 WHERE username ILIKE '%' || $1 || '%'
    OR email ILIKE '%' || $1 || '%'
@@ -141,4 +141,12 @@ WHERE id = $1;
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2, updated_at = NOW()
+WHERE id = $1;
+
+-- name: IsUserActive :one
+SELECT is_active FROM users WHERE id = $1;
+
+-- name: SetUserActive :exec
+UPDATE users
+SET is_active = $2, updated_at = NOW()
 WHERE id = $1;

@@ -182,6 +182,7 @@ type Querier interface {
 	HasTaskLabel(ctx context.Context, arg HasTaskLabelParams) (bool, error)
 	IsProjectMember(ctx context.Context, arg IsProjectMemberParams) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
+	IsUserActive(ctx context.Context, id uuid.UUID) (bool, error)
 	IsWorkspaceMember(ctx context.Context, arg IsWorkspaceMemberParams) (bool, error)
 	LinkProviderToUser(ctx context.Context, arg LinkProviderToUserParams) error
 	ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID) ([]ListActiveCyclesForUserRow, error)
@@ -323,6 +324,7 @@ type Querier interface {
 	// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
 	// as a subtask.
 	SetTaskParent(ctx context.Context, arg SetTaskParentParams) error
+	SetUserActive(ctx context.Context, arg SetUserActiveParams) error
 	SoftDeleteComment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteCycle(ctx context.Context, id uuid.UUID) error
 	SoftDeleteModule(ctx context.Context, id uuid.UUID) error

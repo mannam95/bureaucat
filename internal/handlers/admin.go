@@ -155,6 +155,7 @@ func (h *AdminHandler) ListUsers(c *echo.Context) error {
 				FirstName: u.FirstName,
 				LastName:  u.LastName,
 				UserType:  u.UserType,
+				IsActive:  u.IsActive,
 				CreatedAt: u.CreatedAt,
 				UpdatedAt: u.UpdatedAt,
 			}
@@ -178,14 +179,15 @@ func (h *AdminHandler) ListUsers(c *echo.Context) error {
 	userResponses := make([]UserResponse, len(users))
 	for i, u := range users {
 		userResponses[i] = UserResponse{
-			ID:           u.ID,
-			Username:     u.Username,
-			Email:        u.Email,
-			FirstName:    u.FirstName,
-			LastName:     u.LastName,
-			UserType:     u.UserType,
-			CreatedAt:    u.CreatedAt.Time,
-			IsSuperAdmin: h.isSuperAdmin(u.Email),
+			ID:            u.ID,
+			Username:      u.Username,
+			Email:         u.Email,
+			FirstName:     u.FirstName,
+			LastName:      u.LastName,
+			UserType:      u.UserType,
+			CreatedAt:     u.CreatedAt.Time,
+			IsSuperAdmin:  h.isSuperAdmin(u.Email),
+			IsDeactivated: !u.IsActive,
 		}
 	}
 
@@ -583,6 +585,90 @@ func (h *AdminHandler) ResetUserPassword(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "password reset successfully"})
+}
+
+// SetUserActiveRequest represents the request to activate or deactivate a user.
+type SetUserActiveRequest struct {
+	Active *bool `json:"active"`
+}
+
+// SetUserActive activates or deactivates a user without deleting the account.
+// A deactivated user cannot sign in or refresh, and their live sessions are
+// revoked; the account's data and password are preserved, so reactivating
+// restores access with the same credentials.
+//
+//	@Summary		Activate or deactivate a user
+//	@Description	Enable or disable a user account without deleting it.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"User ID"
+//	@Param			body	body		SetUserActiveRequest	true	"Active flag"
+//	@Success		200		{object}	UserResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/users/{id}/active [put]
+func (h *AdminHandler) SetUserActive(c *echo.Context) error {
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+
+	var req SetUserActiveRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.Active == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "active is required")
+	}
+
+	// Prevent self-deactivation so an admin cannot lock themselves out.
+	currentUserIDStr := c.Request().Header.Get(auth.HeaderUserID)
+	currentUserID, _ := uuid.Parse(currentUserIDStr)
+	if userID == currentUserID && !*req.Active {
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot deactivate yourself")
+	}
+
+	ctx := c.Request().Context()
+
+	// Check user exists
+	user, err := h.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	// The break-glass superadmin must stay usable; only the DB can disable it.
+	if h.isSuperAdmin(user.Email) && !*req.Active {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot deactivate the break-glass superadmin account")
+	}
+
+	if err := h.store.SetUserActive(ctx, store.SetUserActiveParams{ID: userID, IsActive: *req.Active}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user status")
+	}
+
+	// On deactivation, revoke all sessions so access ends now rather than
+	// lingering until the short-lived access token expires.
+	if !*req.Active {
+		if err := h.store.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to revoke sessions")
+		}
+	}
+
+	return c.JSON(http.StatusOK, UserResponse{
+		ID:            user.ID,
+		Username:      user.Username,
+		Email:         user.Email,
+		FirstName:     user.FirstName,
+		LastName:      user.LastName,
+		UserType:      user.UserType,
+		CreatedAt:     user.CreatedAt.Time,
+		IsSuperAdmin:  h.isSuperAdmin(user.Email),
+		IsDeactivated: !*req.Active,
+	})
 }
 
 // CleanupExpiredTokens hard-deletes all expired tokens.

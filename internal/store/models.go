@@ -564,6 +564,7 @@ type User struct {
 	AuthProvider   pgtype.Text        `json:"auth_provider"`
 	ProviderUserID pgtype.Text        `json:"provider_user_id"`
 	AvatarUrl      pgtype.Text        `json:"avatar_url"`
+	IsActive       bool               `json:"is_active"`
 }
 
 type UserPreference struct {

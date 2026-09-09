@@ -325,6 +325,33 @@ export function useAdmin() {
     }
   }
 
+  async function setUserActive(userId: string, active: boolean): Promise<{
+    success: boolean;
+    data?: User;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/users/${userId}/active`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ active }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to update user status" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function getStats(from: string, to: string): Promise<{
     success: boolean;
     data?: AdminStats;
@@ -402,6 +429,7 @@ export function useAdmin() {
     deleteUser,
     updateUserRole,
     resetUserPassword,
+    setUserActive,
     listTokens,
     revokeToken,
     cleanupExpiredTokens,
