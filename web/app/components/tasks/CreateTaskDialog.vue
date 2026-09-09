@@ -132,9 +132,9 @@ const form = ref({
   figma_link: "",
   branch: "",
   pull_request: "",
-  // Originator/Requester (user id). Defaults to the current user (self-raised),
-  // and is required — see handleSubmit.
-  originator: "" as string,
+  // Originators/Requesters (user ids). Defaults to the current user (self-raised),
+  // and at least one is required — see handleSubmit.
+  originators: [] as string[],
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -182,8 +182,8 @@ function resetForm() {
     figma_link: "",
     branch: "",
     pull_request: "",
-    // Self-raised by default: pre-fill the originator with the current user.
-    originator: user.value?.id || "",
+    // Self-raised by default: pre-fill the requester with the current user.
+    originators: user.value?.id ? [user.value.id] : [],
   };
   selectedTemplateId.value = "";
   error.value = null;
@@ -315,8 +315,8 @@ async function handleSubmit() {
     error.value = "Please select a project";
     return;
   }
-  if (!form.value.originator) {
-    error.value = "Please choose an originator / requester";
+  if (form.value.originators.length === 0) {
+    error.value = "Please choose at least one originator / requester";
     return;
   }
 
@@ -333,7 +333,7 @@ async function handleSubmit() {
     figma_link: form.value.figma_link.trim() || undefined,
     branch: form.value.branch.trim() || undefined,
     pull_request: form.value.pull_request.trim() || undefined,
-    originator: form.value.originator,
+    originators: form.value.originators.length > 0 ? form.value.originators : undefined,
     parent_task_number: props.parentTaskNumber,
   });
 
@@ -752,14 +752,15 @@ function removeLabel(labelId: string) {
               Originator / Requester <span class="text-destructive">*</span>
             </Label>
             <MemberSelector
-              v-model="form.originator"
+              v-model="form.originators"
               :members="effMembers"
-              add-label="Pick"
+              multi
+              add-label="Add"
               empty-label="Choose who this request is from"
               :disabled="loading"
             />
             <p class="text-xs text-muted-foreground">
-              Whose need this is — defaults to you; required.
+              Whose need this is — defaults to you; at least one required.
             </p>
           </div>
 
@@ -871,7 +872,7 @@ function removeLabel(labelId: string) {
           >
             Cancel
           </Button>
-          <Button type="submit" :disabled="loading || !form.title || !form.originator || !effectiveProjectKey">
+          <Button type="submit" :disabled="loading || !form.title || form.originators.length === 0 || !effectiveProjectKey">
             <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
             {{ isSubtaskMode ? "Create Subtask" : "Create Task" }}
           </Button>

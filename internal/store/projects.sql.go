@@ -104,6 +104,31 @@ func (q *Queries) AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) erro
 	return err
 }
 
+const addTaskOriginator = `-- name: AddTaskOriginator :one
+INSERT INTO task_originators (task_id, user_id, added_by)
+VALUES ($1, $2, $3)
+RETURNING id, task_id, user_id, added_at, added_by
+`
+
+type AddTaskOriginatorParams struct {
+	TaskID  uuid.UUID `json:"task_id"`
+	UserID  uuid.UUID `json:"user_id"`
+	AddedBy uuid.UUID `json:"added_by"`
+}
+
+func (q *Queries) AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorParams) (TaskOriginator, error) {
+	row := q.db.QueryRow(ctx, addTaskOriginator, arg.TaskID, arg.UserID, arg.AddedBy)
+	var i TaskOriginator
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.UserID,
+		&i.AddedAt,
+		&i.AddedBy,
+	)
+	return i, err
+}
+
 const cascadeSoftDeleteSubtasks = `-- name: CascadeSoftDeleteSubtasks :exec
 UPDATE tasks
 SET deleted_at = NOW(), updated_at = NOW()
@@ -190,6 +215,17 @@ SELECT COUNT(*) FROM comments WHERE task_id = $1 AND deleted_at IS NULL
 
 func (q *Queries) CountTaskComments(ctx context.Context, taskID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countTaskComments, taskID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTaskOriginators = `-- name: CountTaskOriginators :one
+SELECT COUNT(*) FROM task_originators WHERE task_id = $1
+`
+
+func (q *Queries) CountTaskOriginators(ctx context.Context, taskID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTaskOriginators, taskID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -475,9 +511,9 @@ func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectState
 
 const createTask = `-- name: CreateTask :one
 
-INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, originator_id, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating)
-VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($10::uuid, $7), $8, $9, $11, $12, $13, $14, COALESCE($15, 0))
-RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, originator_id, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
+INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 0))
+RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
 
 type CreateTaskParams struct {
@@ -490,7 +526,6 @@ type CreateTaskParams struct {
 	CreatedBy      uuid.UUID          `json:"created_by"`
 	StartDate      pgtype.Timestamptz `json:"start_date"`
 	DueDate        pgtype.Timestamptz `json:"due_date"`
-	OriginatorID   pgtype.UUID        `json:"originator_id"`
 	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
 	FigmaLink      pgtype.Text        `json:"figma_link"`
 	Branch         pgtype.Text        `json:"branch"`
@@ -507,7 +542,6 @@ type CreateTaskRow struct {
 	StateID        uuid.UUID          `json:"state_id"`
 	Priority       int32              `json:"priority"`
 	CreatedBy      uuid.UUID          `json:"created_by"`
-	OriginatorID   uuid.UUID          `json:"originator_id"`
 	StartDate      pgtype.Timestamptz `json:"start_date"`
 	DueDate        pgtype.Timestamptz `json:"due_date"`
 	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
@@ -521,8 +555,8 @@ type CreateTaskRow struct {
 }
 
 // ==================== TASKS ====================
-// originator_id defaults to the creator ($7) when the caller doesn't supply one,
-// so self-raised tickets need no extra input while the field is always set.
+// Requesters/originators live in task_originators; the caller inserts them after
+// creating the task (defaulting to the creator when none are given).
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.ProjectID,
@@ -534,7 +568,6 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		arg.CreatedBy,
 		arg.StartDate,
 		arg.DueDate,
-		arg.OriginatorID,
 		arg.ParentTaskID,
 		arg.FigmaLink,
 		arg.Branch,
@@ -551,7 +584,6 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.StateID,
 		&i.Priority,
 		&i.CreatedBy,
-		&i.OriginatorID,
 		&i.StartDate,
 		&i.DueDate,
 		&i.ParentTaskID,
@@ -975,57 +1007,50 @@ func (q *Queries) GetTaskAttachEligibility(ctx context.Context, id uuid.UUID) (G
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.originator_id, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
-       uo.username as originator_username, uo.first_name as originator_first_name, uo.last_name as originator_last_name, uo.avatar_url as originator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
        (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 JOIN users u ON t.created_by = u.id
-JOIN users uo ON t.originator_id = uo.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.id = $1 AND t.deleted_at IS NULL
 `
 
 type GetTaskByIDRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	ProjectID           uuid.UUID          `json:"project_id"`
-	TaskNumber          int32              `json:"task_number"`
-	Title               string             `json:"title"`
-	Description         pgtype.Text        `json:"description"`
-	StateID             uuid.UUID          `json:"state_id"`
-	Priority            int32              `json:"priority"`
-	CreatedBy           uuid.UUID          `json:"created_by"`
-	OriginatorID        uuid.UUID          `json:"originator_id"`
-	StartDate           pgtype.Timestamptz `json:"start_date"`
-	DueDate             pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID        pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink           pgtype.Text        `json:"figma_link"`
-	Branch              pgtype.Text        `json:"branch"`
-	PullRequest         pgtype.Text        `json:"pull_request"`
-	PriorityRating      int32              `json:"priority_rating"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-	ProjectKey          string             `json:"project_key"`
-	StateName           string             `json:"state_name"`
-	StateType           string             `json:"state_type"`
-	StateColor          pgtype.Text        `json:"state_color"`
-	CreatorUsername     string             `json:"creator_username"`
-	CreatorFirstName    string             `json:"creator_first_name"`
-	CreatorLastName     string             `json:"creator_last_name"`
-	CreatorAvatarUrl    pgtype.Text        `json:"creator_avatar_url"`
-	OriginatorUsername  string             `json:"originator_username"`
-	OriginatorFirstName string             `json:"originator_first_name"`
-	OriginatorLastName  string             `json:"originator_last_name"`
-	OriginatorAvatarUrl pgtype.Text        `json:"originator_avatar_url"`
-	ParentTaskNumber    pgtype.Int4        `json:"parent_task_number"`
-	ParentTaskTitle     pgtype.Text        `json:"parent_task_title"`
-	SubtaskCount        int64              `json:"subtask_count"`
+	ID               uuid.UUID          `json:"id"`
+	ProjectID        uuid.UUID          `json:"project_id"`
+	TaskNumber       int32              `json:"task_number"`
+	Title            string             `json:"title"`
+	Description      pgtype.Text        `json:"description"`
+	StateID          uuid.UUID          `json:"state_id"`
+	Priority         int32              `json:"priority"`
+	CreatedBy        uuid.UUID          `json:"created_by"`
+	StartDate        pgtype.Timestamptz `json:"start_date"`
+	DueDate          pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID     pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink        pgtype.Text        `json:"figma_link"`
+	Branch           pgtype.Text        `json:"branch"`
+	PullRequest      pgtype.Text        `json:"pull_request"`
+	PriorityRating   int32              `json:"priority_rating"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	ProjectKey       string             `json:"project_key"`
+	StateName        string             `json:"state_name"`
+	StateType        string             `json:"state_type"`
+	StateColor       pgtype.Text        `json:"state_color"`
+	CreatorUsername  string             `json:"creator_username"`
+	CreatorFirstName string             `json:"creator_first_name"`
+	CreatorLastName  string             `json:"creator_last_name"`
+	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
+	ParentTaskNumber pgtype.Int4        `json:"parent_task_number"`
+	ParentTaskTitle  pgtype.Text        `json:"parent_task_title"`
+	SubtaskCount     int64              `json:"subtask_count"`
 }
 
 func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow, error) {
@@ -1040,7 +1065,6 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 		&i.StateID,
 		&i.Priority,
 		&i.CreatedBy,
-		&i.OriginatorID,
 		&i.StartDate,
 		&i.DueDate,
 		&i.ParentTaskID,
@@ -1059,10 +1083,6 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 		&i.CreatorFirstName,
 		&i.CreatorLastName,
 		&i.CreatorAvatarUrl,
-		&i.OriginatorUsername,
-		&i.OriginatorFirstName,
-		&i.OriginatorLastName,
-		&i.OriginatorAvatarUrl,
 		&i.ParentTaskNumber,
 		&i.ParentTaskTitle,
 		&i.SubtaskCount,
@@ -1071,18 +1091,16 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 }
 
 const getTaskByProjectAndNumber = `-- name: GetTaskByProjectAndNumber :one
-SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.originator_id, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.start_date, t.due_date, t.parent_task_id, t.figma_link, t.branch, t.pull_request, t.priority_rating, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
-       uo.username as originator_username, uo.first_name as originator_first_name, uo.last_name as originator_last_name, uo.avatar_url as originator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
        (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 JOIN users u ON t.created_by = u.id
-JOIN users uo ON t.originator_id = uo.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.project_id = $1 AND t.task_number = $2 AND t.deleted_at IS NULL
 `
@@ -1093,40 +1111,35 @@ type GetTaskByProjectAndNumberParams struct {
 }
 
 type GetTaskByProjectAndNumberRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	ProjectID           uuid.UUID          `json:"project_id"`
-	TaskNumber          int32              `json:"task_number"`
-	Title               string             `json:"title"`
-	Description         pgtype.Text        `json:"description"`
-	StateID             uuid.UUID          `json:"state_id"`
-	Priority            int32              `json:"priority"`
-	CreatedBy           uuid.UUID          `json:"created_by"`
-	OriginatorID        uuid.UUID          `json:"originator_id"`
-	StartDate           pgtype.Timestamptz `json:"start_date"`
-	DueDate             pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID        pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink           pgtype.Text        `json:"figma_link"`
-	Branch              pgtype.Text        `json:"branch"`
-	PullRequest         pgtype.Text        `json:"pull_request"`
-	PriorityRating      int32              `json:"priority_rating"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-	ProjectKey          string             `json:"project_key"`
-	StateName           string             `json:"state_name"`
-	StateType           string             `json:"state_type"`
-	StateColor          pgtype.Text        `json:"state_color"`
-	CreatorUsername     string             `json:"creator_username"`
-	CreatorFirstName    string             `json:"creator_first_name"`
-	CreatorLastName     string             `json:"creator_last_name"`
-	CreatorAvatarUrl    pgtype.Text        `json:"creator_avatar_url"`
-	OriginatorUsername  string             `json:"originator_username"`
-	OriginatorFirstName string             `json:"originator_first_name"`
-	OriginatorLastName  string             `json:"originator_last_name"`
-	OriginatorAvatarUrl pgtype.Text        `json:"originator_avatar_url"`
-	ParentTaskNumber    pgtype.Int4        `json:"parent_task_number"`
-	ParentTaskTitle     pgtype.Text        `json:"parent_task_title"`
-	SubtaskCount        int64              `json:"subtask_count"`
+	ID               uuid.UUID          `json:"id"`
+	ProjectID        uuid.UUID          `json:"project_id"`
+	TaskNumber       int32              `json:"task_number"`
+	Title            string             `json:"title"`
+	Description      pgtype.Text        `json:"description"`
+	StateID          uuid.UUID          `json:"state_id"`
+	Priority         int32              `json:"priority"`
+	CreatedBy        uuid.UUID          `json:"created_by"`
+	StartDate        pgtype.Timestamptz `json:"start_date"`
+	DueDate          pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID     pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink        pgtype.Text        `json:"figma_link"`
+	Branch           pgtype.Text        `json:"branch"`
+	PullRequest      pgtype.Text        `json:"pull_request"`
+	PriorityRating   int32              `json:"priority_rating"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	ProjectKey       string             `json:"project_key"`
+	StateName        string             `json:"state_name"`
+	StateType        string             `json:"state_type"`
+	StateColor       pgtype.Text        `json:"state_color"`
+	CreatorUsername  string             `json:"creator_username"`
+	CreatorFirstName string             `json:"creator_first_name"`
+	CreatorLastName  string             `json:"creator_last_name"`
+	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
+	ParentTaskNumber pgtype.Int4        `json:"parent_task_number"`
+	ParentTaskTitle  pgtype.Text        `json:"parent_task_title"`
+	SubtaskCount     int64              `json:"subtask_count"`
 }
 
 func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByProjectAndNumberParams) (GetTaskByProjectAndNumberRow, error) {
@@ -1141,7 +1154,6 @@ func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByPr
 		&i.StateID,
 		&i.Priority,
 		&i.CreatedBy,
-		&i.OriginatorID,
 		&i.StartDate,
 		&i.DueDate,
 		&i.ParentTaskID,
@@ -1160,10 +1172,6 @@ func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByPr
 		&i.CreatorFirstName,
 		&i.CreatorLastName,
 		&i.CreatorAvatarUrl,
-		&i.OriginatorUsername,
-		&i.OriginatorFirstName,
-		&i.OriginatorLastName,
-		&i.OriginatorAvatarUrl,
 		&i.ParentTaskNumber,
 		&i.ParentTaskTitle,
 		&i.SubtaskCount,
@@ -1246,6 +1254,25 @@ func (q *Queries) IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) 
 	var is_assignee bool
 	err := row.Scan(&is_assignee)
 	return is_assignee, err
+}
+
+const isTaskOriginator = `-- name: IsTaskOriginator :one
+SELECT EXISTS (
+    SELECT 1 FROM task_originators
+    WHERE task_id = $1 AND user_id = $2
+) AS is_originator
+`
+
+type IsTaskOriginatorParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) IsTaskOriginator(ctx context.Context, arg IsTaskOriginatorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isTaskOriginator, arg.TaskID, arg.UserID)
+	var is_originator bool
+	err := row.Scan(&is_originator)
+	return is_originator, err
 }
 
 const listAllProjects = `-- name: ListAllProjects :many
@@ -1532,6 +1559,61 @@ func (q *Queries) ListLabelsForTasks(ctx context.Context, taskIds []uuid.UUID) (
 			&i.AddedAt,
 			&i.Name,
 			&i.Color,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOriginatorsForTasks = `-- name: ListOriginatorsForTasks :many
+
+SELECT to2.task_id, to2.id, to2.user_id, to2.added_at,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_originators to2
+JOIN users u ON to2.user_id = u.id
+WHERE to2.task_id = ANY($1::uuid[])
+ORDER BY to2.added_at ASC
+`
+
+type ListOriginatorsForTasksRow struct {
+	TaskID    uuid.UUID          `json:"task_id"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AddedAt   pgtype.Timestamptz `json:"added_at"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+// ==================== TASK ORIGINATORS ====================
+// Requesters/originators, many-to-many, mirroring task assignees. "to" is a SQL
+// keyword so the join table is aliased to2/o.
+func (q *Queries) ListOriginatorsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListOriginatorsForTasksRow, error) {
+	rows, err := q.db.Query(ctx, listOriginatorsForTasks, taskIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOriginatorsForTasksRow{}
+	for rows.Next() {
+		var i ListOriginatorsForTasksRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.ID,
+			&i.UserID,
+			&i.AddedAt,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -2196,6 +2278,59 @@ func (q *Queries) ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListT
 	return items, nil
 }
 
+const listTaskOriginators = `-- name: ListTaskOriginators :many
+SELECT o.id, o.task_id, o.user_id, o.added_at, o.added_by,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_originators o
+JOIN users u ON o.user_id = u.id
+WHERE o.task_id = $1
+ORDER BY o.added_at ASC
+`
+
+type ListTaskOriginatorsRow struct {
+	ID        uuid.UUID          `json:"id"`
+	TaskID    uuid.UUID          `json:"task_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AddedAt   pgtype.Timestamptz `json:"added_at"`
+	AddedBy   uuid.UUID          `json:"added_by"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+func (q *Queries) ListTaskOriginators(ctx context.Context, taskID uuid.UUID) ([]ListTaskOriginatorsRow, error) {
+	rows, err := q.db.Query(ctx, listTaskOriginators, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskOriginatorsRow{}
+	for rows.Next() {
+		var i ListTaskOriginatorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.UserID,
+			&i.AddedAt,
+			&i.AddedBy,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTaskParticipants = `-- name: ListTaskParticipants :many
 
 SELECT DISTINCT user_id FROM (
@@ -2755,6 +2890,21 @@ type RemoveTaskLabelParams struct {
 
 func (q *Queries) RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error {
 	_, err := q.db.Exec(ctx, removeTaskLabel, arg.TaskID, arg.LabelID)
+	return err
+}
+
+const removeTaskOriginator = `-- name: RemoveTaskOriginator :exec
+DELETE FROM task_originators
+WHERE task_id = $1 AND user_id = $2
+`
+
+type RemoveTaskOriginatorParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error {
+	_, err := q.db.Exec(ctx, removeTaskOriginator, arg.TaskID, arg.UserID)
 	return err
 }
 
@@ -3339,7 +3489,6 @@ SET title = COALESCE($2, title),
     branch = COALESCE($11, branch),
     pull_request = COALESCE($12, pull_request),
     priority_rating = COALESCE($13, priority_rating),
-    originator_id = COALESCE($14, originator_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
@@ -3359,7 +3508,6 @@ type UpdateTaskParams struct {
 	Branch          pgtype.Text        `json:"branch"`
 	PullRequest     pgtype.Text        `json:"pull_request"`
 	PriorityRating  pgtype.Int4        `json:"priority_rating"`
-	OriginatorID    pgtype.UUID        `json:"originator_id"`
 }
 
 type UpdateTaskRow struct {
@@ -3398,7 +3546,6 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		arg.Branch,
 		arg.PullRequest,
 		arg.PriorityRating,
-		arg.OriginatorID,
 	)
 	var i UpdateTaskRow
 	err := row.Scan(

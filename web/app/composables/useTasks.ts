@@ -300,6 +300,58 @@ export function useTasks() {
       return { success: false, error: "Network error" };
     }
   }
+  async function addOriginator(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/originators`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ user_id: userId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to add requester" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+  async function removeOriginator(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/originators/${userId}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeader(),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to remove requester" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
 
   // Labels
   async function addLabel(
@@ -567,6 +619,8 @@ export function useTasks() {
     // Assignees
     addAssignee,
     removeAssignee,
+    addOriginator,
+    removeOriginator,
 
     // Labels
     addLabel,

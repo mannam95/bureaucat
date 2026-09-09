@@ -29,6 +29,7 @@ type Querier interface {
 	AddTaskAssignee(ctx context.Context, arg AddTaskAssigneeParams) (TaskAssignee, error)
 	// ==================== TASK LABELS ====================
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
+	AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorParams) (TaskOriginator, error)
 	// ==================== CYCLE TASKS ====================
 	AddTasksToCycle(ctx context.Context, arg AddTasksToCycleParams) error
 	// ==================== WORKSPACE MEMBERS ====================
@@ -60,6 +61,7 @@ type Querier interface {
 	CountSearchUsers(ctx context.Context, dollar_1 pgtype.Text) (int64, error)
 	CountSubtasks(ctx context.Context) (int64, error)
 	CountTaskComments(ctx context.Context, taskID uuid.UUID) (int64, error)
+	CountTaskOriginators(ctx context.Context, taskID uuid.UUID) (int64, error)
 	CountTasksByAssignee(ctx context.Context, arg CountTasksByAssigneeParams) (int64, error)
 	CountTasksInState(ctx context.Context, stateID uuid.UUID) (int64, error)
 	CountTopLevelTasks(ctx context.Context) (int64, error)
@@ -70,7 +72,10 @@ type Querier interface {
 	CountUserWorkspaces(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUserWorkspacesFiltered(ctx context.Context, arg CountUserWorkspacesFilteredParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	// The three tab counts in one row, so the admin page shows all of them
+	// regardless of which tab is selected.
 	CountUsersByState(ctx context.Context) (CountUsersByStateRow, error)
+	// Total rows matching the selected state and search, for pagination.
 	CountUsersByStateSearch(ctx context.Context, arg CountUsersByStateSearchParams) (int64, error)
 	CountWorkspaces(ctx context.Context) (int64, error)
 	// ==================== ACTIVITY LOG ====================
@@ -99,8 +104,8 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSSOUser(ctx context.Context, arg CreateSSOUserParams) (CreateSSOUserRow, error)
 	// ==================== TASKS ====================
-	// originator_id defaults to the creator ($7) when the caller doesn't supply one,
-	// so self-raised tickets need no extra input while the field is always set.
+	// Requesters/originators live in task_originators; the caller inserts them after
+	// creating the task (defaulting to the creator when none are given).
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
 	// ==================== TASK TEMPLATES ====================
 	CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplateParams) (TaskTemplate, error)
@@ -131,6 +136,9 @@ type Querier interface {
 	GetCycleMetrics(ctx context.Context, cycleID uuid.UUID) (GetCycleMetricsRow, error)
 	GetCycleStateBreakdown(ctx context.Context, cycleID uuid.UUID) ([]GetCycleStateBreakdownRow, error)
 	GetDefaultProjectState(ctx context.Context, projectID uuid.UUID) (ProjectState, error)
+	// A single global preference row for one user, or no rows when unset (the
+	// caller then applies the registry default). Used off the request path, e.g.
+	// the notifier checking whether a recipient wants email.
 	GetGlobalPreference(ctx context.Context, arg GetGlobalPreferenceParams) (GetGlobalPreferenceRow, error)
 	GetLastActivityChecksum(ctx context.Context, taskID uuid.UUID) (string, error)
 	// COALESCE the joined user fields because LEFT JOIN on nullable lead_id would
@@ -180,6 +188,8 @@ type Querier interface {
 	// Deliberately narrow: only the password hash, so it is never carried around on
 	// the general-purpose user row. Used to verify the current password on change.
 	GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype.Text, error)
+	// The state of the account that owns a conflicting email/username, so create
+	// can explain whether it's active, deactivated or deleted.
 	GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error)
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
@@ -187,6 +197,7 @@ type Querier interface {
 	HasTaskLabel(ctx context.Context, arg HasTaskLabelParams) (bool, error)
 	IsProjectMember(ctx context.Context, arg IsProjectMemberParams) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
+	IsTaskOriginator(ctx context.Context, arg IsTaskOriginatorParams) (bool, error)
 	IsUserActive(ctx context.Context, id uuid.UUID) (bool, error)
 	IsWorkspaceMember(ctx context.Context, arg IsWorkspaceMemberParams) (bool, error)
 	LinkProviderToUser(ctx context.Context, arg LinkProviderToUserParams) error
@@ -225,6 +236,10 @@ type Querier interface {
 	ListModuleTasks(ctx context.Context, arg ListModuleTasksParams) ([]ListModuleTasksRow, error)
 	// A recipient's notifications, newest first, with task/project/actor display fields.
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
+	// ==================== TASK ORIGINATORS ====================
+	// Requesters/originators, many-to-many, mirroring task assignees. "to" is a SQL
+	// keyword so the join table is aliased to2/o.
+	ListOriginatorsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListOriginatorsForTasksRow, error)
 	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]ListPersonalAccessTokensByUserRow, error)
 	ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error)
 	ListProjectCyclesAll(ctx context.Context, projectID uuid.UUID) ([]ListProjectCyclesAllRow, error)
@@ -267,6 +282,7 @@ type Querier interface {
 	ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListTaskLabelsRow, error)
 	// The modules a task belongs to (a task can be in more than one).
 	ListTaskModules(ctx context.Context, taskID uuid.UUID) ([]ListTaskModulesRow, error)
+	ListTaskOriginators(ctx context.Context, taskID uuid.UUID) ([]ListTaskOriginatorsRow, error)
 	// ==================== TASK PARTICIPANTS ====================
 	// Everyone involved with a task: its creator, current assignees, and anyone who
 	// has commented (non-deleted comments). Used to fan out notifications.
@@ -282,6 +298,9 @@ type Querier interface {
 	ListUserProjectsFiltered(ctx context.Context, arg ListUserProjectsFilteredParams) ([]ListUserProjectsFilteredRow, error)
 	ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]Workspace, error)
 	ListUserWorkspacesFiltered(ctx context.Context, arg ListUserWorkspacesFilteredParams) ([]Workspace, error)
+	// One page of users in the selected state, filtered by an optional search.
+	// Actor names for who deactivated/deleted are folded in via LEFT JOINs and
+	// COALESCEd to non-null strings ('' when unknown).
 	ListUsersByState(ctx context.Context, arg ListUsersByStateParams) ([]ListUsersByStateRow, error)
 	ListUsersPaginated(ctx context.Context, arg ListUsersPaginatedParams) ([]ListUsersPaginatedRow, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
@@ -295,17 +314,19 @@ type Querier interface {
 	ProjectKeyExists(ctx context.Context, projectKey string) (bool, error)
 	ProjectViewSlugExists(ctx context.Context, arg ProjectViewSlugExistsParams) (bool, error)
 	ProjectsPerWorkspace(ctx context.Context) ([]ProjectsPerWorkspaceRow, error)
+	ReactivateUser(ctx context.Context, id uuid.UUID) error
 	RemoveModuleMember(ctx context.Context, arg RemoveModuleMemberParams) error
 	RemoveModuleTask(ctx context.Context, arg RemoveModuleTaskParams) error
 	RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error
 	RemoveTaskAssignee(ctx context.Context, arg RemoveTaskAssigneeParams) error
 	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
+	RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
-	ReactivateUser(ctx context.Context, id uuid.UUID) error
 	RestoreProject(ctx context.Context, id uuid.UUID) error
+	// Restores a deleted account back to Active (usable right away).
 	RestoreUser(ctx context.Context, id uuid.UUID) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
@@ -324,6 +345,8 @@ type Querier interface {
 	// Matches tasks by title, description, or composed task key ("KEY-123") across
 	// projects the user is a member of.
 	SearchUserTasks(ctx context.Context, arg SearchUserTasksParams) ([]SearchUserTasksRow, error)
+	// Used to find people to add to a project/workspace, so deleted users are
+	// excluded: a removed account must never be re-addable.
 	SearchUsersPaginated(ctx context.Context, arg SearchUsersPaginatedParams) ([]SearchUsersPaginatedRow, error)
 	// Marks exactly one state as default for the project, clearing any previous
 	// default. Atomic in a single statement (no transaction needed).

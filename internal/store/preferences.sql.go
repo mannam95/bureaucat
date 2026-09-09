@@ -44,6 +44,44 @@ func (q *Queries) DeleteProjectPreference(ctx context.Context, arg DeleteProject
 	return err
 }
 
+const getGlobalPreference = `-- name: GetGlobalPreference :one
+SELECT preference_key, value, value_version, revision, updated_at
+FROM user_preferences
+WHERE user_id = $1
+  AND preference_key = $2
+  AND workspace_id IS NULL
+  AND project_id IS NULL
+`
+
+type GetGlobalPreferenceParams struct {
+	UserID        uuid.UUID `json:"user_id"`
+	PreferenceKey string    `json:"preference_key"`
+}
+
+type GetGlobalPreferenceRow struct {
+	PreferenceKey string             `json:"preference_key"`
+	Value         []byte             `json:"value"`
+	ValueVersion  int32              `json:"value_version"`
+	Revision      int64              `json:"revision"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// A single global preference row for one user, or no rows when unset (the
+// caller then applies the registry default). Used off the request path, e.g.
+// the notifier checking whether a recipient wants email.
+func (q *Queries) GetGlobalPreference(ctx context.Context, arg GetGlobalPreferenceParams) (GetGlobalPreferenceRow, error) {
+	row := q.db.QueryRow(ctx, getGlobalPreference, arg.UserID, arg.PreferenceKey)
+	var i GetGlobalPreferenceRow
+	err := row.Scan(
+		&i.PreferenceKey,
+		&i.Value,
+		&i.ValueVersion,
+		&i.Revision,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listGlobalPreferences = `-- name: ListGlobalPreferences :many
 
 SELECT preference_key, value, value_version, revision, updated_at
@@ -138,41 +176,6 @@ func (q *Queries) ListProjectPreferences(ctx context.Context, arg ListProjectPre
 		return nil, err
 	}
 	return items, nil
-}
-
-const getGlobalPreference = `-- name: GetGlobalPreference :one
-SELECT preference_key, value, value_version, revision, updated_at
-FROM user_preferences
-WHERE user_id = $1
-  AND preference_key = $2
-  AND workspace_id IS NULL
-  AND project_id IS NULL
-`
-
-type GetGlobalPreferenceParams struct {
-	UserID        uuid.UUID `json:"user_id"`
-	PreferenceKey string    `json:"preference_key"`
-}
-
-type GetGlobalPreferenceRow struct {
-	PreferenceKey string             `json:"preference_key"`
-	Value         []byte             `json:"value"`
-	ValueVersion  int32              `json:"value_version"`
-	Revision      int64              `json:"revision"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetGlobalPreference(ctx context.Context, arg GetGlobalPreferenceParams) (GetGlobalPreferenceRow, error) {
-	row := q.db.QueryRow(ctx, getGlobalPreference, arg.UserID, arg.PreferenceKey)
-	var i GetGlobalPreferenceRow
-	err := row.Scan(
-		&i.PreferenceKey,
-		&i.Value,
-		&i.ValueVersion,
-		&i.Revision,
-		&i.UpdatedAt,
-	)
-	return i, err
 }
 
 const upsertGlobalPreference = `-- name: UpsertGlobalPreference :one

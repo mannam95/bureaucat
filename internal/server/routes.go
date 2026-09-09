@@ -302,6 +302,10 @@ func (s *Server) registerRoutes() {
 				projectGroup.POST("/tasks/:taskNum/assignees", s.taskHandler.AddAssignee, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/assignees/:userId", s.taskHandler.RemoveAssignee, auth.ProjectRoleMiddleware("member"))
 
+				// Task originators / requesters
+				projectGroup.POST("/tasks/:taskNum/originators", s.taskHandler.AddOriginator, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/tasks/:taskNum/originators/:userId", s.taskHandler.RemoveOriginator, auth.ProjectRoleMiddleware("member"))
+
 				// Task labels
 				projectGroup.POST("/tasks/:taskNum/labels", s.taskHandler.AddLabel, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/labels/:labelId", s.taskHandler.RemoveLabel, auth.ProjectRoleMiddleware("member"))

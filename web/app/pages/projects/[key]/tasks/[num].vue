@@ -264,31 +264,6 @@ async function handleRatingChange(rating: number) {
   }
 }
 
-// Editable Originator/Requester. Mirror the task's value into a local model so
-// the member picker can change it, and patch on a new valid selection. Clearing
-// is a no-op here (the field is mandatory) — it re-syncs on the next refresh.
-const originatorModel = ref<string | null>(null);
-watch(
-  () => currentTask.value?.originator_id,
-  (id) => {
-    originatorModel.value = id ?? null;
-  },
-  { immediate: true }
-);
-watch(originatorModel, async (v) => {
-  if (!v || v === currentTask.value?.originator_id) return;
-  updating.value = true;
-  const result = await updateTask(projectKey.value, taskNum.value, { originator: v });
-  updating.value = false;
-  if (result.success) {
-    toast.success("Originator updated");
-    await refreshTask();
-    await listActivity(projectKey.value, taskNum.value);
-  } else {
-    toast.error(result.error || "Failed to update originator");
-    originatorModel.value = currentTask.value?.originator_id ?? null;
-  }
-});
 
 const startDateOpen = ref(false);
 const dueDateOpen = ref(false);
@@ -1249,30 +1224,14 @@ onMounted(() => {
 
                 <!-- Originator / Requester -->
                 <div class="py-3">
-                  <p class="mb-2 text-xs text-muted-foreground">Originator / Requester</p>
-                  <MemberSelector
-                    v-if="isMember && !isDisabled"
-                    v-model="originatorModel"
+                  <TaskOriginators
+                    :originators="currentTask.originators || []"
+                    :project-key="projectKey"
+                    :task-num="taskNum"
                     :members="members"
-                    add-label="Pick"
-                    empty-label="Not set"
-                    :disabled="updating"
+                    :is-member="isMember && !isDisabled"
+                    @refresh="refreshTask"
                   />
-                  <NuxtLink
-                    v-else-if="currentTask.originator_id"
-                    :to="`/profile/${currentTask.originator_id}`"
-                    class="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-2.5 transition-colors hover:bg-muted"
-                  >
-                    <Avatar class="size-6">
-                      <AvatarImage v-if="currentTask.originator_avatar_url" :src="currentTask.originator_avatar_url" />
-                      <AvatarFallback class="text-xs" :seed="currentTask.originator_id">
-                        {{ currentTask.originator_first_name?.[0] }}{{ currentTask.originator_last_name?.[0] }}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span class="text-sm">
-                      {{ currentTask.originator_first_name }} {{ currentTask.originator_last_name }}
-                    </span>
-                  </NuxtLink>
                 </div>
 
                 <!-- Labels -->

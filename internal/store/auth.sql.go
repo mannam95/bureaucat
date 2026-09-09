@@ -52,6 +52,60 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countUsersByState = `-- name: CountUsersByState :one
+SELECT
+    COUNT(*) FILTER (WHERE deleted_at IS NULL AND is_active)     AS active,
+    COUNT(*) FILTER (WHERE deleted_at IS NULL AND NOT is_active) AS deactivated,
+    COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)               AS deleted
+FROM users
+`
+
+type CountUsersByStateRow struct {
+	Active      int64 `json:"active"`
+	Deactivated int64 `json:"deactivated"`
+	Deleted     int64 `json:"deleted"`
+}
+
+// The three tab counts in one row, so the admin page shows all of them
+// regardless of which tab is selected.
+func (q *Queries) CountUsersByState(ctx context.Context) (CountUsersByStateRow, error) {
+	row := q.db.QueryRow(ctx, countUsersByState)
+	var i CountUsersByStateRow
+	err := row.Scan(&i.Active, &i.Deactivated, &i.Deleted)
+	return i, err
+}
+
+const countUsersByStateSearch = `-- name: CountUsersByStateSearch :one
+SELECT COUNT(*)
+FROM users
+WHERE (
+        ($1::text = 'active'      AND deleted_at IS NULL AND is_active)
+     OR ($1::text = 'deactivated' AND deleted_at IS NULL AND NOT is_active)
+     OR ($1::text = 'deleted'     AND deleted_at IS NOT NULL)
+      )
+  AND (
+        $2::text = ''
+     OR username ILIKE '%' || $2 || '%'
+     OR email ILIKE '%' || $2 || '%'
+     OR first_name ILIKE '%' || $2 || '%'
+     OR last_name ILIKE '%' || $2 || '%'
+     OR (first_name || ' ' || last_name) ILIKE '%' || $2 || '%'
+      )
+`
+
+type CountUsersByStateSearchParams struct {
+	Status string `json:"status"`
+	Search string `json:"search"`
+}
+
+// Total rows matching the selected state and search, for pagination.
+func (q *Queries) CountUsersByStateSearch(ctx context.Context, arg CountUsersByStateSearchParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByStateSearch, arg.Status, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRefreshToken = `-- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
 VALUES ($1, $2, $3)
@@ -184,6 +238,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deactivateUser = `-- name: DeactivateUser :exec
+UPDATE users
+SET is_active = FALSE, deactivated_at = NOW(), deactivated_by = $1, updated_at = NOW()
+WHERE id = $2
+`
+
+type DeactivateUserParams struct {
+	DeactivatedBy pgtype.UUID `json:"deactivated_by"`
+	ID            uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) DeactivateUser(ctx context.Context, arg DeactivateUserParams) error {
+	_, err := q.db.Exec(ctx, deactivateUser, arg.DeactivatedBy, arg.ID)
+	return err
 }
 
 const deleteExpiredRefreshTokens = `-- name: DeleteExpiredRefreshTokens :execrows
@@ -425,6 +495,32 @@ func (q *Queries) GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype
 	return password_hash, err
 }
 
+const getUserStatusByEmailOrUsername = `-- name: GetUserStatusByEmailOrUsername :one
+SELECT is_active, deleted_at
+FROM users
+WHERE email = $1 OR username = $2
+LIMIT 1
+`
+
+type GetUserStatusByEmailOrUsernameParams struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+type GetUserStatusByEmailOrUsernameRow struct {
+	IsActive  bool               `json:"is_active"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+// The state of the account that owns a conflicting email/username, so create
+// can explain whether it's active, deactivated or deleted.
+func (q *Queries) GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error) {
+	row := q.db.QueryRow(ctx, getUserStatusByEmailOrUsername, arg.Email, arg.Username)
+	var i GetUserStatusByEmailOrUsernameRow
+	err := row.Scan(&i.IsActive, &i.DeletedAt)
+	return i, err
+}
+
 const isUserActive = `-- name: IsUserActive :one
 SELECT is_active FROM users WHERE id = $1
 `
@@ -509,6 +605,96 @@ func (q *Queries) ListActiveRefreshTokens(ctx context.Context, arg ListActiveRef
 	return items, nil
 }
 
+const listUsersByState = `-- name: ListUsersByState :many
+SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.user_type, u.is_active,
+       u.deactivated_at, u.deleted_at, u.created_at, u.updated_at,
+       COALESCE(da.first_name || ' ' || da.last_name, '')::text AS deactivated_by_name,
+       COALESCE(dl.first_name || ' ' || dl.last_name, '')::text AS deleted_by_name
+FROM users u
+LEFT JOIN users da ON u.deactivated_by = da.id
+LEFT JOIN users dl ON u.deleted_by = dl.id
+WHERE (
+        ($1::text = 'active'      AND u.deleted_at IS NULL AND u.is_active)
+     OR ($1::text = 'deactivated' AND u.deleted_at IS NULL AND NOT u.is_active)
+     OR ($1::text = 'deleted'     AND u.deleted_at IS NOT NULL)
+      )
+  AND (
+        $2::text = ''
+     OR u.username ILIKE '%' || $2 || '%'
+     OR u.email ILIKE '%' || $2 || '%'
+     OR u.first_name ILIKE '%' || $2 || '%'
+     OR u.last_name ILIKE '%' || $2 || '%'
+     OR (u.first_name || ' ' || u.last_name) ILIKE '%' || $2 || '%'
+      )
+ORDER BY u.created_at ASC
+LIMIT $4 OFFSET $3
+`
+
+type ListUsersByStateParams struct {
+	Status string `json:"status"`
+	Search string `json:"search"`
+	Off    int32  `json:"off"`
+	Lim    int32  `json:"lim"`
+}
+
+type ListUsersByStateRow struct {
+	ID                uuid.UUID          `json:"id"`
+	Username          string             `json:"username"`
+	Email             string             `json:"email"`
+	FirstName         string             `json:"first_name"`
+	LastName          string             `json:"last_name"`
+	UserType          string             `json:"user_type"`
+	IsActive          bool               `json:"is_active"`
+	DeactivatedAt     pgtype.Timestamptz `json:"deactivated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeactivatedByName string             `json:"deactivated_by_name"`
+	DeletedByName     string             `json:"deleted_by_name"`
+}
+
+// One page of users in the selected state, filtered by an optional search.
+// Actor names for who deactivated/deleted are folded in via LEFT JOINs and
+// COALESCEd to non-null strings (” when unknown).
+func (q *Queries) ListUsersByState(ctx context.Context, arg ListUsersByStateParams) ([]ListUsersByStateRow, error) {
+	rows, err := q.db.Query(ctx, listUsersByState,
+		arg.Status,
+		arg.Search,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersByStateRow{}
+	for rows.Next() {
+		var i ListUsersByStateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.UserType,
+			&i.IsActive,
+			&i.DeactivatedAt,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeactivatedByName,
+			&i.DeletedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsersPaginated = `-- name: ListUsersPaginated :many
 SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
@@ -561,6 +747,29 @@ func (q *Queries) ListUsersPaginated(ctx context.Context, arg ListUsersPaginated
 		return nil, err
 	}
 	return items, nil
+}
+
+const reactivateUser = `-- name: ReactivateUser :exec
+UPDATE users
+SET is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) ReactivateUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, reactivateUser, id)
+	return err
+}
+
+const restoreUser = `-- name: RestoreUser :exec
+UPDATE users
+SET deleted_at = NULL, deleted_by = NULL, is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
+WHERE id = $1
+`
+
+// Restores a deleted account back to Active (usable right away).
+func (q *Queries) RestoreUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, restoreUser, id)
+	return err
 }
 
 const revokeAllUserRefreshTokens = `-- name: RevokeAllUserRefreshTokens :exec
@@ -618,6 +827,8 @@ type SearchUsersPaginatedRow struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Used to find people to add to a project/workspace, so deleted users are
+// excluded: a removed account must never be re-addable.
 func (q *Queries) SearchUsersPaginated(ctx context.Context, arg SearchUsersPaginatedParams) ([]SearchUsersPaginatedRow, error) {
 	rows, err := q.db.Query(ctx, searchUsersPaginated, arg.Column1, arg.Limit, arg.Offset)
 	if err != nil {
@@ -648,33 +859,6 @@ func (q *Queries) SearchUsersPaginated(ctx context.Context, arg SearchUsersPagin
 	return items, nil
 }
 
-const deactivateUser = `-- name: DeactivateUser :exec
-UPDATE users
-SET is_active = FALSE, deactivated_at = NOW(), deactivated_by = $1, updated_at = NOW()
-WHERE id = $2
-`
-
-type DeactivateUserParams struct {
-	DeactivatedBy pgtype.UUID `json:"deactivated_by"`
-	ID            uuid.UUID   `json:"id"`
-}
-
-func (q *Queries) DeactivateUser(ctx context.Context, arg DeactivateUserParams) error {
-	_, err := q.db.Exec(ctx, deactivateUser, arg.DeactivatedBy, arg.ID)
-	return err
-}
-
-const reactivateUser = `-- name: ReactivateUser :exec
-UPDATE users
-SET is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
-WHERE id = $1
-`
-
-func (q *Queries) ReactivateUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, reactivateUser, id)
-	return err
-}
-
 const softDeleteUser = `-- name: SoftDeleteUser :exec
 UPDATE users
 SET deleted_at = NOW(), deleted_by = $1, is_active = FALSE, updated_at = NOW()
@@ -689,155 +873,6 @@ type SoftDeleteUserParams struct {
 func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
 	_, err := q.db.Exec(ctx, softDeleteUser, arg.DeletedBy, arg.ID)
 	return err
-}
-
-const restoreUser = `-- name: RestoreUser :exec
-UPDATE users
-SET deleted_at = NULL, deleted_by = NULL, is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
-WHERE id = $1
-`
-
-func (q *Queries) RestoreUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, restoreUser, id)
-	return err
-}
-
-const countUsersByState = `-- name: CountUsersByState :one
-SELECT
-    COUNT(*) FILTER (WHERE deleted_at IS NULL AND is_active)     AS active,
-    COUNT(*) FILTER (WHERE deleted_at IS NULL AND NOT is_active) AS deactivated,
-    COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)               AS deleted
-FROM users
-`
-
-type CountUsersByStateRow struct {
-	Active      int64 `json:"active"`
-	Deactivated int64 `json:"deactivated"`
-	Deleted     int64 `json:"deleted"`
-}
-
-func (q *Queries) CountUsersByState(ctx context.Context) (CountUsersByStateRow, error) {
-	row := q.db.QueryRow(ctx, countUsersByState)
-	var i CountUsersByStateRow
-	err := row.Scan(&i.Active, &i.Deactivated, &i.Deleted)
-	return i, err
-}
-
-const countUsersByStateSearch = `-- name: CountUsersByStateSearch :one
-SELECT COUNT(*)
-FROM users
-WHERE (
-        ($1::text = 'active'      AND deleted_at IS NULL AND is_active)
-     OR ($1::text = 'deactivated' AND deleted_at IS NULL AND NOT is_active)
-     OR ($1::text = 'deleted'     AND deleted_at IS NOT NULL)
-      )
-  AND (
-        $2::text = ''
-     OR username ILIKE '%' || $2 || '%'
-     OR email ILIKE '%' || $2 || '%'
-     OR first_name ILIKE '%' || $2 || '%'
-     OR last_name ILIKE '%' || $2 || '%'
-     OR (first_name || ' ' || last_name) ILIKE '%' || $2 || '%'
-      )
-`
-
-type CountUsersByStateSearchParams struct {
-	Status string `json:"status"`
-	Search string `json:"search"`
-}
-
-func (q *Queries) CountUsersByStateSearch(ctx context.Context, arg CountUsersByStateSearchParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countUsersByStateSearch, arg.Status, arg.Search)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const listUsersByState = `-- name: ListUsersByState :many
-SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.user_type, u.is_active,
-       u.deactivated_at, u.deleted_at, u.created_at, u.updated_at,
-       COALESCE(da.first_name || ' ' || da.last_name, '')::text AS deactivated_by_name,
-       COALESCE(dl.first_name || ' ' || dl.last_name, '')::text AS deleted_by_name
-FROM users u
-LEFT JOIN users da ON u.deactivated_by = da.id
-LEFT JOIN users dl ON u.deleted_by = dl.id
-WHERE (
-        ($1::text = 'active'      AND u.deleted_at IS NULL AND u.is_active)
-     OR ($1::text = 'deactivated' AND u.deleted_at IS NULL AND NOT u.is_active)
-     OR ($1::text = 'deleted'     AND u.deleted_at IS NOT NULL)
-      )
-  AND (
-        $2::text = ''
-     OR u.username ILIKE '%' || $2 || '%'
-     OR u.email ILIKE '%' || $2 || '%'
-     OR u.first_name ILIKE '%' || $2 || '%'
-     OR u.last_name ILIKE '%' || $2 || '%'
-     OR (u.first_name || ' ' || u.last_name) ILIKE '%' || $2 || '%'
-      )
-ORDER BY u.created_at ASC
-LIMIT $3 OFFSET $4
-`
-
-type ListUsersByStateParams struct {
-	Status string `json:"status"`
-	Search string `json:"search"`
-	Lim    int32  `json:"lim"`
-	Off    int32  `json:"off"`
-}
-
-type ListUsersByStateRow struct {
-	ID                uuid.UUID          `json:"id"`
-	Username          string             `json:"username"`
-	Email             string             `json:"email"`
-	FirstName         string             `json:"first_name"`
-	LastName          string             `json:"last_name"`
-	UserType          string             `json:"user_type"`
-	IsActive          bool               `json:"is_active"`
-	DeactivatedAt     pgtype.Timestamptz `json:"deactivated_at"`
-	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	DeactivatedByName string             `json:"deactivated_by_name"`
-	DeletedByName     string             `json:"deleted_by_name"`
-}
-
-func (q *Queries) ListUsersByState(ctx context.Context, arg ListUsersByStateParams) ([]ListUsersByStateRow, error) {
-	rows, err := q.db.Query(ctx, listUsersByState,
-		arg.Status,
-		arg.Search,
-		arg.Lim,
-		arg.Off,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUsersByStateRow{}
-	for rows.Next() {
-		var i ListUsersByStateRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.FirstName,
-			&i.LastName,
-			&i.UserType,
-			&i.IsActive,
-			&i.DeactivatedAt,
-			&i.DeletedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeactivatedByName,
-			&i.DeletedByName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const updateUserAvatarURL = `-- name: UpdateUserAvatarURL :exec
@@ -905,28 +940,4 @@ func (q *Queries) UserExistsByEmailOrUsername(ctx context.Context, arg UserExist
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
-}
-
-const getUserStatusByEmailOrUsername = `-- name: GetUserStatusByEmailOrUsername :one
-SELECT is_active, deleted_at
-FROM users
-WHERE email = $1 OR username = $2
-LIMIT 1
-`
-
-type GetUserStatusByEmailOrUsernameParams struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-}
-
-type GetUserStatusByEmailOrUsernameRow struct {
-	IsActive  bool               `json:"is_active"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-}
-
-func (q *Queries) GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error) {
-	row := q.db.QueryRow(ctx, getUserStatusByEmailOrUsername, arg.Email, arg.Username)
-	var i GetUserStatusByEmailOrUsernameRow
-	err := row.Scan(&i.IsActive, &i.DeletedAt)
-	return i, err
 }

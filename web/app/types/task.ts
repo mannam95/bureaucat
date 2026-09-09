@@ -19,13 +19,10 @@ export interface Task {
   creator_first_name: string;
   creator_last_name: string;
   creator_avatar_url?: string;
-  /** Originator/Requester: whose need the task represents (defaults to creator).
-   *  Present on the task detail response; omitted in list responses. */
-  originator_id?: string;
-  originator_username?: string;
-  originator_first_name?: string;
-  originator_last_name?: string;
-  originator_avatar_url?: string;
+  /** Originators/Requesters: whose need the task represents (at least one;
+   *  defaults to creator). Present on the task detail response; omitted in list
+   *  responses. */
+  originators?: TaskOriginator[];
   assignees?: TaskAssignee[];
   labels?: TaskLabel[];
   comment_count: number;
@@ -123,6 +120,16 @@ export interface TaskAssignee {
   avatar_url?: string;
 }
 
+export interface TaskOriginator {
+  id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url?: string;
+}
+
 export interface TaskLabel {
   id: string;
   name: string;
@@ -147,9 +154,9 @@ export interface CreateTaskRequest {
   figma_link?: string;
   branch?: string;
   pull_request?: string;
-  // Originator/Requester (user id). The create form requires it and defaults it
-  // to the current user; the backend also defaults to the creator if omitted.
-  originator?: string;
+  // Originators/Requesters (user ids). At least one; the backend defaults to the
+  // creator when empty.
+  originators?: string[];
   // When set, creates this task as a subtask of the given (project-local)
   // parent task number. One level of nesting only.
   parent_task_number?: number;
@@ -168,8 +175,6 @@ export interface UpdateTaskRequest {
   figma_link?: string;
   branch?: string;
   pull_request?: string;
-  // Originator/Requester (user id). Omit to leave unchanged.
-  originator?: string;
 }
 
 /** @deprecated — retained so legacy URL migration can parse old bookmarks. */

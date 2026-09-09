@@ -34,6 +34,8 @@ const (
 	ActivityTypeModuleRemoved     ActivityType = "module_removed"
 	ActivityTypeAttachmentAdded   ActivityType = "attachment_added"
 	ActivityTypeAttachmentRemoved ActivityType = "attachment_removed"
+	ActivityTypeOriginatorAdded   ActivityType = "originator_added"
+	ActivityTypeOriginatorRemoved ActivityType = "originator_removed"
 )
 
 func (e *ActivityType) Scan(src interface{}) error {
@@ -512,7 +514,6 @@ type Task struct {
 	Branch         pgtype.Text        `json:"branch"`
 	PullRequest    pgtype.Text        `json:"pull_request"`
 	PriorityRating int32              `json:"priority_rating"`
-	OriginatorID   uuid.UUID          `json:"originator_id"`
 }
 
 type TaskAssignee struct {
@@ -526,6 +527,14 @@ type TaskAssignee struct {
 type TaskLabel struct {
 	TaskID  uuid.UUID          `json:"task_id"`
 	LabelID uuid.UUID          `json:"label_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	AddedBy uuid.UUID          `json:"added_by"`
+}
+
+type TaskOriginator struct {
+	ID      uuid.UUID          `json:"id"`
+	TaskID  uuid.UUID          `json:"task_id"`
+	UserID  uuid.UUID          `json:"user_id"`
 	AddedAt pgtype.Timestamptz `json:"added_at"`
 	AddedBy uuid.UUID          `json:"added_by"`
 }
@@ -565,6 +574,10 @@ type User struct {
 	ProviderUserID pgtype.Text        `json:"provider_user_id"`
 	AvatarUrl      pgtype.Text        `json:"avatar_url"`
 	IsActive       bool               `json:"is_active"`
+	DeactivatedAt  pgtype.Timestamptz `json:"deactivated_at"`
+	DeactivatedBy  pgtype.UUID        `json:"deactivated_by"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	DeletedBy      pgtype.UUID        `json:"deleted_by"`
 }
 
 type UserPreference struct {
