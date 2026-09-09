@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -245,7 +246,9 @@ func (h *AdminHandler) CreateUser(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	// Check if user exists
+	// Check if user exists. When it does, explain which state that account is in
+	// so the admin knows to restore/reactivate it rather than being stuck: a
+	// soft-deleted or deactivated user still owns its email and username.
 	exists, err := h.store.UserExistsByEmailOrUsername(ctx, store.UserExistsByEmailOrUsernameParams{
 		Email:    req.Email,
 		Username: req.Username,
@@ -254,7 +257,22 @@ func (h *AdminHandler) CreateUser(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check user existence")
 	}
 	if exists {
-		return echo.NewHTTPError(http.StatusConflict, "user with this email or username already exists")
+		state, advice := "active", "Use a different email or username."
+		if st, serr := h.store.GetUserStatusByEmailOrUsername(ctx, store.GetUserStatusByEmailOrUsernameParams{
+			Email:    req.Email,
+			Username: req.Username,
+		}); serr == nil {
+			switch {
+			case st.DeletedAt.Valid:
+				state = "deleted"
+				advice = "Restore that account from the Deleted tab, or use a different email or username."
+			case !st.IsActive:
+				state = "deactivated"
+				advice = "Reactivate that account, or use a different email or username."
+			}
+		}
+		return echo.NewHTTPError(http.StatusConflict,
+			fmt.Sprintf("That email or username already belongs to a %s user. %s", state, advice))
 	}
 
 	// Hash password

@@ -27,6 +27,14 @@ SELECT EXISTS (
     WHERE email = $1 OR username = $2
 ) AS exists;
 
+-- name: GetUserStatusByEmailOrUsername :one
+-- The state of the account that owns a conflicting email/username, so create
+-- can explain whether it's active, deactivated or deleted.
+SELECT is_active, deleted_at
+FROM users
+WHERE email = $1 OR username = $2
+LIMIT 1;
+
 -- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
 VALUES ($1, $2, $3)

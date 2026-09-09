@@ -180,6 +180,7 @@ type Querier interface {
 	// Deliberately narrow: only the password hash, so it is never carried around on
 	// the general-purpose user row. Used to verify the current password on change.
 	GetUserPasswordHash(ctx context.Context, id uuid.UUID) (pgtype.Text, error)
+	GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error)
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
 	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)

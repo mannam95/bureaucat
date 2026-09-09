@@ -906,3 +906,27 @@ func (q *Queries) UserExistsByEmailOrUsername(ctx context.Context, arg UserExist
 	err := row.Scan(&exists)
 	return exists, err
 }
+
+const getUserStatusByEmailOrUsername = `-- name: GetUserStatusByEmailOrUsername :one
+SELECT is_active, deleted_at
+FROM users
+WHERE email = $1 OR username = $2
+LIMIT 1
+`
+
+type GetUserStatusByEmailOrUsernameParams struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+type GetUserStatusByEmailOrUsernameRow struct {
+	IsActive  bool               `json:"is_active"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+func (q *Queries) GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error) {
+	row := q.db.QueryRow(ctx, getUserStatusByEmailOrUsername, arg.Email, arg.Username)
+	var i GetUserStatusByEmailOrUsernameRow
+	err := row.Scan(&i.IsActive, &i.DeletedAt)
+	return i, err
+}
