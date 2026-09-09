@@ -59,6 +59,13 @@ type UserResponse struct {
 	// admin listings; omitted (false = active) everywhere else. Expressed as the
 	// negative so active accounts serialize nothing.
 	IsDeactivated bool `json:"is_deactivated,omitempty"`
+	// Soft-delete / deactivation audit, populated only on admin listings so the
+	// Deactivated and Deleted tabs can show when and by whom.
+	IsDeleted         bool       `json:"is_deleted,omitempty"`
+	DeactivatedAt     *time.Time `json:"deactivated_at,omitempty"`
+	DeactivatedByName string     `json:"deactivated_by_name,omitempty"`
+	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
+	DeletedByName     string     `json:"deleted_by_name,omitempty"`
 }
 
 // AuthHandler handles authentication endpoints.

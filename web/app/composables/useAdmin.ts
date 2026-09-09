@@ -6,6 +6,19 @@ interface User {
   last_name: string;
   user_type: string;
   created_at: string;
+  is_super_admin?: boolean;
+  is_deactivated?: boolean;
+  is_deleted?: boolean;
+  deactivated_at?: string;
+  deactivated_by_name?: string;
+  deleted_at?: string;
+  deleted_by_name?: string;
+}
+
+interface UserStateCounts {
+  active: number;
+  deactivated: number;
+  deleted: number;
 }
 
 interface PaginatedUsersResponse {
@@ -14,6 +27,7 @@ interface PaginatedUsersResponse {
   page: number;
   per_page: number;
   total_pages: number;
+  counts: UserStateCounts;
 }
 
 interface TokenInfo {
@@ -129,14 +143,15 @@ export function useAdmin() {
   async function listUsers(
     page = 1,
     perPage = 20,
-    search = ""
+    search = "",
+    status: "active" | "deactivated" | "deleted" = "active"
   ): Promise<{
     success: boolean;
     data?: PaginatedUsersResponse;
     error?: string;
   }> {
     try {
-      const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+      const params = new URLSearchParams({ page: String(page), per_page: String(perPage), status });
       if (search) params.set("search", search);
       const response = await fetch(
         `/api/v1/admin/users?${params}`,
@@ -352,6 +367,27 @@ export function useAdmin() {
     }
   }
 
+  async function restoreUser(userId: string): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/users/${userId}/restore`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to restore user" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function getStats(from: string, to: string): Promise<{
     success: boolean;
     data?: AdminStats;
@@ -430,6 +466,7 @@ export function useAdmin() {
     updateUserRole,
     resetUserPassword,
     setUserActive,
+    restoreUser,
     listTokens,
     revokeToken,
     cleanupExpiredTokens,

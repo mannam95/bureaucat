@@ -70,13 +70,23 @@ type CreateUserRequest struct {
 	UserType  string `json:"user_type"`
 }
 
-// PaginatedUsersResponse represents a paginated list of users.
+// UserStateCounts holds the per-state totals for the admin Users tabs.
+type UserStateCounts struct {
+	Active      int64 `json:"active"`
+	Deactivated int64 `json:"deactivated"`
+	Deleted     int64 `json:"deleted"`
+}
+
+// PaginatedUsersResponse represents a paginated list of users. Total/TotalPages
+// describe the selected state+search; Counts always carries all three tab
+// totals so the UI can label the tabs regardless of which one is open.
 type PaginatedUsersResponse struct {
-	Users      []UserResponse `json:"users"`
-	Total      int64          `json:"total"`
-	Page       int            `json:"page"`
-	PerPage    int            `json:"per_page"`
-	TotalPages int            `json:"total_pages"`
+	Users      []UserResponse  `json:"users"`
+	Total      int64           `json:"total"`
+	Page       int             `json:"page"`
+	PerPage    int             `json:"per_page"`
+	TotalPages int             `json:"total_pages"`
+	Counts     UserStateCounts `json:"counts"`
 }
 
 // TokenInfo represents a refresh token with user info.
@@ -124,70 +134,57 @@ func (h *AdminHandler) ListUsers(c *echo.Context) error {
 	offset := (page - 1) * perPage
 	search := c.QueryParam("search")
 
-	ctx := c.Request().Context()
-
-	var total int64
-	var users []store.ListUsersPaginatedRow
-	var err error
-
-	if search != "" {
-		// Search with filter
-		searchText := pgtype.Text{String: search, Valid: true}
-		total, err = h.store.CountSearchUsers(ctx, searchText)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
-		}
-		searchResults, searchErr := h.store.SearchUsersPaginated(ctx, store.SearchUsersPaginatedParams{
-			Column1: searchText,
-			Limit:   int32(perPage),
-			Offset:  int32(offset),
-		})
-		if searchErr != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to search users")
-		}
-		// Convert search results to same type
-		users = make([]store.ListUsersPaginatedRow, len(searchResults))
-		for i, u := range searchResults {
-			users[i] = store.ListUsersPaginatedRow{
-				ID:        u.ID,
-				Username:  u.Username,
-				Email:     u.Email,
-				FirstName: u.FirstName,
-				LastName:  u.LastName,
-				UserType:  u.UserType,
-				IsActive:  u.IsActive,
-				CreatedAt: u.CreatedAt,
-				UpdatedAt: u.UpdatedAt,
-			}
-		}
-	} else {
-		// No search filter
-		total, err = h.store.CountUsers(ctx)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
-		}
-		users, err = h.store.ListUsersPaginated(ctx, store.ListUsersPaginatedParams{
-			Limit:  int32(perPage),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to list users")
-		}
+	// Which state's tab is open. Anything unexpected falls back to active.
+	status := c.QueryParam("status")
+	switch status {
+	case "active", "deactivated", "deleted":
+	default:
+		status = "active"
 	}
 
-	// Convert to response format
+	ctx := c.Request().Context()
+
+	// Tab counts for all three states, independent of the selected tab.
+	counts, err := h.store.CountUsersByState(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
+	}
+
+	total, err := h.store.CountUsersByStateSearch(ctx, store.CountUsersByStateSearchParams{
+		Status: status,
+		Search: search,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
+	}
+
+	users, err := h.store.ListUsersByState(ctx, store.ListUsersByStateParams{
+		Status: status,
+		Search: search,
+		Lim:    int32(perPage),
+		Off:    int32(offset),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list users")
+	}
+
 	userResponses := make([]UserResponse, len(users))
 	for i, u := range users {
 		userResponses[i] = UserResponse{
-			ID:            u.ID,
-			Username:      u.Username,
-			Email:         u.Email,
-			FirstName:     u.FirstName,
-			LastName:      u.LastName,
-			UserType:      u.UserType,
-			CreatedAt:     u.CreatedAt.Time,
-			IsSuperAdmin:  h.isSuperAdmin(u.Email),
-			IsDeactivated: !u.IsActive,
+			ID:                u.ID,
+			Username:          u.Username,
+			Email:             u.Email,
+			FirstName:         u.FirstName,
+			LastName:          u.LastName,
+			UserType:          u.UserType,
+			CreatedAt:         u.CreatedAt.Time,
+			IsSuperAdmin:      h.isSuperAdmin(u.Email),
+			IsDeactivated:     !u.DeletedAt.Valid && !u.IsActive,
+			IsDeleted:         u.DeletedAt.Valid,
+			DeactivatedAt:     timestamptzToTimePtr(u.DeactivatedAt),
+			DeactivatedByName: u.DeactivatedByName,
+			DeletedAt:         timestamptzToTimePtr(u.DeletedAt),
+			DeletedByName:     u.DeletedByName,
 		}
 	}
 
@@ -202,6 +199,11 @@ func (h *AdminHandler) ListUsers(c *echo.Context) error {
 		Page:       page,
 		PerPage:    perPage,
 		TotalPages: totalPages,
+		Counts: UserStateCounts{
+			Active:      counts.Active,
+			Deactivated: counts.Deactivated,
+			Deleted:     counts.Deleted,
+		},
 	})
 }
 
@@ -285,10 +287,10 @@ func (h *AdminHandler) CreateUser(c *echo.Context) error {
 	})
 }
 
-// DeleteUser deletes a user by ID.
+// DeleteUser soft-deletes a user by ID.
 //
 //	@Summary		Delete user
-//	@Description	Delete a user by their ID. Cannot delete yourself.
+//	@Description	Soft-delete a user: the account is hidden and can no longer sign in, but is kept and can be restored. Cannot delete yourself.
 //	@Tags			Admin - Users
 //	@Produce		json
 //	@Param			id	path		string	true	"User ID"
@@ -327,13 +329,55 @@ func (h *AdminHandler) DeleteUser(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "cannot delete the break-glass superadmin account")
 	}
 
-	// Delete user (cascade will delete refresh tokens)
-	err = h.store.DeleteUserByID(ctx, userID)
-	if err != nil {
+	// Soft delete: mark deleted and disable sign-in. The row (and all the
+	// records that reference it) is kept, so history and requester names stay
+	// intact and the account can be restored.
+	if err := h.store.SoftDeleteUser(ctx, store.SoftDeleteUserParams{
+		DeletedBy: pgtype.UUID{Bytes: currentUserID, Valid: currentUserID != uuid.Nil},
+		ID:        userID,
+	}); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete user")
 	}
 
+	// End any live sessions immediately.
+	if err := h.store.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to revoke sessions")
+	}
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted"})
+}
+
+// RestoreUser brings a soft-deleted user back as active.
+//
+//	@Summary		Restore user
+//	@Description	Restore a soft-deleted user; the account becomes active again and can sign in with its existing password.
+//	@Tags			Admin - Users
+//	@Produce		json
+//	@Param			id	path		string	true	"User ID"
+//	@Success		200	{object}	MessageResponse
+//	@Failure		400	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/users/{id}/restore [post]
+func (h *AdminHandler) RestoreUser(c *echo.Context) error {
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+
+	ctx := c.Request().Context()
+
+	if _, err := h.store.GetUserByID(ctx, userID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	if err := h.store.RestoreUser(ctx, userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to restore user")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "user restored"})
 }
 
 // ListTokens returns paginated list of active refresh tokens.
@@ -646,13 +690,19 @@ func (h *AdminHandler) SetUserActive(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "cannot deactivate the break-glass superadmin account")
 	}
 
-	if err := h.store.SetUserActive(ctx, store.SetUserActiveParams{ID: userID, IsActive: *req.Active}); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user status")
-	}
-
-	// On deactivation, revoke all sessions so access ends now rather than
-	// lingering until the short-lived access token expires.
-	if !*req.Active {
+	if *req.Active {
+		if err := h.store.ReactivateUser(ctx, userID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user status")
+		}
+	} else {
+		if err := h.store.DeactivateUser(ctx, store.DeactivateUserParams{
+			DeactivatedBy: pgtype.UUID{Bytes: currentUserID, Valid: currentUserID != uuid.Nil},
+			ID:            userID,
+		}); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user status")
+		}
+		// Revoke all sessions so access ends now rather than lingering until the
+		// short-lived access token expires.
 		if err := h.store.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to revoke sessions")
 		}

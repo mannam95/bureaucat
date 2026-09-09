@@ -70,6 +70,8 @@ type Querier interface {
 	CountUserWorkspaces(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUserWorkspacesFiltered(ctx context.Context, arg CountUserWorkspacesFilteredParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CountUsersByState(ctx context.Context) (CountUsersByStateRow, error)
+	CountUsersByStateSearch(ctx context.Context, arg CountUsersByStateSearchParams) (int64, error)
 	CountWorkspaces(ctx context.Context) (int64, error)
 	// ==================== ACTIVITY LOG ====================
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
@@ -107,6 +109,7 @@ type Querier interface {
 	// ==================== WORKSPACES ====================
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	CyclesCreatedPerDay(ctx context.Context, arg CyclesCreatedPerDayParams) ([]CyclesCreatedPerDayRow, error)
+	DeactivateUser(ctx context.Context, arg DeactivateUserParams) error
 	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
 	// Returns the upload_id so the caller can clean up the underlying file once no
 	// attachment references it anymore.
@@ -278,6 +281,7 @@ type Querier interface {
 	ListUserProjectsFiltered(ctx context.Context, arg ListUserProjectsFilteredParams) ([]ListUserProjectsFilteredRow, error)
 	ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]Workspace, error)
 	ListUserWorkspacesFiltered(ctx context.Context, arg ListUserWorkspacesFilteredParams) ([]Workspace, error)
+	ListUsersByState(ctx context.Context, arg ListUsersByStateParams) ([]ListUsersByStateRow, error)
 	ListUsersPaginated(ctx context.Context, arg ListUsersPaginatedParams) ([]ListUsersPaginatedRow, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
@@ -299,7 +303,9 @@ type Querier interface {
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
+	ReactivateUser(ctx context.Context, id uuid.UUID) error
 	RestoreProject(ctx context.Context, id uuid.UUID) error
+	RestoreUser(ctx context.Context, id uuid.UUID) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
 	// Admin variant: matches across all projects.
@@ -325,7 +331,6 @@ type Querier interface {
 	// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
 	// as a subtask.
 	SetTaskParent(ctx context.Context, arg SetTaskParentParams) error
-	SetUserActive(ctx context.Context, arg SetUserActiveParams) error
 	SoftDeleteComment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteCycle(ctx context.Context, id uuid.UUID) error
 	SoftDeleteModule(ctx context.Context, id uuid.UUID) error
@@ -335,6 +340,7 @@ type Querier interface {
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProjectView(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTask(ctx context.Context, id uuid.UUID) error
+	SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error
 	SoftDeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	SubtasksCreatedPerDay(ctx context.Context, arg SubtasksCreatedPerDayParams) ([]SubtasksCreatedPerDayRow, error)
 	TasksByPriority(ctx context.Context) ([]TasksByPriorityRow, error)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw } from "lucide-vue-next";
 
 definePageMeta({
   middleware: ["admin"],
@@ -7,7 +7,9 @@ definePageMeta({
 
 useSeoMeta({ title: "Manage Users" });
 
-const { listUsers, createUser, deleteUser, updateUserRole, resetUserPassword, setUserActive } = useAdmin();
+const { listUsers, createUser, deleteUser, updateUserRole, resetUserPassword, setUserActive, restoreUser } = useAdmin();
+
+type UserStatus = "active" | "deactivated" | "deleted";
 
 interface User {
   id: string;
@@ -21,6 +23,11 @@ interface User {
   is_super_admin?: boolean;
   // True when an admin has deactivated the account (kept, but cannot sign in).
   is_deactivated?: boolean;
+  is_deleted?: boolean;
+  deactivated_at?: string;
+  deactivated_by_name?: string;
+  deleted_at?: string;
+  deleted_by_name?: string;
 }
 
 // State
@@ -33,6 +40,52 @@ const totalPages = ref(0);
 const error = ref<string | null>(null);
 const searchQuery = ref("");
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+// Which state's tab is open, and the per-state counts shown on the tabs.
+const status = ref<UserStatus>("active");
+const counts = ref({ active: 0, deactivated: 0, deleted: 0 });
+
+const tabs = computed(() => [
+  { key: "active" as UserStatus, label: "Active", count: counts.value.active },
+  { key: "deactivated" as UserStatus, label: "Deactivated", count: counts.value.deactivated },
+  { key: "deleted" as UserStatus, label: "Deleted", count: counts.value.deleted },
+]);
+
+const statusHint = computed(() => {
+  switch (status.value) {
+    case "deactivated":
+      return "These users can't sign in. Reactivate an account to restore access.";
+    case "deleted":
+      return "Deleted users are hidden and can't sign in. Restore brings an account back as active; nothing is erased.";
+    default:
+      return "Active users can sign in and use Bureaucat normally.";
+  }
+});
+
+const whenColumnLabel = computed(() =>
+  status.value === "deactivated" ? "Deactivated" : status.value === "deleted" ? "Deleted" : "Created"
+);
+
+const searchPlaceholder = computed(() => `Search ${status.value} users by username, email, or name...`);
+
+function whenDate(user: User): string {
+  if (status.value === "deactivated") return user.deactivated_at || user.created_at;
+  if (status.value === "deleted") return user.deleted_at || user.created_at;
+  return user.created_at;
+}
+
+function whenActor(user: User): string {
+  if (status.value === "deactivated") return user.deactivated_by_name || "";
+  if (status.value === "deleted") return user.deleted_by_name || "";
+  return "";
+}
+
+function selectStatus(s: UserStatus) {
+  if (status.value === s) return;
+  status.value = s;
+  page.value = 1;
+  fetchUsers();
+}
 
 // Create dialog state
 const showCreateDialog = ref(false);
@@ -69,14 +122,20 @@ const passwordError = ref<string | null>(null);
 const userToResetPassword = ref<User | null>(null);
 const newPassword = ref("");
 
+// Restore dialog state
+const showRestoreDialog = ref(false);
+const restoreLoading = ref(false);
+const userToRestore = ref<User | null>(null);
+
 async function fetchUsers() {
   loading.value = true;
   error.value = null;
-  const result = await listUsers(page.value, perPage.value, searchQuery.value);
+  const result = await listUsers(page.value, perPage.value, searchQuery.value, status.value);
   if (result.success && result.data) {
     users.value = result.data.users || [];
     total.value = result.data.total;
     totalPages.value = result.data.total_pages;
+    if (result.data.counts) counts.value = result.data.counts;
   } else {
     error.value = result.error || "Failed to fetch users";
   }
@@ -177,6 +236,28 @@ async function handleToggleActive() {
   }
 }
 
+function confirmRestore(user: User) {
+  userToRestore.value = user;
+  showRestoreDialog.value = true;
+}
+
+async function handleRestore() {
+  if (!userToRestore.value) return;
+
+  restoreLoading.value = true;
+  const result = await restoreUser(userToRestore.value.id);
+  restoreLoading.value = false;
+
+  if (result.success) {
+    showRestoreDialog.value = false;
+    userToRestore.value = null;
+    await fetchUsers();
+  } else {
+    error.value = result.error || "Failed to restore user";
+    showRestoreDialog.value = false;
+  }
+}
+
 function openPasswordReset(user: User) {
   userToResetPassword.value = user;
   newPassword.value = "";
@@ -270,11 +351,28 @@ onMounted(() => {
           {{ error }}
         </div>
 
+        <!-- Status tabs -->
+        <div class="mb-3 flex items-center gap-1 border-b">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="relative -mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+            :class="status === tab.key
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'"
+            @click="selectStatus(tab.key)"
+          >
+            {{ tab.label }}
+            <span class="rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums">{{ tab.count }}</span>
+          </button>
+        </div>
+        <p class="mb-4 text-sm text-muted-foreground">{{ statusHint }}</p>
+
         <div class="mb-4 relative">
           <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             v-model="searchQuery"
-            placeholder="Search by username, email, or name..."
+            :placeholder="searchPlaceholder"
             class="pl-9 pr-9"
             @input="onSearchInput"
           />
@@ -297,23 +395,22 @@ onMounted(() => {
                   <TableHead>Email</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead>{{ whenColumnLabel }}</TableHead>
                   <TableHead class="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow v-if="loading">
-                  <TableCell colspan="7" class="py-8 text-center">
+                  <TableCell colspan="6" class="py-8 text-center">
                     <Loader2 class="mx-auto size-6 animate-spin" />
                   </TableCell>
                 </TableRow>
                 <TableRow v-else-if="users.length === 0">
-                  <TableCell colspan="7" class="py-8 text-center text-muted-foreground">
+                  <TableCell colspan="6" class="py-8 text-center text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
-                <TableRow v-for="user in users" :key="user.id" :class="{ 'opacity-60': user.is_deactivated }">
+                <TableRow v-for="user in users" :key="user.id">
                   <TableCell class="font-medium">{{ user.username }}</TableCell>
                   <TableCell>{{ user.email }}</TableCell>
                   <TableCell>{{ user.first_name }} {{ user.last_name }}</TableCell>
@@ -323,15 +420,13 @@ onMounted(() => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge v-if="user.is_deactivated" variant="outline" class="border-destructive/40 text-destructive">
-                      Deactivated
-                    </Badge>
-                    <Badge v-else variant="outline" class="border-emerald-500/40 text-emerald-600 dark:text-emerald-500">
-                      Active
-                    </Badge>
+                    <div class="text-sm">{{ formatDate(whenDate(user)) }}</div>
+                    <div v-if="whenActor(user)" class="text-xs text-muted-foreground">
+                      by {{ whenActor(user) }}
+                    </div>
                   </TableCell>
-                  <TableCell>{{ formatDate(user.created_at) }}</TableCell>
                   <TableCell>
+                    <!-- Protected break-glass account: no destructive controls. -->
                     <div
                       v-if="user.is_super_admin"
                       class="flex items-center gap-1.5 text-muted-foreground"
@@ -340,6 +435,45 @@ onMounted(() => {
                       <Lock class="size-3.5" />
                       <span class="text-xs">Protected</span>
                     </div>
+
+                    <!-- Deleted tab: restore only. -->
+                    <div v-else-if="status === 'deleted'" class="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Restore user"
+                        title="Restore user"
+                        @click="confirmRestore(user)"
+                      >
+                        <RotateCcw class="mr-1.5 size-4" />
+                        Restore
+                      </Button>
+                    </div>
+
+                    <!-- Deactivated tab: reactivate or delete. -->
+                    <div v-else-if="status === 'deactivated'" class="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Reactivate user"
+                        title="Reactivate user"
+                        @click="confirmToggleActive(user)"
+                      >
+                        <UserCheck class="size-4 text-emerald-600 dark:text-emerald-500" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Delete user"
+                        title="Delete user"
+                        class="text-destructive hover:text-destructive"
+                        @click="confirmDelete(user)"
+                      >
+                        <Trash2 class="size-4" />
+                      </Button>
+                    </div>
+
+                    <!-- Active tab: role, deactivate, reset password, delete. -->
                     <div v-else class="flex items-center gap-1">
                       <Button
                         variant="ghost"
@@ -354,12 +488,11 @@ onMounted(() => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        :aria-label="user.is_deactivated ? 'Activate user' : 'Deactivate user'"
-                        :title="user.is_deactivated ? 'Activate user' : 'Deactivate user'"
+                        aria-label="Deactivate user"
+                        title="Deactivate user"
                         @click="confirmToggleActive(user)"
                       >
-                        <UserCheck v-if="user.is_deactivated" class="size-4 text-emerald-600 dark:text-emerald-500" />
-                        <UserX v-else class="size-4" />
+                        <UserX class="size-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -374,6 +507,7 @@ onMounted(() => {
                         variant="ghost"
                         size="icon"
                         aria-label="Delete user"
+                        title="Delete user"
                         class="text-destructive hover:text-destructive"
                         @click="confirmDelete(user)"
                       >
@@ -561,8 +695,9 @@ onMounted(() => {
             <DialogHeader>
               <DialogTitle>Delete User</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete the user "{{ userToDelete?.username }}"?
-                This action cannot be undone.
+                Delete the user "{{ userToDelete?.username }}"? They'll be signed out and
+                can no longer sign in. The account is kept, not erased — you can bring it
+                back from the Deleted tab.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -572,6 +707,28 @@ onMounted(() => {
               <Button variant="destructive" :disabled="deleteLoading" @click="handleDeleteUser">
                 <Loader2 v-if="deleteLoading" class="mr-2 size-4 animate-spin" />
                 Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <!-- Restore Confirmation Dialog -->
+        <Dialog v-model:open="showRestoreDialog">
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Restore User</DialogTitle>
+              <DialogDescription>
+                Restore "{{ userToRestore?.username }}"? The account becomes active again
+                and can sign in with its existing password.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" @click="showRestoreDialog = false" :disabled="restoreLoading">
+                Cancel
+              </Button>
+              <Button :disabled="restoreLoading" @click="handleRestore">
+                <Loader2 v-if="restoreLoading" class="mr-2 size-4 animate-spin" />
+                Restore
               </Button>
             </DialogFooter>
           </DialogContent>

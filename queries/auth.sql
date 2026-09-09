@@ -57,13 +57,18 @@ ORDER BY created_at ASC
 LIMIT $1 OFFSET $2;
 
 -- name: SearchUsersPaginated :many
+-- Used to find people to add to a project/workspace, so deleted users are
+-- excluded: a removed account must never be re-addable.
 SELECT id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
 FROM users
-WHERE username ILIKE '%' || $1 || '%'
-   OR email ILIKE '%' || $1 || '%'
-   OR first_name ILIKE '%' || $1 || '%'
-   OR last_name ILIKE '%' || $1 || '%'
-   OR (first_name || ' ' || last_name) ILIKE '%' || $1 || '%'
+WHERE deleted_at IS NULL
+  AND (
+    username ILIKE '%' || $1 || '%'
+    OR email ILIKE '%' || $1 || '%'
+    OR first_name ILIKE '%' || $1 || '%'
+    OR last_name ILIKE '%' || $1 || '%'
+    OR (first_name || ' ' || last_name) ILIKE '%' || $1 || '%'
+  )
 ORDER BY created_at ASC
 LIMIT $2 OFFSET $3;
 
@@ -146,7 +151,77 @@ WHERE id = $1;
 -- name: IsUserActive :one
 SELECT is_active FROM users WHERE id = $1;
 
--- name: SetUserActive :exec
+-- name: DeactivateUser :exec
 UPDATE users
-SET is_active = $2, updated_at = NOW()
-WHERE id = $1;
+SET is_active = FALSE, deactivated_at = NOW(), deactivated_by = @deactivated_by, updated_at = NOW()
+WHERE id = @id;
+
+-- name: ReactivateUser :exec
+UPDATE users
+SET is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
+WHERE id = @id;
+
+-- name: SoftDeleteUser :exec
+UPDATE users
+SET deleted_at = NOW(), deleted_by = @deleted_by, is_active = FALSE, updated_at = NOW()
+WHERE id = @id;
+
+-- name: RestoreUser :exec
+-- Restores a deleted account back to Active (usable right away).
+UPDATE users
+SET deleted_at = NULL, deleted_by = NULL, is_active = TRUE, deactivated_at = NULL, deactivated_by = NULL, updated_at = NOW()
+WHERE id = @id;
+
+-- name: CountUsersByState :one
+-- The three tab counts in one row, so the admin page shows all of them
+-- regardless of which tab is selected.
+SELECT
+    COUNT(*) FILTER (WHERE deleted_at IS NULL AND is_active)     AS active,
+    COUNT(*) FILTER (WHERE deleted_at IS NULL AND NOT is_active) AS deactivated,
+    COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)               AS deleted
+FROM users;
+
+-- name: CountUsersByStateSearch :one
+-- Total rows matching the selected state and search, for pagination.
+SELECT COUNT(*)
+FROM users
+WHERE (
+        (@status::text = 'active'      AND deleted_at IS NULL AND is_active)
+     OR (@status::text = 'deactivated' AND deleted_at IS NULL AND NOT is_active)
+     OR (@status::text = 'deleted'     AND deleted_at IS NOT NULL)
+      )
+  AND (
+        @search::text = ''
+     OR username ILIKE '%' || @search || '%'
+     OR email ILIKE '%' || @search || '%'
+     OR first_name ILIKE '%' || @search || '%'
+     OR last_name ILIKE '%' || @search || '%'
+     OR (first_name || ' ' || last_name) ILIKE '%' || @search || '%'
+      );
+
+-- name: ListUsersByState :many
+-- One page of users in the selected state, filtered by an optional search.
+-- Actor names for who deactivated/deleted are folded in via LEFT JOINs and
+-- COALESCEd to non-null strings ('' when unknown).
+SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.user_type, u.is_active,
+       u.deactivated_at, u.deleted_at, u.created_at, u.updated_at,
+       COALESCE(da.first_name || ' ' || da.last_name, '')::text AS deactivated_by_name,
+       COALESCE(dl.first_name || ' ' || dl.last_name, '')::text AS deleted_by_name
+FROM users u
+LEFT JOIN users da ON u.deactivated_by = da.id
+LEFT JOIN users dl ON u.deleted_by = dl.id
+WHERE (
+        (@status::text = 'active'      AND u.deleted_at IS NULL AND u.is_active)
+     OR (@status::text = 'deactivated' AND u.deleted_at IS NULL AND NOT u.is_active)
+     OR (@status::text = 'deleted'     AND u.deleted_at IS NOT NULL)
+      )
+  AND (
+        @search::text = ''
+     OR u.username ILIKE '%' || @search || '%'
+     OR u.email ILIKE '%' || @search || '%'
+     OR u.first_name ILIKE '%' || @search || '%'
+     OR u.last_name ILIKE '%' || @search || '%'
+     OR (u.first_name || ' ' || u.last_name) ILIKE '%' || @search || '%'
+      )
+ORDER BY u.created_at ASC
+LIMIT @lim OFFSET @off;

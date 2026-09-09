@@ -336,6 +336,7 @@ func (s *Server) registerRoutes() {
 		admin.GET("/users", s.adminHandler.ListUsers)
 		admin.POST("/users", s.adminHandler.CreateUser)
 		admin.DELETE("/users/:id", s.adminHandler.DeleteUser)
+		admin.POST("/users/:id/restore", s.adminHandler.RestoreUser)
 		admin.PUT("/users/:id/role", s.adminHandler.UpdateUserRole)
 		admin.PUT("/users/:id/password", s.adminHandler.ResetUserPassword)
 		admin.PUT("/users/:id/active", s.adminHandler.SetUserActive)
