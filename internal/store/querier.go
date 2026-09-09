@@ -128,6 +128,7 @@ type Querier interface {
 	GetCycleMetrics(ctx context.Context, cycleID uuid.UUID) (GetCycleMetricsRow, error)
 	GetCycleStateBreakdown(ctx context.Context, cycleID uuid.UUID) ([]GetCycleStateBreakdownRow, error)
 	GetDefaultProjectState(ctx context.Context, projectID uuid.UUID) (ProjectState, error)
+	GetGlobalPreference(ctx context.Context, arg GetGlobalPreferenceParams) (GetGlobalPreferenceRow, error)
 	GetLastActivityChecksum(ctx context.Context, taskID uuid.UUID) (string, error)
 	// COALESCE the joined user fields because LEFT JOIN on nullable lead_id would
 	// otherwise trip sqlc's (column-nullability-based) assumption that the fields

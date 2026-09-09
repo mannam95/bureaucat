@@ -19,6 +19,17 @@ FROM user_preferences
 WHERE user_id = $1
   AND project_id = $2;
 
+-- name: GetGlobalPreference :one
+-- A single global preference row for one user, or no rows when unset (the
+-- caller then applies the registry default). Used off the request path, e.g.
+-- the notifier checking whether a recipient wants email.
+SELECT preference_key, value, value_version, revision, updated_at
+FROM user_preferences
+WHERE user_id = $1
+  AND preference_key = $2
+  AND workspace_id IS NULL
+  AND project_id IS NULL;
+
 -- name: UpsertGlobalPreference :one
 -- On a matching revision the row is bumped; on a stale revision no row is
 -- returned (the handler maps that to 409). A first write (no existing row)

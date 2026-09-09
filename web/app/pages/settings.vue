@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock, UserCircle } from "lucide-vue-next";
+import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock, UserCircle, Bell } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,14 @@ useSeoMeta({ title: "Settings" });
 
 const { listTokens, createToken, updateTokenScope, deleteToken } = usePAT();
 const { user, changePassword, logout, getAuthHeader, refreshUser } = useAuth();
+
+// ---- Notifications ----
+// Server-backed preference; global prefs are already hydrated at sign-in, so
+// this reflects the stored choice immediately and writes back on toggle.
+const emailNotificationsEnabled = usePreferences().globalRef<boolean>(
+  "notifications.email_enabled",
+  true
+);
 
 // ---- Profile photo ----
 const avatarInput = ref<HTMLInputElement | null>(null);
@@ -347,6 +355,35 @@ onMounted(() => {
                 accept="image/*"
                 class="hidden"
                 @change="onAvatarSelected"
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <!-- Notifications Section -->
+        <div class="mb-10">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <Bell class="size-5" />
+              Notifications
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Choose how Bureaucat reaches you.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent class="flex items-center justify-between gap-4 pt-6">
+              <div class="space-y-0.5">
+                <p class="text-sm font-medium">Email notifications</p>
+                <p class="text-sm text-muted-foreground">
+                  Get emails for assignments, mentions and comments. In-app
+                  notifications stay on either way.
+                </p>
+              </div>
+              <Switch
+                v-model:checked="emailNotificationsEnabled"
+                aria-label="Email notifications"
               />
             </CardContent>
           </Card>

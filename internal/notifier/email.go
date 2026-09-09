@@ -114,6 +114,7 @@ func renderEmail(n Notification) (subject, body string) {
 		body = fmt.Sprintf("There was an update on %s %q.", ref, n.TaskTitle)
 	}
 	body += fmt.Sprintf("\n\nView it here:\n%s\n", n.TaskURL())
+	body += fmt.Sprintf("\n--\nYou can turn off email notifications in Settings:\n%s/settings\n", n.BaseURL)
 	return subject, body
 }
 

@@ -9,8 +9,8 @@ import (
 // The registry is a closed set; these counts guard against a key being added or
 // removed without a deliberate test update.
 func TestForScopeCounts(t *testing.T) {
-	if got := len(ForScope(ScopeGlobal)); got != 9 {
-		t.Fatalf("global scope has %d keys, want 9", got)
+	if got := len(ForScope(ScopeGlobal)); got != 10 {
+		t.Fatalf("global scope has %d keys, want 10", got)
 	}
 	if got := len(ForScope(ScopeProject)); got != 3 {
 		t.Fatalf("project scope has %d keys, want 3", got)
@@ -87,6 +87,7 @@ func TestCheckValidValues(t *testing.T) {
 		{"tasks.detail.activity_sort", ScopeGlobal, `"oldest"`},
 		{"tasks.list.page_size", ScopeGlobal, `50`},
 		{"dashboard.show_all_workspaces", ScopeGlobal, `true`},
+		{"notifications.email_enabled", ScopeGlobal, `false`},
 		{"navigation.last_workspace_id", ScopeGlobal, `""`},
 		{"navigation.last_workspace_id", ScopeGlobal, `"3f1a1d2e-0000-4000-8000-000000000000"`},
 		{"tasks.list.view_state", ScopeProject, `{"filter":null,"sortBy":"created_at","sortDir":"desc"}`},

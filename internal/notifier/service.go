@@ -52,13 +52,38 @@ func (s *Service) Notify(ctx context.Context, n Notification) {
 		return
 	}
 
+	// Email is opt-out per user; other providers (e.g. Mattermost) are not gated
+	// by this preference. Check once and reuse for every email provider.
+	emailAllowed := s.emailEnabledForUser(ctx, n.RecipientID)
+
 	for _, provider := range providers {
+		if provider.Name() == "email" && !emailAllowed {
+			continue
+		}
 		go func(p Notifier) {
 			if err := p.Send(context.Background(), email, n); err != nil {
 				log.Printf("notifier [%s]: failed to send to %s: %v", p.Name(), email, err)
 			}
 		}(provider)
 	}
+}
+
+// emailEnabledForUser reports whether the recipient wants email notifications.
+// A missing preference row or any read error means "enabled" — email is the
+// default, and a lookup hiccup should never silently drop notifications.
+func (s *Service) emailEnabledForUser(ctx context.Context, userID uuid.UUID) bool {
+	row, err := s.store.GetGlobalPreference(ctx, store.GetGlobalPreferenceParams{
+		UserID:        userID,
+		PreferenceKey: "notifications.email_enabled",
+	})
+	if err != nil {
+		return true
+	}
+	var enabled bool
+	if err := json.Unmarshal(row.Value, &enabled); err != nil {
+		return true
+	}
+	return enabled
 }
 
 // NotifyAll sends notifications to multiple recipients via all providers.
