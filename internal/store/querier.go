@@ -30,6 +30,7 @@ type Querier interface {
 	// ==================== TASK LABELS ====================
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
 	AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorParams) (TaskOriginator, error)
+	AddTaskWatcher(ctx context.Context, arg AddTaskWatcherParams) (TaskWatcher, error)
 	// ==================== CYCLE TASKS ====================
 	AddTasksToCycle(ctx context.Context, arg AddTasksToCycleParams) error
 	// ==================== WORKSPACE MEMBERS ====================
@@ -198,6 +199,7 @@ type Querier interface {
 	IsProjectMember(ctx context.Context, arg IsProjectMemberParams) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
 	IsTaskOriginator(ctx context.Context, arg IsTaskOriginatorParams) (bool, error)
+	IsTaskWatcher(ctx context.Context, arg IsTaskWatcherParams) (bool, error)
 	IsUserActive(ctx context.Context, id uuid.UUID) (bool, error)
 	IsWorkspaceMember(ctx context.Context, arg IsWorkspaceMemberParams) (bool, error)
 	LinkProviderToUser(ctx context.Context, arg LinkProviderToUserParams) error
@@ -284,10 +286,12 @@ type Querier interface {
 	ListTaskModules(ctx context.Context, taskID uuid.UUID) ([]ListTaskModulesRow, error)
 	ListTaskOriginators(ctx context.Context, taskID uuid.UUID) ([]ListTaskOriginatorsRow, error)
 	// ==================== TASK PARTICIPANTS ====================
-	// Everyone involved with a task: its creator, current assignees, and anyone who
-	// has commented (non-deleted comments). Used to fan out notifications.
+	// Everyone involved with a task: its creator, current assignees, watchers, and
+	// anyone who has commented (non-deleted comments). Used to fan out in-app
+	// notifications.
 	ListTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]uuid.UUID, error)
 	ListTaskTemplates(ctx context.Context, projectID uuid.UUID) ([]TaskTemplate, error)
+	ListTaskWatchers(ctx context.Context, taskID uuid.UUID) ([]ListTaskWatchersRow, error)
 	ListTasksByAssignee(ctx context.Context, arg ListTasksByAssigneeParams) ([]ListTasksByAssigneeRow, error)
 	ListUnassignedProjectTasks(ctx context.Context, arg ListUnassignedProjectTasksParams) ([]ListUnassignedProjectTasksRow, error)
 	ListUploadsByUser(ctx context.Context, arg ListUploadsByUserParams) ([]Upload, error)
@@ -303,6 +307,10 @@ type Querier interface {
 	// COALESCEd to non-null strings ('' when unknown).
 	ListUsersByState(ctx context.Context, arg ListUsersByStateParams) ([]ListUsersByStateRow, error)
 	ListUsersPaginated(ctx context.Context, arg ListUsersPaginatedParams) ([]ListUsersPaginatedRow, error)
+	// ==================== TASK WATCHERS ====================
+	// Users following a task to receive its updates, many-to-many, mirroring task
+	// assignees. Zero or more per task.
+	ListWatchersForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListWatchersForTasksRow, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
@@ -322,6 +330,7 @@ type Querier interface {
 	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
 	RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error
+	RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error

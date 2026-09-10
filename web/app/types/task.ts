@@ -24,6 +24,8 @@ export interface Task {
    *  responses. */
   originators?: TaskOriginator[];
   assignees?: TaskAssignee[];
+  /** Watchers follow the task for its updates (in-app notifications). */
+  watchers?: TaskWatcher[];
   labels?: TaskLabel[];
   comment_count: number;
   parent_task_id?: string;
@@ -130,6 +132,16 @@ export interface TaskOriginator {
   avatar_url?: string;
 }
 
+export interface TaskWatcher {
+  id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url?: string;
+}
+
 export interface TaskLabel {
   id: string;
   name: string;
@@ -157,6 +169,8 @@ export interface CreateTaskRequest {
   // Originators/Requesters (user ids). At least one; the backend defaults to the
   // creator when empty.
   originators?: string[];
+  // Watchers (user ids) who will follow the task. Optional; zero or more.
+  watchers?: string[];
   // When set, creates this task as a subtask of the given (project-local)
   // parent task number. One level of nesting only.
   parent_task_number?: number;

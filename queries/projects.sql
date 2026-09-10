@@ -619,6 +619,41 @@ SELECT EXISTS (
     WHERE task_id = $1 AND user_id = $2
 ) AS is_originator;
 
+-- ==================== TASK WATCHERS ====================
+-- Users following a task to receive its updates, many-to-many, mirroring task
+-- assignees. Zero or more per task.
+
+-- name: ListWatchersForTasks :many
+SELECT tw.task_id, tw.id, tw.user_id, tw.added_at,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_watchers tw
+JOIN users u ON tw.user_id = u.id
+WHERE tw.task_id = ANY(@task_ids::uuid[])
+ORDER BY tw.added_at ASC;
+
+-- name: ListTaskWatchers :many
+SELECT tw.id, tw.task_id, tw.user_id, tw.added_at, tw.added_by,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_watchers tw
+JOIN users u ON tw.user_id = u.id
+WHERE tw.task_id = $1
+ORDER BY tw.added_at ASC;
+
+-- name: AddTaskWatcher :one
+INSERT INTO task_watchers (task_id, user_id, added_by)
+VALUES ($1, $2, $3)
+RETURNING id, task_id, user_id, added_at, added_by;
+
+-- name: RemoveTaskWatcher :exec
+DELETE FROM task_watchers
+WHERE task_id = $1 AND user_id = $2;
+
+-- name: IsTaskWatcher :one
+SELECT EXISTS (
+    SELECT 1 FROM task_watchers
+    WHERE task_id = $1 AND user_id = $2
+) AS is_watcher;
+
 -- ==================== TASK LABELS ====================
 
 -- name: AddTaskLabel :exec
@@ -808,8 +843,9 @@ ORDER BY activity_date ASC;
 -- ==================== TASK PARTICIPANTS ====================
 
 -- name: ListTaskParticipants :many
--- Everyone involved with a task: its creator, current assignees, and anyone who
--- has commented (non-deleted comments). Used to fan out notifications.
+-- Everyone involved with a task: its creator, current assignees, watchers, and
+-- anyone who has commented (non-deleted comments). Used to fan out in-app
+-- notifications.
 SELECT DISTINCT user_id FROM (
   SELECT t.created_by AS user_id
   FROM tasks t
@@ -820,6 +856,12 @@ SELECT DISTINCT user_id FROM (
   SELECT ta.user_id
   FROM task_assignees ta
   WHERE ta.task_id = sqlc.arg('task_id')
+
+  UNION
+
+  SELECT tw.user_id
+  FROM task_watchers tw
+  WHERE tw.task_id = sqlc.arg('task_id')
 
   UNION
 

@@ -352,6 +352,58 @@ export function useTasks() {
       return { success: false, error: "Network error" };
     }
   }
+  async function addWatcher(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/watchers`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ user_id: userId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to add watcher" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+  async function removeWatcher(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/watchers/${userId}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeader(),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to remove watcher" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
 
   // Labels
   async function addLabel(
@@ -621,6 +673,8 @@ export function useTasks() {
     removeAssignee,
     addOriginator,
     removeOriginator,
+    addWatcher,
+    removeWatcher,
 
     // Labels
     addLabel,

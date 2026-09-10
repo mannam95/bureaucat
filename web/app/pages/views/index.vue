@@ -10,6 +10,9 @@ import {
   Filter,
   Layers,
   FolderKanban,
+  Play,
+  Pencil,
+  Trash2,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { Project, ProjectView } from "~/types";
@@ -20,7 +23,58 @@ definePageMeta({
 
 useSeoMeta({ title: "Views" });
 
-const { getAuthHeader } = useAuth();
+const { getAuthHeader, user } = useAuth();
+const { deleteView } = useViews();
+
+const currentUserId = computed(() => user.value?.id);
+
+// Same rule as the backend: the owner, or an admin of a shared view, may edit/
+// delete it. `project.role` is the caller's role in that project.
+function canEdit(project: Project, v: ProjectView): boolean {
+  const uid = currentUserId.value;
+  return (
+    (uid !== undefined && v.owner_id === uid) ||
+    (v.visibility === "shared" && project.role === "admin")
+  );
+}
+
+// Apply opens the project with the view deep-linked; the project page applies it.
+function applyViewNav(projectKey: string, v: ProjectView) {
+  navigateTo(viewHref(projectKey, v));
+}
+
+// Edit routes into the project's Views tab and opens the editor there, where the
+// project's filter options (states, labels, members) are available.
+function editViewNav(projectKey: string, v: ProjectView) {
+  navigateTo(`/projects/${projectKey}?tab=views&editView=${v.slug}`);
+}
+
+const showDeleteDialog = ref(false);
+const deleting = ref(false);
+const deleteTarget = ref<{ group: ProjectWithViews; view: ProjectView } | null>(null);
+
+function requestDelete(group: ProjectWithViews, v: ProjectView) {
+  deleteTarget.value = { group, view: v };
+  showDeleteDialog.value = true;
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return;
+  const { group, view } = deleteTarget.value;
+  deleting.value = true;
+  const res = await deleteView(group.project.project_key, view.slug);
+  deleting.value = false;
+  showDeleteDialog.value = false;
+  if (!res.success) {
+    toast.error(res.error || "Failed to delete view");
+    deleteTarget.value = null;
+    return;
+  }
+  toast.success("View deleted");
+  group.views = group.views.filter((x) => x.id !== view.id);
+  groups.value = groups.value.filter((g) => g.views.length > 0);
+  deleteTarget.value = null;
+}
 
 interface ProjectWithViews {
   project: Project;
@@ -198,14 +252,16 @@ onMounted(loadAll);
             </div>
 
             <div class="space-y-2">
-              <NuxtLink
+              <div
                 v-for="v in g.views"
                 :key="v.id"
-                :to="viewHref(g.project.project_key, v)"
-                class="group block rounded-lg border bg-card transition-colors hover:border-border/80 hover:bg-accent/30"
+                class="group rounded-lg border bg-card transition-colors hover:border-border/80 hover:bg-accent/30"
               >
                 <div class="flex items-center gap-4 px-4 py-3">
-                  <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50">
+                  <div
+                    class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50"
+                    :title="v.visibility === 'shared' ? 'Shared — visible to everyone in the project' : 'Private — only you'"
+                  >
                     <component
                       :is="v.visibility === 'shared' ? UsersIcon : Lock"
                       class="size-3.5 text-muted-foreground"
@@ -214,7 +270,13 @@ onMounted(loadAll);
 
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2">
-                      <span class="truncate font-medium group-hover:underline">{{ v.name }}</span>
+                      <button
+                        type="button"
+                        class="truncate text-left font-medium hover:underline"
+                        @click="applyViewNav(g.project.project_key, v)"
+                      >
+                        {{ v.name }}
+                      </button>
                       <span
                         class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
                       >
@@ -246,12 +308,71 @@ onMounted(loadAll);
                       <span>{{ groupByLabel(v.group_by) }}</span>
                     </div>
                   </div>
+
+                  <!-- Actions -->
+                  <div class="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      class="h-7 gap-1.5 px-3 text-xs"
+                      @click="applyViewNav(g.project.project_key, v)"
+                    >
+                      <Play class="size-3" />
+                      Apply
+                    </Button>
+                    <Button
+                      v-if="canEdit(g.project, v)"
+                      size="sm"
+                      variant="ghost"
+                      class="h-7 gap-1.5 px-2 text-xs"
+                      @click="editViewNav(g.project.project_key, v)"
+                    >
+                      <Pencil class="size-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      v-if="canEdit(g.project, v)"
+                      size="sm"
+                      variant="ghost"
+                      class="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      aria-label="Delete view"
+                      title="Delete view"
+                      @click="requestDelete(g, v)"
+                    >
+                      <Trash2 class="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </NuxtLink>
+              </div>
             </div>
           </section>
         </div>
       </div>
     </main>
+
+    <Dialog v-model:open="showDeleteDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete view</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete the view
+            <strong>"{{ deleteTarget?.view.name }}"</strong>?
+            <template v-if="deleteTarget?.view.visibility === 'shared'">
+              It's shared, so it will disappear for everyone in the project.
+            </template>
+            This can't be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" :disabled="deleting" @click="showDeleteDialog = false">
+            Cancel
+          </Button>
+          <Button variant="destructive" :disabled="deleting" @click="confirmDelete">
+            <Loader2 v-if="deleting" class="mr-2 size-4 animate-spin" />
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

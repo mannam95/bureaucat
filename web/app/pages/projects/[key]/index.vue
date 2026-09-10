@@ -21,7 +21,7 @@ import {
   Trash2,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task } from "~/types";
+import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task, ViewGroupBy, SortKey, SortDir, ViewDefaultTab, ViewVisibility } from "~/types";
 import { PRIORITY_LABELS } from "~/types";
 
 definePageMeta({
@@ -124,8 +124,21 @@ function handlePerPageChange(value: unknown) {
 
 const showCreateTask = ref(false);
 const showAddMember = ref(false);
-const showSaveView = ref(false);
-const renameViewTarget = ref<ProjectView | null>(null);
+// The unified view editor (create / edit). Seeds are copied in when opened.
+const showViewEditor = ref(false);
+const viewEditor = reactive({
+  mode: "create" as "create" | "edit",
+  slug: null as string | null,
+  name: "",
+  description: "",
+  visibility: "private" as ViewVisibility,
+  defaultTab: "tasks" as ViewDefaultTab,
+  tree: { children: [] } as FilterTree,
+  groupBy: "state" as ViewGroupBy,
+  sortBy: "created_at" as SortKey,
+  sortDir: "desc" as SortDir,
+  isShared: false,
+});
 
 const isAdmin = computed(() => currentProject.value?.role === "admin");
 const isMember = computed(
@@ -439,9 +452,103 @@ async function applyView(slug: string) {
   activeTab.value = targetTab;
 }
 
-function openRenameView(view: ProjectView) {
-  renameViewTarget.value = view;
-  showSaveView.value = true;
+function cloneTree(t: FilterTree | null | undefined): FilterTree {
+  return t ? JSON.parse(JSON.stringify(t)) : { children: [] };
+}
+
+// The saved view the toolbar currently reflects, if any.
+const activeView = computed<ProjectView | null>(
+  () => views.value.find((v) => v.slug === activeViewSlug.value) ?? null
+);
+
+// Whether the current user may update/delete the active view (owner, or admin of
+// a shared view) — mirrors the backend rule.
+const canEditActiveView = computed(() => {
+  const av = activeView.value;
+  if (!av || !currentUserId.value) return false;
+  return av.owner_id === currentUserId.value || (av.visibility === "shared" && isAdmin.value);
+});
+
+// The working filters/sort/group differ from what the active view has saved.
+const isViewDirty = computed(() => {
+  const av = activeView.value;
+  if (!av) return false;
+  return (
+    JSON.stringify(tree.value ?? { children: [] }) !==
+      JSON.stringify(av.filter_tree ?? { children: [] }) ||
+    sortBy.value !== av.sort_by ||
+    sortDir.value !== av.sort_dir ||
+    groupBy.value !== av.group_by
+  );
+});
+
+function currentDefaultTab(): ViewDefaultTab {
+  return activeTab.value === "board" ? "board" : "tasks";
+}
+
+// Create a new view from the current working filters.
+function openCreateView() {
+  Object.assign(viewEditor, {
+    mode: "create",
+    slug: null,
+    name: "",
+    description: "",
+    visibility: "private",
+    defaultTab: currentDefaultTab(),
+    tree: cloneTree(tree.value),
+    groupBy: groupBy.value,
+    sortBy: sortBy.value,
+    sortDir: sortDir.value,
+    isShared: false,
+  });
+  showViewEditor.value = true;
+}
+
+// Update the active view with the current working filters (toolbar).
+function openUpdateView() {
+  const av = activeView.value;
+  if (!av) return;
+  Object.assign(viewEditor, {
+    mode: "edit",
+    slug: av.slug,
+    name: av.name,
+    description: av.description ?? "",
+    visibility: av.visibility,
+    defaultTab: av.default_tab,
+    tree: cloneTree(tree.value),
+    groupBy: groupBy.value,
+    sortBy: sortBy.value,
+    sortDir: sortDir.value,
+    isShared: av.visibility === "shared",
+  });
+  showViewEditor.value = true;
+}
+
+// Edit a view from the Views list — seeded from the view's own saved state.
+function openEditView(view: ProjectView) {
+  Object.assign(viewEditor, {
+    mode: "edit",
+    slug: view.slug,
+    name: view.name,
+    description: view.description ?? "",
+    visibility: view.visibility,
+    defaultTab: view.default_tab,
+    tree: cloneTree(view.filter_tree),
+    groupBy: view.group_by,
+    sortBy: view.sort_by,
+    sortDir: view.sort_dir,
+    isShared: view.visibility === "shared",
+  });
+  showViewEditor.value = true;
+}
+
+async function onViewSaved(slug: string, mode: "create" | "edit") {
+  await listViews(projectKey.value);
+  // Re-apply when creating, or when we just edited the view that's active, so the
+  // toolbar re-syncs to the saved state (dirty clears).
+  if (mode === "create" || slug === activeViewSlug.value) {
+    await applyView(slug);
+  }
 }
 
 function resetFilters() {
@@ -494,6 +601,22 @@ onMounted(async () => {
   await hydrate();
   await loadProject();
   if (activeTab.value === "board") loadBoardTasks();
+
+  // Deep links from the global /views page.
+  const qView = route.query.view;
+  if (typeof qView === "string" && qView) {
+    await applyView(qView);
+  }
+  // ?editView=slug opens the editor for that view (the /views "Edit" flow).
+  const qEdit = route.query.editView;
+  if (typeof qEdit === "string" && qEdit) {
+    await listViews(projectKey.value);
+    const v = views.value.find((x) => x.slug === qEdit);
+    if (v) {
+      activeTab.value = "views";
+      openEditView(v);
+    }
+  }
 });
 </script>
 
@@ -584,16 +707,30 @@ onMounted(async () => {
                 </TabsTrigger>
               </TabsList>
 
-              <Button
-                v-if="activeTab === 'tasks' || activeTab === 'board'"
-                variant="outline"
-                size="sm"
-                class="gap-1.5"
-                @click="renameViewTarget = null; showSaveView = true"
+              <div
+                v-if="isMember && (activeTab === 'tasks' || activeTab === 'board')"
+                class="flex items-center gap-2"
               >
-                <Save class="size-3.5" />
-                {{ activeViewSlug ? "Save as view" : "Save view" }}
-              </Button>
+                <Button
+                  v-if="canEditActiveView && isViewDirty"
+                  variant="outline"
+                  size="sm"
+                  class="gap-1.5"
+                  @click="openUpdateView"
+                >
+                  <Save class="size-3.5" />
+                  Update View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="gap-1.5"
+                  @click="openCreateView"
+                >
+                  <Plus class="size-3.5" />
+                  Create New View
+                </Button>
+              </div>
             </div>
 
             <!-- Shared filter bar for tasks + board tabs -->
@@ -841,10 +978,10 @@ onMounted(async () => {
                 <Button
                   v-if="isMember"
                   variant="outline"
-                  @click="renameViewTarget = null; showSaveView = true"
+                  @click="openCreateView"
                 >
                   <Plus class="mr-2 size-4" />
-                  Save current filters
+                  Create New View
                 </Button>
               </div>
 
@@ -855,7 +992,7 @@ onMounted(async () => {
                 :current-user-id="currentUserId"
                 :is-admin="isAdmin"
                 @apply:view="applyView"
-                @rename:view="openRenameView"
+                @edit:view="openEditView"
                 @refresh="listViews(projectKey)"
               />
             </TabsContent>
@@ -956,22 +1093,26 @@ onMounted(async () => {
           @added="handleMemberAdded"
         />
 
-        <SaveViewDialog
-          :open="showSaveView"
+        <ViewEditorDialog
+          :open="showViewEditor"
           :project-key="projectKey"
-          :initial="renameViewTarget ? {
-            slug: renameViewTarget.slug,
-            name: renameViewTarget.name,
-            description: renameViewTarget.description,
-            visibility: renameViewTarget.visibility,
-            default_tab: renameViewTarget.default_tab,
-          } : undefined"
-          :current-tree="tree"
-          :current-group-by="groupBy"
-          :current-sort-by="sortBy"
-          :current-sort-dir="sortDir"
-          @update:open="(v) => { showSaveView = v; if (!v) renameViewTarget = null; }"
-          @saved="(slug) => { listViews(projectKey); if (!renameViewTarget) applyView(slug); }"
+          :mode="viewEditor.mode"
+          :edit-slug="viewEditor.slug"
+          :seed-name="viewEditor.name"
+          :seed-description="viewEditor.description"
+          :seed-visibility="viewEditor.visibility"
+          :seed-default-tab="viewEditor.defaultTab"
+          :seed-tree="viewEditor.tree"
+          :seed-group-by="viewEditor.groupBy"
+          :seed-sort-by="viewEditor.sortBy"
+          :seed-sort-dir="viewEditor.sortDir"
+          :edit-is-shared="viewEditor.isShared"
+          :states="states"
+          :labels="labels"
+          :members="members"
+          :cycles="projectCycles"
+          @update:open="(v) => (showViewEditor = v)"
+          @saved="onViewSaved"
         />
       </div>
     </main>

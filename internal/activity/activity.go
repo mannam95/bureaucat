@@ -29,6 +29,8 @@ const (
 	AssigneeRemoved   ActivityType = "assignee_removed"
 	OriginatorAdded   ActivityType = "originator_added"
 	OriginatorRemoved ActivityType = "originator_removed"
+	WatcherAdded      ActivityType = "watcher_added"
+	WatcherRemoved    ActivityType = "watcher_removed"
 	LabelAdded        ActivityType = "label_added"
 	LabelRemoved      ActivityType = "label_removed"
 	StateChanged      ActivityType = "state_changed"

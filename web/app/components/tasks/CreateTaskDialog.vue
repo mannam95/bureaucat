@@ -135,6 +135,8 @@ const form = ref({
   // Originators/Requesters (user ids). Defaults to the current user (self-raised),
   // and at least one is required — see handleSubmit.
   originators: [] as string[],
+  // Watchers (user ids) who will follow the task. Optional; zero or more.
+  watchers: [] as string[],
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -184,6 +186,7 @@ function resetForm() {
     pull_request: "",
     // Self-raised by default: pre-fill the requester with the current user.
     originators: user.value?.id ? [user.value.id] : [],
+    watchers: [],
   };
   selectedTemplateId.value = "";
   error.value = null;
@@ -207,6 +210,7 @@ async function loadProjectMeta(key: string) {
   form.value.state_id = defaultState.value?.id || "";
   form.value.assignees = [];
   form.value.labels = [];
+  form.value.watchers = [];
   selectedTemplateId.value = "";
 }
 
@@ -334,6 +338,7 @@ async function handleSubmit() {
     branch: form.value.branch.trim() || undefined,
     pull_request: form.value.pull_request.trim() || undefined,
     originators: form.value.originators.length > 0 ? form.value.originators : undefined,
+    watchers: form.value.watchers.length > 0 ? form.value.watchers : undefined,
     parent_task_number: props.parentTaskNumber,
   });
 
@@ -749,7 +754,7 @@ function removeLabel(labelId: string) {
 
           <div class="space-y-2">
             <Label>
-              Originator / Requester <span class="text-destructive">*</span>
+              Originators / Requesters <span class="text-destructive">*</span>
             </Label>
             <MemberSelector
               v-model="form.originators"
@@ -794,6 +799,21 @@ function removeLabel(labelId: string) {
                 {{ member.first_name }} {{ member.last_name }}
               </template>
             </TokenSelect>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Watchers</Label>
+            <MemberSelector
+              v-model="form.watchers"
+              :members="effMembers"
+              multi
+              add-label="Add"
+              empty-label="Add people to follow this ticket"
+              :disabled="loading"
+            />
+            <p class="text-xs text-muted-foreground">
+              Watchers receive in-app updates for this ticket. Optional.
+            </p>
           </div>
 
           <div class="space-y-2">

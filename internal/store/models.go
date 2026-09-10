@@ -36,6 +36,8 @@ const (
 	ActivityTypeAttachmentRemoved ActivityType = "attachment_removed"
 	ActivityTypeOriginatorAdded   ActivityType = "originator_added"
 	ActivityTypeOriginatorRemoved ActivityType = "originator_removed"
+	ActivityTypeWatcherAdded      ActivityType = "watcher_added"
+	ActivityTypeWatcherRemoved    ActivityType = "watcher_removed"
 )
 
 func (e *ActivityType) Scan(src interface{}) error {
@@ -548,6 +550,14 @@ type TaskTemplate struct {
 	CreatedBy   uuid.UUID          `json:"created_by"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TaskWatcher struct {
+	ID      uuid.UUID          `json:"id"`
+	TaskID  uuid.UUID          `json:"task_id"`
+	UserID  uuid.UUID          `json:"user_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	AddedBy uuid.UUID          `json:"added_by"`
 }
 
 type Upload struct {

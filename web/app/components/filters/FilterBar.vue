@@ -29,6 +29,9 @@ const props = defineProps<{
   cycles: CycleSibling[];
   /** When true, show the Group-by control (board tab only). */
   showGroupBy?: boolean;
+  /** When true, hide the free-text search box (e.g. inside the view editor,
+   *  where search is not part of a saved view). */
+  hideSearch?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -78,7 +81,7 @@ function updatePredicate(index: number, p: Predicate) {
   <div class="space-y-2">
     <!-- Top row: search, add-filter, group-by, sort, reset -->
     <div class="flex flex-wrap items-center gap-2">
-      <div class="relative flex-1 sm:max-w-xs">
+      <div v-if="!hideSearch" class="relative flex-1 sm:max-w-xs">
         <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           :model-value="searchQuery"

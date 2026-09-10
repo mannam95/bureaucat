@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { toast } from "vue-sonner";
-import type { TaskOriginator, ProjectMember } from "~/types";
+import type { TaskWatcher, ProjectMember } from "~/types";
 
 const props = defineProps<{
-  originators: TaskOriginator[];
+  watchers: TaskWatcher[];
   projectKey: string;
   taskNum: number;
   members: ProjectMember[];
@@ -14,32 +14,31 @@ const emit = defineEmits<{
   refresh: [];
 }>();
 
-const { addOriginator, removeOriginator } = useTasks();
+const { addWatcher, removeWatcher } = useTasks();
 
 const loading = ref<string | null>(null);
 
-// A common shape both TaskOriginator (chips) and ProjectMember (dropdown)
-// satisfy, so TokenSelect can treat them as one item type keyed by user_id.
+// A common shape both TaskWatcher (chips) and ProjectMember (dropdown) satisfy,
+// so TokenSelect can treat them as one item type keyed by user_id.
 type TokenMember = Pick<
   ProjectMember,
   "user_id" | "username" | "first_name" | "last_name" | "avatar_url"
 >;
 
-const selectedTokens = computed<TokenMember[]>(() => props.originators);
+const selectedTokens = computed<TokenMember[]>(() => props.watchers);
 
-// Members not already a requester — the pool offered in the token dropdown.
-// Only current members are offered, so a non-member can't be added; but chips
-// above still show requesters who have since left the project.
+// Members not already watching — the pool offered in the token dropdown. Only
+// current members are offered; chips above still show watchers who have left.
 const availableTokens = computed<TokenMember[]>(() => {
-  const chosen = new Set(props.originators.map((o) => o.user_id));
+  const chosen = new Set(props.watchers.map((w) => w.user_id));
   return props.members.filter((m) => !chosen.has(m.user_id));
 });
 
-// Requesters who are no longer members of this project (removed or deactivated).
+// Watchers who are no longer members of this project (removed or deactivated).
 // Their name still shows because it comes from the task, not the members list.
 const formerMemberCount = computed(() => {
   const memberIds = new Set(props.members.map((m) => m.user_id));
-  return props.originators.filter((o) => !memberIds.has(o.user_id)).length;
+  return props.watchers.filter((w) => !memberIds.has(w.user_id)).length;
 });
 
 function memberSearchText(m: TokenMember) {
@@ -48,39 +47,34 @@ function memberSearchText(m: TokenMember) {
 
 async function handleAdd(userId: string) {
   loading.value = userId;
-  const result = await addOriginator(props.projectKey, props.taskNum, userId);
+  const result = await addWatcher(props.projectKey, props.taskNum, userId);
   loading.value = null;
 
   if (result.success) {
-    toast.success("Requester added");
+    toast.success("Watcher added");
     emit("refresh");
   } else {
-    toast.error(result.error || "Failed to add requester");
+    toast.error(result.error || "Failed to add watcher");
   }
 }
 
 async function handleRemove(userId: string) {
-  // A task must always keep at least one requester.
-  if (props.originators.length <= 1) {
-    toast.error("A task must have at least one requester");
-    return;
-  }
   loading.value = userId;
-  const result = await removeOriginator(props.projectKey, props.taskNum, userId);
+  const result = await removeWatcher(props.projectKey, props.taskNum, userId);
   loading.value = null;
 
   if (result.success) {
-    toast.success("Requester removed");
+    toast.success("Watcher removed");
     emit("refresh");
   } else {
-    toast.error(result.error || "Failed to remove requester");
+    toast.error(result.error || "Failed to remove watcher");
   }
 }
 </script>
 
 <template>
   <div class="space-y-2">
-    <p class="text-xs text-muted-foreground">Originators / Requesters</p>
+    <p class="text-xs text-muted-foreground">Watchers</p>
 
     <!-- Editable: Gmail-style token input -->
     <TokenSelect
@@ -90,7 +84,7 @@ async function handleRemove(userId: string) {
       :get-key="(m) => m.user_id"
       :get-search-text="memberSearchText"
       :pending-key="loading"
-      placeholder="Add requesters..."
+      placeholder="Add watchers..."
       empty-text="No members found"
       @add="(m) => handleAdd(m.user_id)"
       @remove="(m) => handleRemove(m.user_id)"
@@ -117,30 +111,30 @@ async function handleRemove(userId: string) {
 
     <p v-if="isMember && formerMemberCount > 0" class="text-[11px] text-muted-foreground">
       {{ formerMemberCount }}
-      {{ formerMemberCount === 1 ? "requester is" : "requesters are" }}
+      {{ formerMemberCount === 1 ? "watcher is" : "watchers are" }}
       no longer a member of this project.
     </p>
 
     <!-- Read-only view -->
     <div v-else-if="!isMember" class="flex flex-wrap items-center gap-2">
       <NuxtLink
-        v-for="originator in originators"
-        :key="originator.id"
-        :to="`/profile/${originator.user_id}`"
+        v-for="watcher in watchers"
+        :key="watcher.id"
+        :to="`/profile/${watcher.user_id}`"
         class="flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pl-1 pr-2.5 transition-opacity hover:opacity-80"
       >
         <Avatar class="size-6">
-          <AvatarImage v-if="originator.avatar_url" :src="originator.avatar_url" />
-          <AvatarFallback class="text-xs" :seed="originator.user_id">
-            {{ originator.first_name[0] }}{{ originator.last_name[0] }}
+          <AvatarImage v-if="watcher.avatar_url" :src="watcher.avatar_url" />
+          <AvatarFallback class="text-xs" :seed="watcher.user_id">
+            {{ watcher.first_name[0] }}{{ watcher.last_name[0] }}
           </AvatarFallback>
         </Avatar>
         <span class="text-sm">
-          {{ originator.first_name }} {{ originator.last_name }}
+          {{ watcher.first_name }} {{ watcher.last_name }}
         </span>
       </NuxtLink>
-      <span v-if="originators.length === 0" class="text-sm text-muted-foreground">
-        No requesters
+      <span v-if="watchers.length === 0" class="text-sm text-muted-foreground">
+        No watchers
       </span>
     </div>
   </div>

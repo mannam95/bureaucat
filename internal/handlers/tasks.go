@@ -125,22 +125,25 @@ type TaskResponse struct {
 	// Originators/Requesters: whose need the task represents (distinct from the
 	// creator). At least one; defaults to the creator. Populated on the
 	// detail/create/update responses; omitted in list responses.
-	Originators      []OriginatorResponse `json:"originators,omitempty"`
-	Assignees        []AssigneeResponse   `json:"assignees,omitempty"`
-	Labels           []TaskLabelInfo      `json:"labels,omitempty"`
-	CommentCount     int                  `json:"comment_count"`
-	ParentTaskID     *uuid.UUID           `json:"parent_task_id,omitempty"`
-	ParentTaskNumber *int                 `json:"parent_task_number,omitempty"`
-	ParentTaskTitle  *string              `json:"parent_task_title,omitempty"`
-	SubtaskCount     int                  `json:"subtask_count"`
-	CycleID          *uuid.UUID           `json:"cycle_id,omitempty"`
-	CycleTitle       *string              `json:"cycle_title,omitempty"`
-	Modules          []TaskModuleInfo     `json:"modules,omitempty"`
-	FigmaLink        *string              `json:"figma_link,omitempty"`
-	Branch           *string              `json:"branch,omitempty"`
-	PullRequest      *string              `json:"pull_request,omitempty"`
-	CreatedAt        time.Time            `json:"created_at"`
-	UpdatedAt        time.Time            `json:"updated_at"`
+	Originators []OriginatorResponse `json:"originators,omitempty"`
+	Assignees   []AssigneeResponse   `json:"assignees,omitempty"`
+	// Watchers follow the task to receive its updates (in-app notifications),
+	// without being an assignee or originator. Detail-only, like originators.
+	Watchers         []WatcherResponse `json:"watchers,omitempty"`
+	Labels           []TaskLabelInfo   `json:"labels,omitempty"`
+	CommentCount     int               `json:"comment_count"`
+	ParentTaskID     *uuid.UUID        `json:"parent_task_id,omitempty"`
+	ParentTaskNumber *int              `json:"parent_task_number,omitempty"`
+	ParentTaskTitle  *string           `json:"parent_task_title,omitempty"`
+	SubtaskCount     int               `json:"subtask_count"`
+	CycleID          *uuid.UUID        `json:"cycle_id,omitempty"`
+	CycleTitle       *string           `json:"cycle_title,omitempty"`
+	Modules          []TaskModuleInfo  `json:"modules,omitempty"`
+	FigmaLink        *string           `json:"figma_link,omitempty"`
+	Branch           *string           `json:"branch,omitempty"`
+	PullRequest      *string           `json:"pull_request,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 // AssigneeResponse represents a task assignee.
@@ -187,6 +190,39 @@ func (h *TaskHandler) originatorsForTask(ctx context.Context, taskID uuid.UUID) 
 	return out
 }
 
+// WatcherResponse is one user watching a task for its updates.
+type WatcherResponse struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+}
+
+// watchersForTask loads a task's watchers as response objects. Errors are
+// swallowed to an empty slice so a decoration failure never fails the request.
+func (h *TaskHandler) watchersForTask(ctx context.Context, taskID uuid.UUID) []WatcherResponse {
+	rows, err := h.store.ListTaskWatchers(ctx, taskID)
+	if err != nil {
+		return []WatcherResponse{}
+	}
+	out := make([]WatcherResponse, len(rows))
+	for i, w := range rows {
+		out[i] = WatcherResponse{
+			ID:        w.ID,
+			UserID:    w.UserID,
+			Username:  w.Username,
+			Email:     w.Email,
+			FirstName: w.FirstName,
+			LastName:  w.LastName,
+			AvatarURL: textToStringPtr(w.AvatarUrl),
+		}
+	}
+	return out
+}
+
 // TaskModuleInfo represents a module a task belongs to.
 type TaskModuleInfo struct {
 	ID    uuid.UUID `json:"id"`
@@ -217,6 +253,8 @@ type CreateTaskRequest struct {
 	// Originators/Requesters (user ids). Optional over the wire — defaults to the
 	// creator when empty — so there is always at least one.
 	Originators []string `json:"originators"`
+	// Watchers (user ids) who will follow the task. Optional; zero or more.
+	Watchers []string `json:"watchers"`
 	// ParentTaskNumber, when set, creates this task as a subtask of the given
 	// (project-local) parent task. One level only: the parent must not itself
 	// be a subtask.
@@ -666,6 +704,38 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		})
 	}
 
+	// Add watchers (optional; zero or more).
+	seenWatcher := map[uuid.UUID]bool{}
+	for _, s := range req.Watchers {
+		wid, perr := uuid.Parse(s)
+		if perr != nil || seenWatcher[wid] {
+			continue
+		}
+		seenWatcher[wid] = true
+		wu, err := h.store.GetUserByID(ctx, wid)
+		if err != nil {
+			continue
+		}
+		if _, err := h.store.AddTaskWatcher(ctx, store.AddTaskWatcherParams{
+			TaskID:  task.ID,
+			UserID:  wid,
+			AddedBy: userID,
+		}); err != nil {
+			continue
+		}
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       task.ID,
+			ActivityType: activity.WatcherAdded,
+			ActorID:      userID,
+			NewValue: map[string]interface{}{
+				"user_id":    wid.String(),
+				"username":   wu.Username,
+				"first_name": wu.FirstName,
+				"last_name":  wu.LastName,
+			},
+		})
+	}
+
 	// Add labels
 	for _, labelIDStr := range req.Labels {
 		labelID, err := uuid.Parse(labelIDStr)
@@ -783,6 +853,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
 		Originators:      h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:        assignees,
+		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
 		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
@@ -868,6 +939,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(task.CreatorAvatarUrl),
 		Originators:      h.originatorsForTask(ctx, task.ID),
 		Assignees:        assignees,
+		Watchers:         h.watchersForTask(ctx, task.ID),
 		Labels:           labels,
 		ParentTaskID:     pgUUIDToUUIDPtr(task.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
@@ -1201,6 +1273,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
 		Originators:      h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:        assignees,
+		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
 		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
 		Branch:           textToStringPtr(fullTask.Branch),
@@ -2011,6 +2084,183 @@ func (h *TaskHandler) RemoveOriginator(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "originator removed"})
 }
 
+// AddWatcherRequest represents the request to add a watcher.
+type AddWatcherRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// AddWatcher adds a watcher to a task.
+//
+//	@Summary		Add watcher
+//	@Description	Add a user to a task's watchers (they receive its updates).
+//	@Tags			Task Watchers
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string				true	"Project key"
+//	@Param			taskNum		path		int					true	"Task number"
+//	@Param			body		body		AddWatcherRequest	true	"User to add"
+//	@Success		201			{object}	MessageResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		404			{object}	ErrorResponse
+//	@Failure		409			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/watchers [post]
+func (h *TaskHandler) AddWatcher(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	userIDStr := c.Request().Header.Get(auth.HeaderUserID)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+
+	taskNumStr := c.Param("taskNum")
+	taskNum, err := strconv.Atoi(taskNumStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	var req AddWatcherRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	watcherID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user_id")
+	}
+
+	ctx := c.Request().Context()
+
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+
+	isWatcher, err := h.store.IsTaskWatcher(ctx, store.IsTaskWatcherParams{
+		TaskID: task.ID,
+		UserID: watcherID,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check watcher")
+	}
+	if isWatcher {
+		return echo.NewHTTPError(http.StatusConflict, "user is already a watcher")
+	}
+
+	watcherUser, err := h.store.GetUserByID(ctx, watcherID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	if _, err := h.store.AddTaskWatcher(ctx, store.AddTaskWatcherParams{
+		TaskID:  task.ID,
+		UserID:  watcherID,
+		AddedBy: userID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add watcher")
+	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.WatcherAdded,
+		ActorID:      userID,
+		NewValue: map[string]interface{}{
+			"user_id":    watcherID.String(),
+			"username":   watcherUser.Username,
+			"first_name": watcherUser.FirstName,
+			"last_name":  watcherUser.LastName,
+		},
+	})
+
+	return c.JSON(http.StatusCreated, map[string]string{"message": "watcher added"})
+}
+
+// RemoveWatcher removes a watcher from a task.
+//
+//	@Summary		Remove watcher
+//	@Description	Remove a user from a task's watchers.
+//	@Tags			Task Watchers
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			taskNum		path		int		true	"Task number"
+//	@Param			userId		path		string	true	"User ID"
+//	@Success		200			{object}	MessageResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		404			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/watchers/{userId} [delete]
+func (h *TaskHandler) RemoveWatcher(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	userIDStr := c.Request().Header.Get(auth.HeaderUserID)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+
+	taskNumStr := c.Param("taskNum")
+	taskNum, err := strconv.Atoi(taskNumStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	watcherIDStr := c.Param("userId")
+	watcherID, err := uuid.Parse(watcherIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+
+	ctx := c.Request().Context()
+
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+
+	watcherUser, err := h.store.GetUserByID(ctx, watcherID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	if err := h.store.RemoveTaskWatcher(ctx, store.RemoveTaskWatcherParams{
+		TaskID: task.ID,
+		UserID: watcherID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove watcher")
+	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.WatcherRemoved,
+		ActorID:      userID,
+		OldValue: map[string]interface{}{
+			"user_id":    watcherID.String(),
+			"username":   watcherUser.Username,
+			"first_name": watcherUser.FirstName,
+			"last_name":  watcherUser.LastName,
+		},
+	})
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "watcher removed"})
+}
+
 // AddLabelRequest represents the request to add a label.
 type AddLabelRequest struct {
 	LabelID string `json:"label_id"`
@@ -2490,6 +2740,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
 		Originators:      h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:        assignees,
+		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
 		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
 		Branch:           textToStringPtr(fullTask.Branch),

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Lock, Users as UsersIcon, Play, Pencil, Trash2, MoreHorizontal, Copy, Filter, Layers, Calendar } from "lucide-vue-next";
+import { Lock, Users as UsersIcon, Play, Pencil, Trash2, Filter, Layers, Calendar, Loader2 } from "lucide-vue-next";
+import { toast } from "vue-sonner";
 import type { ProjectView } from "~/types";
 
 const props = defineProps<{
@@ -12,22 +13,33 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "apply:view": [slug: string];
-  "rename:view": [view: ProjectView];
+  "edit:view": [view: ProjectView];
   "refresh": [];
 }>();
 
-const { updateView, deleteView } = useViews();
+const { deleteView } = useViews();
 
-async function toggleVisibility(view: ProjectView) {
-  const next = view.visibility === "shared" ? "private" : "shared";
-  await updateView(props.projectKey, view.slug, { visibility: next });
-  emit("refresh");
+const showDeleteDialog = ref(false);
+const deleting = ref(false);
+const viewToDelete = ref<ProjectView | null>(null);
+
+function requestDelete(view: ProjectView) {
+  viewToDelete.value = view;
+  showDeleteDialog.value = true;
 }
 
-async function handleDelete(view: ProjectView) {
-  if (!confirm(`Delete view "${view.name}"?`)) return;
-  await deleteView(props.projectKey, view.slug);
-  emit("refresh");
+async function confirmDelete() {
+  if (!viewToDelete.value) return;
+  deleting.value = true;
+  const res = await deleteView(props.projectKey, viewToDelete.value.slug);
+  deleting.value = false;
+  showDeleteDialog.value = false;
+  if (res.success) {
+    emit("refresh");
+  } else {
+    toast.error(res.error || "Failed to delete view");
+  }
+  viewToDelete.value = null;
 }
 
 function isOwner(v: ProjectView): boolean {
@@ -79,7 +91,10 @@ function groupByLabel(groupBy: string): string {
       >
         <div class="flex items-center gap-4 px-4 py-3">
           <!-- Visibility icon -->
-          <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50">
+          <div
+            class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50"
+            :title="v.visibility === 'shared' ? 'Shared — visible to everyone in the project' : 'Private — only you'"
+          >
             <component
               :is="v.visibility === 'shared' ? UsersIcon : Lock"
               class="size-3.5 text-muted-foreground"
@@ -138,29 +153,55 @@ function groupByLabel(groupBy: string): string {
               <Play class="size-3" />
               Apply
             </Button>
-            <DropdownMenu v-if="canEdit(v)">
-              <DropdownMenuTrigger as-child>
-                <Button size="sm" variant="ghost" class="h-7 w-7 p-0 opacity-0 transition-opacity group-hover:opacity-100">
-                  <MoreHorizontal class="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" class="w-44">
-                <DropdownMenuItem @click="emit('rename:view', v)">
-                  <Pencil class="mr-2 size-3.5" /> Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="isOwner(v)" @click="toggleVisibility(v)">
-                  <Copy class="mr-2 size-3.5" />
-                  {{ v.visibility === "shared" ? "Make private" : "Share with project" }}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem class="text-destructive" @click="handleDelete(v)">
-                  <Trash2 class="mr-2 size-3.5" /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              v-if="canEdit(v)"
+              size="sm"
+              variant="ghost"
+              class="h-7 gap-1.5 px-2 text-xs"
+              @click="emit('edit:view', v)"
+            >
+              <Pencil class="size-3.5" />
+              Edit
+            </Button>
+            <Button
+              v-if="canEdit(v)"
+              size="sm"
+              variant="ghost"
+              class="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+              aria-label="Delete view"
+              title="Delete view"
+              @click="requestDelete(v)"
+            >
+              <Trash2 class="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>
     </div>
+
+    <Dialog v-model:open="showDeleteDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete view</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete the view
+            <strong>"{{ viewToDelete?.name }}"</strong>?
+            <template v-if="viewToDelete?.visibility === 'shared'">
+              It's shared, so it will disappear for everyone in the project.
+            </template>
+            This can't be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" :disabled="deleting" @click="showDeleteDialog = false">
+            Cancel
+          </Button>
+          <Button variant="destructive" :disabled="deleting" @click="confirmDelete">
+            <Loader2 v-if="deleting" class="mr-2 size-4 animate-spin" />
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

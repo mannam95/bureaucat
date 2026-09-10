@@ -1222,10 +1222,22 @@ onMounted(() => {
                   />
                 </div>
 
-                <!-- Originator / Requester -->
+                <!-- Originators / Requesters -->
                 <div class="py-3">
                   <TaskOriginators
                     :originators="currentTask.originators || []"
+                    :project-key="projectKey"
+                    :task-num="taskNum"
+                    :members="members"
+                    :is-member="isMember && !isDisabled"
+                    @refresh="refreshTask"
+                  />
+                </div>
+
+                <!-- Watchers -->
+                <div class="py-3">
+                  <TaskWatchers
+                    :watchers="currentTask.watchers || []"
                     :project-key="projectKey"
                     :task-num="taskNum"
                     :members="members"

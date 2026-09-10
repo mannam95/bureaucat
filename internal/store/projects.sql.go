@@ -129,6 +129,31 @@ func (q *Queries) AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorPa
 	return i, err
 }
 
+const addTaskWatcher = `-- name: AddTaskWatcher :one
+INSERT INTO task_watchers (task_id, user_id, added_by)
+VALUES ($1, $2, $3)
+RETURNING id, task_id, user_id, added_at, added_by
+`
+
+type AddTaskWatcherParams struct {
+	TaskID  uuid.UUID `json:"task_id"`
+	UserID  uuid.UUID `json:"user_id"`
+	AddedBy uuid.UUID `json:"added_by"`
+}
+
+func (q *Queries) AddTaskWatcher(ctx context.Context, arg AddTaskWatcherParams) (TaskWatcher, error) {
+	row := q.db.QueryRow(ctx, addTaskWatcher, arg.TaskID, arg.UserID, arg.AddedBy)
+	var i TaskWatcher
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.UserID,
+		&i.AddedAt,
+		&i.AddedBy,
+	)
+	return i, err
+}
+
 const cascadeSoftDeleteSubtasks = `-- name: CascadeSoftDeleteSubtasks :exec
 UPDATE tasks
 SET deleted_at = NOW(), updated_at = NOW()
@@ -1275,6 +1300,25 @@ func (q *Queries) IsTaskOriginator(ctx context.Context, arg IsTaskOriginatorPara
 	return is_originator, err
 }
 
+const isTaskWatcher = `-- name: IsTaskWatcher :one
+SELECT EXISTS (
+    SELECT 1 FROM task_watchers
+    WHERE task_id = $1 AND user_id = $2
+) AS is_watcher
+`
+
+type IsTaskWatcherParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) IsTaskWatcher(ctx context.Context, arg IsTaskWatcherParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isTaskWatcher, arg.TaskID, arg.UserID)
+	var is_watcher bool
+	err := row.Scan(&is_watcher)
+	return is_watcher, err
+}
+
 const listAllProjects = `-- name: ListAllProjects :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
@@ -2346,6 +2390,12 @@ SELECT DISTINCT user_id FROM (
 
   UNION
 
+  SELECT tw.user_id
+  FROM task_watchers tw
+  WHERE tw.task_id = $1
+
+  UNION
+
   SELECT c.created_by AS user_id
   FROM comments c
   WHERE c.task_id = $1 AND c.deleted_at IS NULL
@@ -2353,8 +2403,9 @@ SELECT DISTINCT user_id FROM (
 `
 
 // ==================== TASK PARTICIPANTS ====================
-// Everyone involved with a task: its creator, current assignees, and anyone who
-// has commented (non-deleted comments). Used to fan out notifications.
+// Everyone involved with a task: its creator, current assignees, watchers, and
+// anyone who has commented (non-deleted comments). Used to fan out in-app
+// notifications.
 func (q *Queries) ListTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listTaskParticipants, taskID)
 	if err != nil {
@@ -2397,6 +2448,59 @@ func (q *Queries) ListTaskTemplates(ctx context.Context, projectID uuid.UUID) ([
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskWatchers = `-- name: ListTaskWatchers :many
+SELECT tw.id, tw.task_id, tw.user_id, tw.added_at, tw.added_by,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_watchers tw
+JOIN users u ON tw.user_id = u.id
+WHERE tw.task_id = $1
+ORDER BY tw.added_at ASC
+`
+
+type ListTaskWatchersRow struct {
+	ID        uuid.UUID          `json:"id"`
+	TaskID    uuid.UUID          `json:"task_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AddedAt   pgtype.Timestamptz `json:"added_at"`
+	AddedBy   uuid.UUID          `json:"added_by"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+func (q *Queries) ListTaskWatchers(ctx context.Context, taskID uuid.UUID) ([]ListTaskWatchersRow, error) {
+	rows, err := q.db.Query(ctx, listTaskWatchers, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskWatchersRow{}
+	for rows.Next() {
+		var i ListTaskWatchersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.UserID,
+			&i.AddedAt,
+			&i.AddedBy,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -2763,6 +2867,61 @@ func (q *Queries) ListUserProjectsFiltered(ctx context.Context, arg ListUserProj
 	return items, nil
 }
 
+const listWatchersForTasks = `-- name: ListWatchersForTasks :many
+
+SELECT tw.task_id, tw.id, tw.user_id, tw.added_at,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_watchers tw
+JOIN users u ON tw.user_id = u.id
+WHERE tw.task_id = ANY($1::uuid[])
+ORDER BY tw.added_at ASC
+`
+
+type ListWatchersForTasksRow struct {
+	TaskID    uuid.UUID          `json:"task_id"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AddedAt   pgtype.Timestamptz `json:"added_at"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+// ==================== TASK WATCHERS ====================
+// Users following a task to receive its updates, many-to-many, mirroring task
+// assignees. Zero or more per task.
+func (q *Queries) ListWatchersForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListWatchersForTasksRow, error) {
+	rows, err := q.db.Query(ctx, listWatchersForTasks, taskIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWatchersForTasksRow{}
+	for rows.Next() {
+		var i ListWatchersForTasksRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.ID,
+			&i.UserID,
+			&i.AddedAt,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveTask = `-- name: MoveTask :one
 UPDATE tasks
 SET project_id = $1,
@@ -2905,6 +3064,21 @@ type RemoveTaskOriginatorParams struct {
 
 func (q *Queries) RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error {
 	_, err := q.db.Exec(ctx, removeTaskOriginator, arg.TaskID, arg.UserID)
+	return err
+}
+
+const removeTaskWatcher = `-- name: RemoveTaskWatcher :exec
+DELETE FROM task_watchers
+WHERE task_id = $1 AND user_id = $2
+`
+
+type RemoveTaskWatcherParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error {
+	_, err := q.db.Exec(ctx, removeTaskWatcher, arg.TaskID, arg.UserID)
 	return err
 }
 
