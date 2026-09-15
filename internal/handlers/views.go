@@ -91,7 +91,7 @@ var (
 	}
 	validSortBy = map[string]struct{}{
 		"created_at": {}, "updated_at": {}, "priority": {}, "priority_rating": {},
-		"due_date": {}, "start_date": {}, "title": {},
+		"due_date": {}, "start_date": {}, "title": {}, "state": {},
 	}
 	validSortDir = map[string]struct{}{
 		"asc": {}, "desc": {},

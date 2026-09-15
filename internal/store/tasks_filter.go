@@ -70,6 +70,8 @@ var validSortKeys = map[string]string{
 	"due_date":        "t.due_date",
 	"start_date":      "t.start_date",
 	"title":           "t.title",
+	// Board order of the task's state (the states join is always present).
+	"state": "ps.position",
 }
 
 var validSortDirs = map[string]string{

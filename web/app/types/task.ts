@@ -302,7 +302,8 @@ export type SortKey =
   | "priority_rating"
   | "due_date"
   | "start_date"
-  | "title";
+  | "title"
+  | "state";
 
 export type SortDir = "asc" | "desc";
 

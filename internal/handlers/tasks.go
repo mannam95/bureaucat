@@ -297,7 +297,7 @@ type PaginatedTasksResponse struct {
 //	@Param			per_page	query		int		false	"Items per page"	default(20)
 //	@Param			f			query		string	false	"FilterTree as base64url(JSON)"
 //	@Param			view		query		string	false	"Saved view slug; used when f is omitted"
-//	@Param			sort_by		query		string	false	"One of: created_at, updated_at, priority, due_date, start_date, title"
+//	@Param			sort_by		query		string	false	"One of: created_at, updated_at, priority, priority_rating, due_date, start_date, title, state"
 //	@Param			sort_dir	query		string	false	"asc or desc"
 //	@Success		200			{object}	PaginatedTasksResponse
 //	@Failure		400			{object}	ErrorResponse

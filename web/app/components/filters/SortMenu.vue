@@ -19,6 +19,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "due_date", label: "Due date" },
   { key: "start_date", label: "Start date" },
   { key: "title", label: "Title" },
+  { key: "state", label: "State" },
 ];
 </script>
 
