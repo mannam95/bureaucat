@@ -15,12 +15,44 @@ const { listTokens, createToken, updateTokenScope, deleteToken } = usePAT();
 const { user, changePassword, logout, getAuthHeader, refreshUser } = useAuth();
 
 // ---- Notifications ----
-// Server-backed preference; global prefs are already hydrated at sign-in, so
-// this reflects the stored choice immediately and writes back on toggle.
+// Server-backed preferences; global prefs are already hydrated at sign-in, so
+// these reflect the stored choices immediately and write back on toggle.
 const emailNotificationsEnabled = usePreferences().globalRef<boolean>(
   "notifications.email_enabled",
   true
 );
+
+// Per-category email toggles under the master switch. Defaults mirror the
+// backend registry: deliberate signals on, ambient ones off.
+type EmailEvents = Record<string, boolean>;
+const EMAIL_EVENT_DEFAULTS: EmailEvents = {
+  assigned: true,
+  comments: true,
+  mentions: true,
+  status_changes: false,
+  roles: false,
+  activity: false,
+};
+const emailEvents = usePreferences().globalRef<EmailEvents>(
+  "notifications.email_events",
+  EMAIL_EVENT_DEFAULTS
+);
+
+const EMAIL_CATEGORIES: { key: string; name: string; description: string }[] = [
+  { key: "assigned", name: "Assigned to a task", description: "Someone assigns a task to you." },
+  { key: "comments", name: "Comments", description: "New comments on tasks you're involved in." },
+  { key: "mentions", name: "Mentions", description: "Someone @mentions you." },
+  { key: "status_changes", name: "Status changes", description: "A task you're involved in changes state." },
+  { key: "roles", name: "Requester or watcher", description: "Someone adds you as a requester or watcher." },
+  { key: "activity", name: "Other activity", description: "Edits, labels, dates, attachments, and cycle or module moves." },
+];
+
+function categoryEnabled(key: string): boolean {
+  return emailEvents.value?.[key] ?? EMAIL_EVENT_DEFAULTS[key] ?? false;
+}
+function setCategory(key: string, value: boolean) {
+  emailEvents.value = { ...EMAIL_EVENT_DEFAULTS, ...emailEvents.value, [key]: value };
+}
 
 // ---- Profile photo ----
 const avatarInput = ref<HTMLInputElement | null>(null);
@@ -373,18 +405,44 @@ onMounted(() => {
           </div>
 
           <Card>
-            <CardContent class="flex items-center justify-between gap-4 pt-6">
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium">Email notifications</p>
-                <p class="text-sm text-muted-foreground">
-                  Get emails for assignments, mentions and comments. In-app
-                  notifications stay on either way.
-                </p>
+            <CardContent class="pt-6">
+              <!-- Master switch -->
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-0.5">
+                  <p class="text-sm font-medium">Email notifications</p>
+                  <p class="text-sm text-muted-foreground">
+                    The master switch for all email. In-app notifications stay
+                    on either way.
+                  </p>
+                </div>
+                <Switch
+                  v-model:checked="emailNotificationsEnabled"
+                  aria-label="Email notifications"
+                />
               </div>
-              <Switch
-                v-model:checked="emailNotificationsEnabled"
-                aria-label="Email notifications"
-              />
+
+              <!-- Per-category toggles: name | description | switch, one grid
+                   so every row aligns. Greyed out while the master is off. -->
+              <div
+                class="mt-4 grid grid-cols-[minmax(9rem,12rem)_1fr_auto] items-center gap-x-4 gap-y-0 rounded-lg border transition-opacity"
+                :class="emailNotificationsEnabled ? '' : 'pointer-events-none opacity-50'"
+              >
+                <template v-for="(cat, i) in EMAIL_CATEGORIES" :key="cat.key">
+                  <div
+                    class="col-span-3 grid grid-cols-subgrid items-center gap-x-4 px-4 py-3"
+                    :class="i > 0 ? 'border-t' : ''"
+                  >
+                    <p class="text-sm font-medium">{{ cat.name }}</p>
+                    <p class="text-sm text-muted-foreground">{{ cat.description }}</p>
+                    <Switch
+                      :checked="categoryEnabled(cat.key)"
+                      :disabled="!emailNotificationsEnabled"
+                      :aria-label="cat.name"
+                      @update:checked="(v: boolean) => setCategory(cat.key, v)"
+                    />
+                  </div>
+                </template>
+              </div>
             </CardContent>
           </Card>
         </div>

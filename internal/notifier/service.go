@@ -52,9 +52,10 @@ func (s *Service) Notify(ctx context.Context, n Notification) {
 		return
 	}
 
-	// Email is opt-out per user; other providers (e.g. Mattermost) are not gated
-	// by this preference. Check once and reuse for every email provider.
-	emailAllowed := s.emailEnabledForUser(ctx, n.RecipientID)
+	// Email is opt-out per user and per category; other providers (e.g.
+	// Mattermost) are not gated by these preferences. Check once and reuse for
+	// every email provider.
+	emailAllowed := s.EmailAllowed(ctx, n.RecipientID, n.Event.Category())
 
 	for _, provider := range providers {
 		if provider.Name() == "email" && !emailAllowed {
@@ -68,22 +69,74 @@ func (s *Service) Notify(ctx context.Context, n Notification) {
 	}
 }
 
-// emailEnabledForUser reports whether the recipient wants email notifications.
-// A missing preference row or any read error means "enabled" — email is the
-// default, and a lookup hiccup should never silently drop notifications.
-func (s *Service) emailEnabledForUser(ctx context.Context, userID uuid.UUID) bool {
-	row, err := s.store.GetGlobalPreference(ctx, store.GetGlobalPreferenceParams{
+// Category defaults when the user has never touched the granular toggles:
+// deliberate signals on, ambient ones off. Mirrors the preferences registry
+// default for notifications.email_events.
+var defaultEmailCategories = map[EmailCategory]bool{
+	CategoryAssigned:      true,
+	CategoryComments:      true,
+	CategoryMentions:      true,
+	CategoryStatusChanges: false,
+	CategoryRoles:         false,
+	CategoryActivity:      false,
+}
+
+// EmailAllowed reports whether the recipient wants email for this category:
+// the master switch AND the category toggle. Missing rows or read errors fall
+// back to the defaults, so a lookup hiccup never silently drops the deliberate
+// signals (and never turns the ambient ones on).
+func (s *Service) EmailAllowed(ctx context.Context, userID uuid.UUID, category EmailCategory) bool {
+	master := true
+	if row, err := s.store.GetGlobalPreference(ctx, store.GetGlobalPreferenceParams{
 		UserID:        userID,
 		PreferenceKey: "notifications.email_enabled",
-	})
-	if err != nil {
-		return true
+	}); err == nil {
+		var enabled bool
+		if json.Unmarshal(row.Value, &enabled) == nil {
+			master = enabled
+		}
 	}
-	var enabled bool
-	if err := json.Unmarshal(row.Value, &enabled); err != nil {
-		return true
+	if !master {
+		return false
+	}
+
+	enabled := defaultEmailCategories[category]
+	if row, err := s.store.GetGlobalPreference(ctx, store.GetGlobalPreferenceParams{
+		UserID:        userID,
+		PreferenceKey: "notifications.email_events",
+	}); err == nil {
+		var m map[string]bool
+		if json.Unmarshal(row.Value, &m) == nil {
+			if v, ok := m[string(category)]; ok {
+				enabled = v
+			}
+		}
 	}
 	return enabled
+}
+
+// NotifyEmail delivers via the email provider only, honoring the recipient's
+// master and per-category toggles. Used by the activity fan-out, which must
+// not ping chat providers (their behavior stays limited to the direct events).
+func (s *Service) NotifyEmail(ctx context.Context, n Notification) {
+	if !s.EmailAllowed(ctx, n.RecipientID, n.Event.Category()) {
+		return
+	}
+	email, err := s.getRecipientEmail(ctx, n.RecipientID)
+	if err != nil {
+		log.Printf("notifier: failed to look up email for user %s: %v", n.RecipientID, err)
+		return
+	}
+	for _, provider := range s.getProviders() {
+		if provider.Name() != "email" {
+			continue
+		}
+		go func(p Notifier) {
+			if err := p.Send(context.Background(), email, n); err != nil {
+				log.Printf("notifier [%s]: failed to send to %s: %v", p.Name(), email, err)
+			}
+		}(provider)
+	}
 }
 
 // NotifyAll sends notifications to multiple recipients via all providers.

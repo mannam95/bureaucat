@@ -446,10 +446,33 @@ async function applyView(slug: string) {
   const res = await getView(projectKey.value, slug);
   if (!res.success || !res.data) return;
   // Write the view into the target tab's stored view state, then navigate there;
-  // the reload watcher fetches the matching tasks.
+  // the reload watcher fetches the matching tasks. Tab, page and view move in
+  // ONE query replace — separate replaces race, and the stale one wins (e.g.
+  // putting the user back on the Views tab instead of the applied view).
   const targetTab = applyViewState(res.data);
-  setPageInUrl(1);
-  activeTab.value = targetTab;
+  router.replace({
+    query: {
+      ...route.query,
+      tab: targetTab === "tasks" ? undefined : targetTab,
+      page: undefined,
+      view: slug,
+    },
+  });
+}
+
+// Drop ?view= from the URL. Every path that detaches the working state from a
+// saved view calls this, so a reload never re-applies a view the user left.
+function stripViewFromUrl() {
+  if (!("view" in route.query)) return;
+  const { view: _view, ...rest } = route.query;
+  router.replace({ query: rest });
+}
+
+// Exit the applied view: back to the default working state (no filters,
+// default sort, done/cancelled hidden) and a clean URL — one query replace.
+function exitView() {
+  resetAll();
+  router.replace({ query: { ...route.query, view: undefined, page: undefined } });
 }
 
 function cloneTree(t: FilterTree | null | undefined): FilterTree {
@@ -555,6 +578,7 @@ function resetFilters() {
   // One "Reset" clears search + filters + sort in a single query write. Two
   // writes (clear then reset-sort) race and leave the search text behind.
   resetAll();
+  stripViewFromUrl();
 }
 
 function handleTreeUpdate(next: FilterTree) {
@@ -563,6 +587,7 @@ function handleTreeUpdate(next: FilterTree) {
   // the next visit). Any remaining chips keep the view association (drift).
   if (next.children.length === 0) {
     clearTreeAndView();
+    stripViewFromUrl();
     return;
   }
   setTree(next);
@@ -757,7 +782,34 @@ onMounted(async () => {
                   @update:sort-dir="(v) => (sortDir = v)"
                   @update:group-by="(v) => (groupBy = v)"
                   @reset="resetFilters"
-                />
+                >
+                  <template v-if="activeView" #leading-chip>
+                    <!-- Active saved view: context chip, styled apart from filters. -->
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 py-1 pl-2 pr-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                    >
+                      <component
+                        :is="activeView.visibility === 'shared' ? Users : Eye"
+                        class="size-3.5"
+                      />
+                      <span class="max-w-[12rem] truncate">{{ activeView.name }}</span>
+                      <span
+                        v-if="isViewDirty"
+                        class="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400"
+                        title="Modified — Update View to save changes"
+                      />
+                      <button
+                        type="button"
+                        class="rounded p-0.5 hover:bg-amber-500/20"
+                        aria-label="Exit view"
+                        title="Exit this view"
+                        @click="exitView"
+                      >
+                        <X class="size-3.5" />
+                      </button>
+                    </span>
+                  </template>
+                </FilterBar>
                 <div v-if="canWrite" class="flex items-center">
                   <Button class="rounded-r-none" @click="showCreateTask = true">
                     <Plus class="mr-2 size-4" />

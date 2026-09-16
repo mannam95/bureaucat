@@ -42,6 +42,9 @@ const {
 const { currentProject, getProject } = useProjects();
 
 const isAdmin = computed(() => currentProject.value?.role === "admin");
+const isMember = computed(
+  () => currentProject.value?.role === "admin" || currentProject.value?.role === "member"
+);
 
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -383,7 +386,7 @@ watch(moduleId, async () => {
                   @update:sort="(s) => (sortState = s)"
                 />
 
-                <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
+                <Button v-if="isMember" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />
                   Add Task
                 </Button>
@@ -391,7 +394,7 @@ watch(moduleId, async () => {
                   variant="outline"
                   size="sm"
                   class="h-9"
-                  :class="{ 'ml-auto': !isAdmin }"
+                  :class="{ 'ml-auto': !isMember }"
                   :title="showDetailPanel ? 'Hide overview panel' : 'Show overview panel'"
                   @click="showDetailPanel = !showDetailPanel"
                 >
@@ -410,7 +413,7 @@ watch(moduleId, async () => {
                     ? "No tasks match these filters."
                     : "No tasks linked yet."
                 }}
-                <div v-if="isAdmin && !anyFilterActive" class="mt-3">
+                <div v-if="isMember && !anyFilterActive" class="mt-3">
                   <Button size="sm" @click="showAddTask = true">
                     <Plus class="mr-1.5 size-4" />
                     Add Task
@@ -422,7 +425,7 @@ watch(moduleId, async () => {
                 v-else
                 :tasks="visibleTasks"
                 :project-key="projectKey"
-                :is-admin="isAdmin"
+                :is-admin="isMember"
                 show-cycle
                 :sort-key="sortState.key"
                 :sort-dir="sortState.dir"

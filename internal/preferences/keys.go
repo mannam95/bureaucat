@@ -77,6 +77,32 @@ func uuidOrEmpty(raw json.RawMessage) error {
 	return nil
 }
 
+// boolObjectOf accepts a JSON object whose keys are drawn from a fixed set and
+// whose values are all booleans. Unknown keys are rejected so the stored shape
+// stays a closed contract.
+func boolObjectOf(allowed ...string) func(json.RawMessage) error {
+	set := make(map[string]struct{}, len(allowed))
+	for _, a := range allowed {
+		set[a] = struct{}{}
+	}
+	return func(raw json.RawMessage) error {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return fmt.Errorf("expected a JSON object")
+		}
+		for k, v := range m {
+			if _, ok := set[k]; !ok {
+				return fmt.Errorf("unknown field %q", k)
+			}
+			var b bool
+			if err := json.Unmarshal(v, &b); err != nil {
+				return fmt.Errorf("field %q must be a boolean", k)
+			}
+		}
+		return nil
+	}
+}
+
 // jsonObject accepts any JSON object. It is intentionally permissive: view
 // states are stored loosely and validated strictly at query time, where the
 // dynamic filter runner treats every stored tree as untrusted input.
@@ -174,5 +200,12 @@ func init() {
 		// in Settings. In-app notifications are unaffected by this preference.
 		Default:  json.RawMessage(`true`),
 		Validate: boolValue,
+	})
+	register(Definition{
+		Key: "notifications.email_events", Scope: ScopeGlobal, ValueVersion: 1, MaxBytes: scalarMax,
+		// Per-category email toggles under the master switch. Quiet by default:
+		// only the deliberate signals (assigned, comments, mentions) start on.
+		Default:  json.RawMessage(`{"assigned":true,"comments":true,"mentions":true,"status_changes":false,"roles":false,"activity":false}`),
+		Validate: boolObjectOf("assigned", "comments", "mentions", "status_changes", "roles", "activity"),
 	})
 }

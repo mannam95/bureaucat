@@ -37,6 +37,19 @@ function sortArrow(key: SortKey) {
   return props.sortDir === "asc" ? ArrowUp : ArrowDown;
 }
 
+// The date column shows the date the list is sorted by; any non-date sort
+// falls back to Created (stable baseline, matches the pre-adaptive behavior).
+type DateField = "created_at" | "updated_at" | "due_date" | "start_date";
+const DATE_COLUMNS: Record<string, { field: DateField; label: string }> = {
+  created_at: { field: "created_at", label: "Created Date" },
+  updated_at: { field: "updated_at", label: "Last Updated" },
+  due_date: { field: "due_date", label: "Due Date" },
+  start_date: { field: "start_date", label: "Start Date" },
+};
+const dateCol = computed(
+  () => DATE_COLUMNS[props.sortBy ?? ""] ?? DATE_COLUMNS.created_at!
+);
+
 const emit = defineEmits<{
   updated: [];
   toggleSelect: [taskNumber: number];
@@ -115,8 +128,8 @@ function subtaskAsTask(sub: Subtask): Task {
         <component :is="sortArrow('priority_rating')" v-if="sortArrow('priority_rating')" class="size-3" />
       </span>
       <span class="justify-self-end inline-flex items-center gap-1 whitespace-nowrap">
-        Created Date
-        <component :is="sortArrow('created_at')" v-if="sortArrow('created_at')" class="size-3" />
+        {{ dateCol.label }}
+        <component :is="sortArrow(dateCol.field)" v-if="sortArrow(dateCol.field)" class="size-3" />
       </span>
       <span class="justify-self-end">Assigned</span>
     </div>
@@ -127,6 +140,7 @@ function subtaskAsTask(sub: Subtask): Task {
         :project-key="projectKey ?? task.project_key"
         :states="statesFor(task)"
         :is-member="isMemberFor(task)"
+        :date-field="dateCol.field"
         :selectable="selectable"
         :selected="selected?.has(task.task_number) ?? false"
         :show-workspace="showWorkspace"

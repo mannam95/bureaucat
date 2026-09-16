@@ -254,8 +254,10 @@ func (s *Server) registerRoutes() {
 				projectGroup.PATCH("/cycles/:cycleId", s.cycleHandler.UpdateCycle, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.DELETE("/cycles/:cycleId", s.cycleHandler.DeleteCycle, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/cycles/:cycleId/tasks", s.cycleHandler.ListCycleTasks)
-				projectGroup.POST("/cycles/:cycleId/tasks", s.cycleHandler.AddCycleTasks, auth.ProjectRoleMiddleware("admin"))
-				projectGroup.DELETE("/cycles/:cycleId/tasks/:taskId", s.cycleHandler.RemoveCycleTask, auth.ProjectRoleMiddleware("admin"))
+				// Task<->cycle membership is member-level: members plan their own
+				// tasks into sprints. Managing the cycles themselves stays admin.
+				projectGroup.POST("/cycles/:cycleId/tasks", s.cycleHandler.AddCycleTasks, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/cycles/:cycleId/tasks/:taskId", s.cycleHandler.RemoveCycleTask, auth.ProjectRoleMiddleware("member"))
 				projectGroup.GET("/cycles/:cycleId/metrics", s.cycleHandler.GetCycleMetrics)
 			}
 
@@ -270,8 +272,9 @@ func (s *Server) registerRoutes() {
 				projectGroup.DELETE("/modules/:moduleId", s.moduleHandler.DeleteModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.POST("/modules/:moduleId/duplicate", s.moduleHandler.DuplicateModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/modules/:moduleId/tasks", s.moduleHandler.ListModuleTasks)
-				projectGroup.POST("/modules/:moduleId/tasks", s.moduleHandler.AddModuleTasks, auth.ProjectRoleMiddleware("admin"))
-				projectGroup.DELETE("/modules/:moduleId/tasks/:taskId", s.moduleHandler.RemoveModuleTask, auth.ProjectRoleMiddleware("admin"))
+				// Task<->module membership mirrors cycles: member-level.
+				projectGroup.POST("/modules/:moduleId/tasks", s.moduleHandler.AddModuleTasks, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/modules/:moduleId/tasks/:taskId", s.moduleHandler.RemoveModuleTask, auth.ProjectRoleMiddleware("member"))
 				projectGroup.GET("/modules/:moduleId/members", s.moduleHandler.ListModuleMembers)
 				projectGroup.POST("/modules/:moduleId/members", s.moduleHandler.AddModuleMember, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.DELETE("/modules/:moduleId/members/:userId", s.moduleHandler.RemoveModuleMember, auth.ProjectRoleMiddleware("admin"))

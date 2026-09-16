@@ -134,11 +134,13 @@ function updatePredicate(index: number, p: Predicate) {
       </Button>
     </div>
 
-    <!-- Active filter chips (implicit AND between all chips) -->
+    <!-- Active filter chips (implicit AND between all chips). The leading slot
+         carries context chips (e.g. the active saved view). -->
     <div
-      v-if="tree.children.length > 0"
+      v-if="tree.children.length > 0 || $slots['leading-chip']"
       class="flex flex-wrap items-center gap-1.5"
     >
+      <slot name="leading-chip" />
       <template v-for="(child, i) in tree.children" :key="i">
         <FilterChip
           v-if="child.predicate"

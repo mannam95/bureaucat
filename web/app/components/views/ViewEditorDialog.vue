@@ -132,7 +132,9 @@ async function save() {
   <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
     <DialogContent class="sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{{ mode === "edit" ? "Edit view" : "Create new view" }}</DialogTitle>
+        <DialogTitle>
+          {{ mode === "edit" ? `Update "${seedName}"` : "Create new view" }}
+        </DialogTitle>
         <DialogDescription>
           {{
             mode === "edit"

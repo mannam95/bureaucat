@@ -12,6 +12,9 @@ const props = withDefaults(
     // instead of navigating on the checkbox itself.
     selectable?: boolean;
     selected?: boolean;
+    // Which date the date column shows (follows the parent list's date sort);
+    // defaults to created_at.
+    dateField?: "created_at" | "updated_at" | "due_date" | "start_date";
     // Multi-project usage (dashboard): show the task's workspace as a leading
     // column. Redundant inside a single project, so off by default.
     showWorkspace?: boolean;
@@ -85,17 +88,24 @@ interface Person {
   avatarUrl?: string;
 }
 
-// The list shows when a task was created (matching the "Created Date" column
-// header and its sort). Who created it lives on the task detail page.
-const createdDate = computed(() =>
-  props.task.created_at
-    ? new Date(props.task.created_at).toLocaleDateString("en-US", {
+// The date column follows the active date sort (the parent passes which field
+// to show); non-date sorts fall back to created_at. Tooltip always carries
+// created + updated so the other date is a hover away.
+function fmtDate(iso?: string): string {
+  return iso
+    ? new Date(iso).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
       })
-    : ""
-);
+    : "";
+}
+const shownDate = computed(() => fmtDate(props.task[props.dateField ?? "created_at"]));
+const dateTooltip = computed(() => {
+  const parts = [`Created ${fmtDate(props.task.created_at)}`];
+  if (props.task.updated_at) parts.push(`Updated ${fmtDate(props.task.updated_at)}`);
+  return parts.join(" · ");
+});
 
 const assignedTo = computed<Person[]>(() =>
   (props.task.assignees ?? []).map((a) => ({
@@ -180,10 +190,10 @@ const assignedTo = computed<Person[]>(() =>
         <PriorityRating :model-value="task.priority_rating ?? 0" />
       </div>
 
-      <!-- Col 5: Created date -->
+      <!-- Col 5: date column (follows the active date sort) -->
       <div class="flex items-center justify-end">
-        <span class="whitespace-nowrap text-xs tabular-nums text-muted-foreground" :title="createdDate">
-          {{ createdDate || "—" }}
+        <span class="whitespace-nowrap text-xs tabular-nums text-muted-foreground" :title="dateTooltip">
+          {{ shownDate || "—" }}
         </span>
       </div>
 

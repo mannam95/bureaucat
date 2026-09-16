@@ -48,6 +48,9 @@ async function addTasksToCurrentCycle(taskIds: string[]) {
 const { currentProject, getProject } = useProjects();
 
 const isAdmin = computed(() => currentProject.value?.role === "admin");
+const isMember = computed(
+  () => currentProject.value?.role === "admin" || currentProject.value?.role === "member"
+);
 
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -128,11 +131,46 @@ function toggleSelectAll() {
   selectedIds.value = allChosen ? new Set() : new Set(visibleIds);
 }
 
-async function moveSelectedToNextCycle() {
+// The move always goes through one confirmation dialog, whatever the selection
+// contains, so the flow reads the same in every case. "Finished" = the task's
+// state is completed or archived.
+const showMoveDialog = ref(false);
+const moveChoice = ref<"unfinished" | "all">("unfinished");
+
+const selectedTasks = computed(() =>
+  visibleTasks.value.filter((t) => selectedIds.value.has(t.id))
+);
+const finishedSelected = computed(() =>
+  selectedTasks.value.filter(
+    (t) => t.state_type === "completed" || t.state_type === "archived"
+  )
+);
+const unfinishedSelected = computed(() =>
+  selectedTasks.value.filter(
+    (t) => t.state_type !== "completed" && t.state_type !== "archived"
+  )
+);
+
+function openMoveDialog() {
+  if (!nextCycle.value || selectedIds.value.size === 0) return;
+  // Default to the safe choice; when nothing unfinished is selected the only
+  // meaningful action is moving everything.
+  moveChoice.value = unfinishedSelected.value.length > 0 ? "unfinished" : "all";
+  showMoveDialog.value = true;
+}
+
+async function confirmMove() {
   const target = nextCycle.value;
-  if (!target || selectedIds.value.size === 0) return;
+  if (!target) return;
+  const ids =
+    moveChoice.value === "all"
+      ? [...selectedIds.value]
+      : unfinishedSelected.value.map((t) => t.id);
+  if (ids.length === 0) {
+    showMoveDialog.value = false;
+    return;
+  }
   moving.value = true;
-  const ids = [...selectedIds.value];
   // A task can belong to only one cycle (unique task_id), so detach from the
   // current cycle first, then attach all to the next one.
   await Promise.all(
@@ -140,6 +178,7 @@ async function moveSelectedToNextCycle() {
   );
   const res = await addTasksToCycle(projectKey.value, target.id, ids);
   moving.value = false;
+  showMoveDialog.value = false;
   selectedIds.value = new Set();
   await reloadTasksAndMetrics();
   if (res.success) {
@@ -334,7 +373,7 @@ watch(cycleId, async () => {
                   @update:sort="(s) => (sortState = s)"
                 />
 
-                <Button v-if="isAdmin" size="sm" class="ml-auto h-9" @click="showAddTask = true">
+                <Button v-if="isMember" size="sm" class="ml-auto h-9" @click="showAddTask = true">
                   <Plus class="mr-1.5 size-4" />
                   Add Task
                 </Button>
@@ -342,7 +381,7 @@ watch(cycleId, async () => {
                   variant="outline"
                   size="sm"
                   class="h-9"
-                  :class="{ 'ml-auto': !isAdmin }"
+                  :class="{ 'ml-auto': !isMember }"
                   :title="showDetailPanel ? 'Hide overview panel' : 'Show overview panel'"
                   @click="showDetailPanel = !showDetailPanel"
                 >
@@ -366,7 +405,7 @@ watch(cycleId, async () => {
                     size="sm"
                     :disabled="!nextCycle || moving"
                     :title="nextCycle ? `Move to ${nextCycle.title}` : 'This is the last cycle'"
-                    @click="moveSelectedToNextCycle"
+                    @click="openMoveDialog"
                   >
                     <Loader2 v-if="moving" class="mr-1.5 size-4 animate-spin" />
                     <ArrowRight v-else class="mr-1.5 size-4" />
@@ -390,7 +429,7 @@ watch(cycleId, async () => {
                   }}
                 </p>
                 <Button
-                  v-if="isAdmin && !anyFilterActive"
+                  v-if="isMember && !anyFilterActive"
                   class="mt-4"
                   size="sm"
                   @click="showAddTask = true"
@@ -403,7 +442,7 @@ watch(cycleId, async () => {
                 v-else
                 :tasks="visibleTasks"
                 :project-key="projectKey"
-                :is-admin="isAdmin"
+                :is-admin="isMember"
                 :selectable="isAdmin"
                 :selected="selectedIds"
                 :sort-key="sortState.key"
@@ -519,5 +558,80 @@ watch(cycleId, async () => {
         </template>
       </div>
     </main>
+
+    <!-- Move-selection confirmation: one harmonized dialog for every case. -->
+    <Dialog v-model:open="showMoveDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Move tasks to "{{ nextCycle?.title }}"?</DialogTitle>
+          <DialogDescription>
+            <template v-if="finishedSelected.length > 0">
+              {{ finishedSelected.length }} of the {{ selectedTasks.length }}
+              selected {{ selectedTasks.length === 1 ? "task is" : "tasks are" }}
+              already done or archived.
+            </template>
+            <template v-else>
+              {{ selectedTasks.length }}
+              {{ selectedTasks.length === 1 ? "task is" : "tasks are" }} selected,
+              none of them done or archived.
+            </template>
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-2">
+          <button
+            type="button"
+            class="flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors"
+            :class="[
+              moveChoice === 'unfinished' ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/50',
+              unfinishedSelected.length === 0 ? 'pointer-events-none opacity-50' : '',
+            ]"
+            @click="moveChoice = 'unfinished'"
+          >
+            <span
+              class="mt-0.5 size-3.5 shrink-0 rounded-full border-2"
+              :class="moveChoice === 'unfinished' ? 'border-primary bg-primary' : 'border-muted-foreground/40'"
+            />
+            <span>
+              <span class="font-medium">
+                Move only the {{ unfinishedSelected.length }} unfinished
+                {{ unfinishedSelected.length === 1 ? "task" : "tasks" }}
+              </span>
+              <span class="block text-xs text-muted-foreground">
+                Done and archived tasks stay in this cycle.
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors"
+            :class="moveChoice === 'all' ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/50'"
+            @click="moveChoice = 'all'"
+          >
+            <span
+              class="mt-0.5 size-3.5 shrink-0 rounded-full border-2"
+              :class="moveChoice === 'all' ? 'border-primary bg-primary' : 'border-muted-foreground/40'"
+            />
+            <span>
+              <span class="font-medium">
+                Move all {{ selectedTasks.length }} selected
+                {{ selectedTasks.length === 1 ? "task" : "tasks" }}
+              </span>
+              <span class="block text-xs text-muted-foreground">
+                Includes done and archived tasks.
+              </span>
+            </span>
+          </button>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" :disabled="moving" @click="showMoveDialog = false">
+            Cancel
+          </Button>
+          <Button :disabled="moving" @click="confirmMove">
+            <Loader2 v-if="moving" class="mr-2 size-4 animate-spin" />
+            Move
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

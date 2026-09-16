@@ -123,37 +123,42 @@ const commentEditHistory = computed<Map<string, CommentVersion[]>>(() => {
   return history;
 });
 
-// Merge and sort activities and comments by timestamp
+// Lens: which slice of the feed is shown. Always opens on Comments (the
+// content people fear missing); deliberately not persisted.
+type FeedLens = "comments" | "activity" | "all";
+const lens = ref<FeedLens>("comments");
+
+// System entries, with comment lifecycle events skipped (the actual comments
+// are shown instead).
+const activityItems = computed<FeedItem[]>(() =>
+  props.activities
+    .filter(
+      (a) =>
+        a.activity_type !== "comment_created" &&
+        a.activity_type !== "comment_updated" &&
+        a.activity_type !== "comment_deleted"
+    )
+    .map((a) => ({
+      type: "activity" as const,
+      data: a,
+      timestamp: new Date(a.created_at),
+    }))
+);
+
+const commentItems = computed<FeedItem[]>(() =>
+  props.comments.map((c) => ({
+    type: "comment" as const,
+    data: c,
+    timestamp: new Date(c.created_at),
+  }))
+);
+
+// The visible slice, sorted by the one shared newest/oldest preference.
 const feedItems = computed<FeedItem[]>(() => {
   const items: FeedItem[] = [];
+  if (lens.value !== "comments") items.push(...activityItems.value);
+  if (lens.value !== "activity") items.push(...commentItems.value);
 
-  // Add activities (except comment-related ones as we show actual comments)
-  for (const activity of props.activities) {
-    // Skip comment activities - we show the actual comments instead
-    if (
-      activity.activity_type === "comment_created" ||
-      activity.activity_type === "comment_updated" ||
-      activity.activity_type === "comment_deleted"
-    ) {
-      continue;
-    }
-    items.push({
-      type: "activity",
-      data: activity,
-      timestamp: new Date(activity.created_at),
-    });
-  }
-
-  // Add comments
-  for (const comment of props.comments) {
-    items.push({
-      type: "comment",
-      data: comment,
-      timestamp: new Date(comment.created_at),
-    });
-  }
-
-  // Sort by timestamp based on user preference
   items.sort((a, b) =>
     newestFirst.value
       ? b.timestamp.getTime() - a.timestamp.getTime()
@@ -162,6 +167,18 @@ const feedItems = computed<FeedItem[]>(() => {
 
   return items;
 });
+
+const LENSES: { key: FeedLens; label: string }[] = [
+  { key: "comments", label: "Comments" },
+  { key: "activity", label: "Activity" },
+  { key: "all", label: "All" },
+];
+
+function lensCount(key: FeedLens): number | null {
+  if (key === "comments") return commentItems.value.length;
+  if (key === "activity") return activityItems.value.length;
+  return null;
+}
 
 function getCommentHistory(commentId: string): CommentVersion[] {
   return commentEditHistory.value.get(commentId) || [];
@@ -310,11 +327,34 @@ function getStateChangeDetail(activity: ActivityLogEntry): { from: string; to: s
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h3 class="flex items-center gap-2 font-semibold">
-        <History class="size-4" />
-        Activity
-      </h3>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-3">
+        <h3 class="flex items-center gap-2 font-semibold">
+          <History class="size-4" />
+          Activity
+        </h3>
+        <!-- Lens: comments, system activity, or the interleaved story. -->
+        <div class="flex items-center rounded-md border p-0.5">
+          <button
+            v-for="l in LENSES"
+            :key="l.key"
+            type="button"
+            class="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors"
+            :class="lens === l.key
+              ? 'bg-muted text-foreground'
+              : 'text-muted-foreground hover:text-foreground'"
+            @click="lens = l.key"
+          >
+            {{ l.label }}
+            <span
+              v-if="lensCount(l.key) !== null"
+              class="rounded-full bg-muted-foreground/10 px-1 text-[10px] tabular-nums"
+            >
+              {{ lensCount(l.key) }}
+            </span>
+          </button>
+        </div>
+      </div>
       <div class="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -443,12 +483,12 @@ function getStateChangeDetail(activity: ActivityLogEntry): { from: string; to: s
       </div>
     </div>
 
-    <!-- Empty state -->
+    <!-- Empty state, phrased for the visible lens -->
     <div
       v-else
       class="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground"
     >
-      No activity yet
+      {{ lens === "comments" ? "No comments yet" : lens === "activity" ? "No activity yet" : "Nothing here yet" }}
     </div>
 
     <!-- Comment Form (oldest first = bottom) -->

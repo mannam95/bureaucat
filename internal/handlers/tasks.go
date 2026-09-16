@@ -793,6 +793,38 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 			})
 		}
 
+		// Email requesters and watchers added at creation (category-gated;
+		// skip the creator adding themself).
+		for _, oid := range originatorIDs {
+			if oid == userID {
+				continue
+			}
+			h.notificationService.NotifyEmail(ctx, notifier.Notification{
+				Event:       notifier.EventAddedAsRequester,
+				RecipientID: oid,
+				ActorName:   actorName,
+				ProjectKey:  projectKey,
+				TaskNumber:  taskNum,
+				TaskTitle:   req.Title,
+				BaseURL:     baseURL,
+			})
+		}
+		for _, watcherIDStr := range req.Watchers {
+			wid, err := uuid.Parse(watcherIDStr)
+			if err != nil || wid == userID {
+				continue
+			}
+			h.notificationService.NotifyEmail(ctx, notifier.Notification{
+				Event:       notifier.EventAddedAsWatcher,
+				RecipientID: wid,
+				ActorName:   actorName,
+				ProjectKey:  projectKey,
+				TaskNumber:  taskNum,
+				TaskTitle:   req.Title,
+				BaseURL:     baseURL,
+			})
+		}
+
 		// Notify mentions in description
 		if req.Description != nil {
 			mentionedIDs := notifier.ParseMentions(*req.Description)
@@ -1993,6 +2025,24 @@ func (h *TaskHandler) AddOriginator(c *echo.Context) error {
 		},
 	})
 
+	// Tell the person they were made a requester (skip self-additions).
+	if h.notificationService != nil && originatorID != userID {
+		actorUser, _ := h.store.GetUserByID(ctx, userID)
+		actorName := actorUser.FirstName + " " + actorUser.LastName
+		if actorName == " " {
+			actorName = actorUser.Username
+		}
+		h.notificationService.NotifyEmail(ctx, notifier.Notification{
+			Event:       notifier.EventAddedAsRequester,
+			RecipientID: originatorID,
+			ActorName:   actorName,
+			ProjectKey:  c.Request().Header.Get(auth.HeaderProjectKey),
+			TaskNumber:  taskNum,
+			TaskTitle:   task.Title,
+			BaseURL:     requestBaseURL(c),
+		})
+	}
+
 	return c.JSON(http.StatusCreated, map[string]string{"message": "originator added"})
 }
 
@@ -2180,6 +2230,24 @@ func (h *TaskHandler) AddWatcher(c *echo.Context) error {
 			"last_name":  watcherUser.LastName,
 		},
 	})
+
+	// Tell the person they are now watching this task (skip self-additions).
+	if h.notificationService != nil && watcherID != userID {
+		actorUser, _ := h.store.GetUserByID(ctx, userID)
+		actorName := actorUser.FirstName + " " + actorUser.LastName
+		if actorName == " " {
+			actorName = actorUser.Username
+		}
+		h.notificationService.NotifyEmail(ctx, notifier.Notification{
+			Event:       notifier.EventAddedAsWatcher,
+			RecipientID: watcherID,
+			ActorName:   actorName,
+			ProjectKey:  c.Request().Header.Get(auth.HeaderProjectKey),
+			TaskNumber:  taskNum,
+			TaskTitle:   task.Title,
+			BaseURL:     requestBaseURL(c),
+		})
+	}
 
 	return c.JSON(http.StatusCreated, map[string]string{"message": "watcher added"})
 }

@@ -109,6 +109,18 @@ func renderEmail(n Notification) (subject, body string) {
 	case EventCommented:
 		subject = fmt.Sprintf("%s commented on %s", n.ActorName, ref)
 		body = fmt.Sprintf("%s commented on %s %q.", n.ActorName, ref, n.TaskTitle)
+	case EventStateChanged:
+		subject = fmt.Sprintf("Status changed on %s", ref)
+		body = fmt.Sprintf("%s changed the status of %s %q.", n.ActorName, ref, n.TaskTitle)
+	case EventAddedAsRequester:
+		subject = fmt.Sprintf("You were added as a requester on %s", ref)
+		body = fmt.Sprintf("%s added you as a requester on %s %q.", n.ActorName, ref, n.TaskTitle)
+	case EventAddedAsWatcher:
+		subject = fmt.Sprintf("You are now watching %s", ref)
+		body = fmt.Sprintf("%s added you as a watcher on %s %q.", n.ActorName, ref, n.TaskTitle)
+	case EventActivity:
+		subject = fmt.Sprintf("Update on %s", ref)
+		body = fmt.Sprintf("%s updated %s %q.", n.ActorName, ref, n.TaskTitle)
 	default:
 		subject = fmt.Sprintf("Update on %s", ref)
 		body = fmt.Sprintf("There was an update on %s %q.", ref, n.TaskTitle)

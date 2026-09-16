@@ -140,14 +140,6 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		srv.uploadService = uploadService
 		srv.uploadHandler = handlers.NewUploadHandler(srv.store, uploadService, srv.authManager)
 
-		// Initialize per-user in-app notifications service, then wire it into the
-		// activity service so every logged activity fans out to participants.
-		srv.notificationsService = notifications.NewService(srv.store)
-		srv.notificationsHandler = handlers.NewNotificationHandler(srv.store)
-
-		// Initialize activity service
-		srv.activityService = activity.NewService(srv.store, srv.notificationsService)
-
 		// Initialize notification service (loads providers dynamically from
 		// settings). An env-configured SMTP email provider is added as an
 		// always-on provider when the core SMTP variables are set; otherwise
@@ -165,6 +157,16 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 			log.Printf("notifier: email (SMTP) enabled via %s:%s", smtpCfg.Host, smtpCfg.Port)
 		}
 		srv.notificationService = notifier.NewService(srv.store, staticNotifiers...)
+
+		// Initialize per-user in-app notifications service, then wire it into the
+		// activity service so every logged activity fans out to participants —
+		// and, category-gated, to email. APP_BASE_URL makes the email links
+		// absolute; unset renders them relative.
+		srv.notificationsService = notifications.NewService(srv.store, srv.notificationService, strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"))
+		srv.notificationsHandler = handlers.NewNotificationHandler(srv.store)
+
+		// Initialize activity service
+		srv.activityService = activity.NewService(srv.store, srv.notificationsService)
 
 		// Initialize workspace, project and task handlers
 		srv.workspaceHandler = handlers.NewWorkspaceHandler(srv.store)

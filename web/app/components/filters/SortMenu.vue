@@ -12,14 +12,19 @@ const emit = defineEmits<{
   "update:sortDir": [value: SortDir];
 }>();
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "created_at", label: "Created date" },
-  { key: "updated_at", label: "Last updated" },
-  { key: "priority_rating", label: "Priority rating" },
-  { key: "due_date", label: "Due date" },
-  { key: "start_date", label: "Start date" },
-  { key: "title", label: "Title" },
+// Canonical option order, harmonized across all sort menus: work attributes
+// first, then dates in the task's lifecycle order. Surfaces lacking a field
+// omit it without reordering the rest.
+const WORK_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "state", label: "State" },
+  { key: "priority_rating", label: "Priority rating" },
+  { key: "title", label: "Title" },
+];
+const DATE_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "created_at", label: "Created date" },
+  { key: "start_date", label: "Start date" },
+  { key: "due_date", label: "Due date" },
+  { key: "updated_at", label: "Last updated" },
 ];
 </script>
 
@@ -36,7 +41,17 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
         Sort by
       </DropdownMenuLabel>
       <DropdownMenuItem
-        v-for="opt in SORT_OPTIONS"
+        v-for="opt in WORK_OPTIONS"
+        :key="opt.key"
+        class="flex items-center justify-between"
+        @click="emit('update:sortBy', opt.key)"
+      >
+        <span>{{ opt.label }}</span>
+        <Check v-if="sortBy === opt.key" class="size-3.5 text-primary" />
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        v-for="opt in DATE_OPTIONS"
         :key="opt.key"
         class="flex items-center justify-between"
         @click="emit('update:sortBy', opt.key)"

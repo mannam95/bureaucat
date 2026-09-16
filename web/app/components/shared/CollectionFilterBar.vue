@@ -67,11 +67,13 @@ const searchQuery = ref("");
 const sortKey = ref<SortKey | null>(null);
 const sortDir = ref<"asc" | "desc">("asc");
 
+// Canonical option order (work attributes first, then dates), matching
+// SortMenu; this surface has no date options today.
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "state_name", label: "State" },
   { key: "priority_rating", label: "Priority rating" },
-  { key: "title", label: "Title" },
   { key: "assignee", label: "Assignee" },
+  { key: "title", label: "Title" },
 ];
 
 // ---- options derived from the loaded tasks ----
