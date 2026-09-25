@@ -67,7 +67,7 @@ function formatSingle(field: string, item: string | number): string {
     const c = props.cycles.find((x) => x.id === item);
     return c?.title ?? String(item).slice(0, 6);
   }
-  if (field === "assignees" || field === "created_by") {
+  if (field === "assignees" || field === "watchers" || field === "created_by") {
     const m = props.members.find((x) => x.user_id === item);
     if (!m) return String(item).slice(0, 6);
     return `${m.first_name} ${m.last_name}`.trim() || m.username;

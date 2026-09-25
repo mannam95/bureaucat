@@ -101,6 +101,40 @@ func TestCompileAtMeBinding(t *testing.T) {
 	}
 }
 
+func TestCompileWatchersPredicates(t *testing.T) {
+	caller := uuid.New()
+	tree := FilterTree{Children: []FilterNode{
+		{Predicate: &Predicate{Field: "watchers", Op: "has_any", Value: mustRaw(t, []string{"@me"})}},
+	}}
+	c := compileOrFail(t, tree, caller)
+	if !strings.Contains(c.WhereSQL, "task_watchers") {
+		t.Fatalf("expected task_watchers join, got: %q", c.WhereSQL)
+	}
+	// The @me alias should be substituted into the arg slice.
+	found := false
+	for _, a := range c.Args {
+		if ids, ok := a.([]uuid.UUID); ok {
+			for _, id := range ids {
+				if id == caller {
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected caller UUID in args: %+v", c.Args)
+	}
+
+	// Presence ops take no value and emit a bare EXISTS check.
+	tree = FilterTree{Children: []FilterNode{
+		{Predicate: &Predicate{Field: "watchers", Op: "is_empty"}},
+	}}
+	c = compileOrFail(t, tree, caller)
+	if !strings.Contains(c.WhereSQL, "NOT EXISTS (SELECT 1 FROM task_watchers") {
+		t.Fatalf("expected NOT EXISTS on task_watchers, got: %q", c.WhereSQL)
+	}
+}
+
 func TestCompileRejectsUnknownField(t *testing.T) {
 	tree := FilterTree{Children: []FilterNode{
 		{Predicate: &Predicate{Field: "nope", Op: "is", Value: mustRaw(t, "x")}},

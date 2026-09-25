@@ -191,6 +191,13 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"assignees", "is_empty"}: assigneesPresence(false),
 	{"assignees", "is_set"}:   assigneesPresence(true),
 
+	// ---- watchers (join) ----
+	{"watchers", "has_any"}:  watchersExists(false),
+	{"watchers", "has_all"}:  watchersHasAll,
+	{"watchers", "has_none"}: watchersExists(true),
+	{"watchers", "is_empty"}: watchersPresence(false),
+	{"watchers", "is_set"}:   watchersPresence(true),
+
 	// ---- labels (join) ----
 	{"labels", "has_any"}:  labelsExists(false, false),
 	{"labels", "has_none"}: labelsExists(true, false),
@@ -476,6 +483,51 @@ func assigneesPresence(set bool) predicateHandler {
 			prefix = ""
 		}
 		return prefix + "EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id)", nil
+	}
+}
+
+// -------- watchers handlers (join via task_watchers; supports @me) --------
+
+func watchersExists(negate bool) predicateHandler {
+	return func(a *argBuffer, callerID uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		ids, err := decodeUUIDArray(v, callerID)
+		if err != nil {
+			return "", err
+		}
+		if len(ids) == 0 {
+			if negate {
+				return "TRUE", nil
+			}
+			return "FALSE", nil
+		}
+		p := a.push(ids)
+		prefix := ""
+		if negate {
+			prefix = "NOT "
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_watchers tw WHERE tw.task_id = t.id AND tw.user_id = ANY(" + p + "::uuid[]))", nil
+	}
+}
+
+func watchersHasAll(a *argBuffer, callerID uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+	ids, err := decodeUUIDArray(v, callerID)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "TRUE", nil
+	}
+	p := a.push(ids)
+	return "(SELECT COUNT(DISTINCT tw.user_id) FROM task_watchers tw WHERE tw.task_id = t.id AND tw.user_id = ANY(" + p + "::uuid[])) = " + strconv.Itoa(len(ids)), nil
+}
+
+func watchersPresence(set bool) predicateHandler {
+	return func(*argBuffer, uuid.UUID, time.Time, json.RawMessage) (string, error) {
+		prefix := "NOT "
+		if set {
+			prefix = ""
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_watchers tw WHERE tw.task_id = t.id)", nil
 	}
 }
 

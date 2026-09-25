@@ -14,6 +14,7 @@ import {
   Flame,
   Users,
   User,
+  Eye,
   Repeat,
   Calendar as CalendarIcon,
   MessageSquare,
@@ -84,6 +85,19 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
       { op: "is_empty", label: "is unassigned", valueKind: "none" },
       { op: "is_set", label: "has any assignee", valueKind: "none" },
+    ],
+  },
+  {
+    field: "watchers",
+    label: "Watchers",
+    icon: Eye,
+    entityKind: "member",
+    ops: [
+      { op: "has_any", label: "include any of", valueKind: "uuid-array" },
+      { op: "has_all", label: "include all of", valueKind: "uuid-array" },
+      { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "has no watchers", valueKind: "none" },
+      { op: "is_set", label: "has any watcher", valueKind: "none" },
     ],
   },
   {

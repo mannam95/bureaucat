@@ -216,6 +216,7 @@ export type FilterField =
   | "state_type"
   | "priority"
   | "assignees"
+  | "watchers"
   | "created_by"
   | "labels"
   | "cycle"
