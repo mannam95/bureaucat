@@ -62,12 +62,20 @@ func (q *Queries) CheckCycleOverlap(ctx context.Context, arg CheckCycleOverlapPa
 
 const countProjectCycles = `-- name: CountProjectCycles :one
 SELECT COUNT(*)
-FROM cycles
-WHERE project_id = $1 AND deleted_at IS NULL
+FROM cycles c
+WHERE c.project_id = $1 AND c.deleted_at IS NULL
+  AND ($2::text = ''
+       OR ($2::text = 'active'    AND c.end_date >= CURRENT_DATE)
+       OR ($2::text = 'completed' AND c.end_date <  CURRENT_DATE))
 `
 
-func (q *Queries) CountProjectCycles(ctx context.Context, projectID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countProjectCycles, projectID)
+type CountProjectCyclesParams struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	StatusGroup string    `json:"status_group"`
+}
+
+func (q *Queries) CountProjectCycles(ctx context.Context, arg CountProjectCyclesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjectCycles, arg.ProjectID, arg.StatusGroup)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -476,14 +484,18 @@ LEFT JOIN LATERAL (
     WHERE ct.cycle_id = c.id
 ) stats ON TRUE
 WHERE c.project_id = $1 AND c.deleted_at IS NULL
+  AND ($4::text = ''
+       OR ($4::text = 'active'    AND c.end_date >= CURRENT_DATE)
+       OR ($4::text = 'completed' AND c.end_date <  CURRENT_DATE))
 ORDER BY c.start_date DESC, c.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListProjectCyclesParams struct {
-	ProjectID uuid.UUID `json:"project_id"`
-	Limit     int32     `json:"limit"`
-	Offset    int32     `json:"offset"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+	StatusGroup string    `json:"status_group"`
 }
 
 type ListProjectCyclesRow struct {
@@ -502,7 +514,12 @@ type ListProjectCyclesRow struct {
 }
 
 func (q *Queries) ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error) {
-	rows, err := q.db.Query(ctx, listProjectCycles, arg.ProjectID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listProjectCycles,
+		arg.ProjectID,
+		arg.Limit,
+		arg.Offset,
+		arg.StatusGroup,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -42,12 +42,14 @@ export function useCycles() {
   async function listCycles(
     projectKey: string,
     page = 1,
-    perPage = 20
+    perPage = 20,
+    statusGroup?: "active" | "completed"
   ): Promise<{ success: boolean; data?: PaginatedCyclesResponse; error?: string }> {
     try {
       state.loading = true;
+      const groupParam = statusGroup ? `&status_group=${statusGroup}` : "";
       const response = await fetch(
-        `/api/v1/projects/${projectKey}/cycles?page=${page}&per_page=${perPage}`,
+        `/api/v1/projects/${projectKey}/cycles?page=${page}&per_page=${perPage}${groupParam}`,
         { headers: getAuthHeader() }
       );
       if (!response.ok) {

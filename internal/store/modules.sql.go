@@ -78,15 +78,19 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND ($4::date IS NULL OR m.start_date >= $4::date)
   AND ($5::date  IS NULL OR m.end_date   <= $5::date)
   AND ($6::text = '' OR m.title ILIKE '%' || $6 || '%' OR COALESCE(m.description, '') ILIKE '%' || $6 || '%')
+  AND ($7::text = ''
+       OR ($7::text = 'active'    AND m.status NOT IN ('completed', 'cancelled'))
+       OR ($7::text = 'completed' AND m.status IN ('completed', 'cancelled')))
 `
 
 type CountProjectModulesParams struct {
-	ProjectID  uuid.UUID   `json:"project_id"`
-	Status     string      `json:"status"`
-	LeadID     pgtype.UUID `json:"lead_id"`
-	StartAfter pgtype.Date `json:"start_after"`
-	EndBefore  pgtype.Date `json:"end_before"`
-	Search     string      `json:"search"`
+	ProjectID   uuid.UUID   `json:"project_id"`
+	Status      string      `json:"status"`
+	LeadID      pgtype.UUID `json:"lead_id"`
+	StartAfter  pgtype.Date `json:"start_after"`
+	EndBefore   pgtype.Date `json:"end_before"`
+	Search      string      `json:"search"`
+	StatusGroup string      `json:"status_group"`
 }
 
 func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error) {
@@ -97,6 +101,7 @@ func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModul
 		arg.StartAfter,
 		arg.EndBefore,
 		arg.Search,
+		arg.StatusGroup,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -715,46 +720,50 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND ($6::date IS NULL OR m.start_date >= $6::date)
   AND ($7::date  IS NULL OR m.end_date   <= $7::date)
   AND ($8::text = '' OR m.title ILIKE '%' || $8 || '%' OR COALESCE(m.description, '') ILIKE '%' || $8 || '%')
+  AND ($9::text = ''
+       OR ($9::text = 'active'    AND m.status NOT IN ('completed', 'cancelled'))
+       OR ($9::text = 'completed' AND m.status IN ('completed', 'cancelled')))
 ORDER BY
-    CASE WHEN $9::text = 'end_date' AND $10::text = 'asc'
+    CASE WHEN $10::text = 'end_date' AND $11::text = 'asc'
          THEN m.end_date END ASC NULLS LAST,
-    CASE WHEN $9::text = 'end_date' AND $10::text = 'desc'
+    CASE WHEN $10::text = 'end_date' AND $11::text = 'desc'
          THEN m.end_date END DESC NULLS LAST,
-    CASE WHEN $9::text = 'progress' AND $10::text = 'asc'
+    CASE WHEN $10::text = 'progress' AND $11::text = 'asc'
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END ASC NULLS LAST,
-    CASE WHEN $9::text = 'progress' AND $10::text = 'desc'
+    CASE WHEN $10::text = 'progress' AND $11::text = 'desc'
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END DESC NULLS LAST,
-    CASE WHEN $9::text = 'priority_rating' AND $10::text = 'asc'
+    CASE WHEN $10::text = 'priority_rating' AND $11::text = 'asc'
          THEN m.priority_rating END ASC NULLS LAST,
-    CASE WHEN $9::text = 'priority_rating' AND $10::text = 'desc'
+    CASE WHEN $10::text = 'priority_rating' AND $11::text = 'desc'
          THEN m.priority_rating END DESC NULLS LAST,
-    CASE WHEN $9::text = 'title' AND $10::text = 'asc'
+    CASE WHEN $10::text = 'title' AND $11::text = 'asc'
          THEN m.title END ASC NULLS LAST,
-    CASE WHEN $9::text = 'title' AND $10::text = 'desc'
+    CASE WHEN $10::text = 'title' AND $11::text = 'desc'
          THEN m.title END DESC NULLS LAST,
-    CASE WHEN $9::text = 'created_at' AND $10::text = 'asc'
+    CASE WHEN $10::text = 'created_at' AND $11::text = 'asc'
          THEN m.created_at END ASC NULLS LAST,
-    CASE WHEN $9::text = 'created_at' AND $10::text = 'desc'
+    CASE WHEN $10::text = 'created_at' AND $11::text = 'desc'
          THEN m.created_at END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListProjectModulesParams struct {
-	ProjectID  uuid.UUID   `json:"project_id"`
-	Limit      int32       `json:"limit"`
-	Offset     int32       `json:"offset"`
-	Status     string      `json:"status"`
-	LeadID     pgtype.UUID `json:"lead_id"`
-	StartAfter pgtype.Date `json:"start_after"`
-	EndBefore  pgtype.Date `json:"end_before"`
-	Search     string      `json:"search"`
-	SortBy     string      `json:"sort_by"`
-	SortDir    string      `json:"sort_dir"`
+	ProjectID   uuid.UUID   `json:"project_id"`
+	Limit       int32       `json:"limit"`
+	Offset      int32       `json:"offset"`
+	Status      string      `json:"status"`
+	LeadID      pgtype.UUID `json:"lead_id"`
+	StartAfter  pgtype.Date `json:"start_after"`
+	EndBefore   pgtype.Date `json:"end_before"`
+	Search      string      `json:"search"`
+	StatusGroup string      `json:"status_group"`
+	SortBy      string      `json:"sort_by"`
+	SortDir     string      `json:"sort_dir"`
 }
 
 type ListProjectModulesRow struct {
@@ -790,6 +799,7 @@ func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModules
 		arg.StartAfter,
 		arg.EndBefore,
 		arg.Search,
+		arg.StatusGroup,
 		arg.SortBy,
 		arg.SortDir,
 	)

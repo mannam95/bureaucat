@@ -261,17 +261,26 @@ func (h *CycleHandler) ListCycles(c *echo.Context) error {
 	}
 	offset := (page - 1) * perPage
 
+	statusGroup := c.QueryParam("status_group")
+	if statusGroup != "active" && statusGroup != "completed" {
+		statusGroup = ""
+	}
+
 	ctx := c.Request().Context()
 
-	total, err := h.store.CountProjectCycles(ctx, projectID)
+	total, err := h.store.CountProjectCycles(ctx, store.CountProjectCyclesParams{
+		ProjectID:   projectID,
+		StatusGroup: statusGroup,
+	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count cycles")
 	}
 
 	rows, err := h.store.ListProjectCycles(ctx, store.ListProjectCyclesParams{
-		ProjectID: projectID,
-		Limit:     int32(perPage),
-		Offset:    int32(offset),
+		ProjectID:   projectID,
+		Limit:       int32(perPage),
+		Offset:      int32(offset),
+		StatusGroup: statusGroup,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list cycles")

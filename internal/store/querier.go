@@ -54,7 +54,7 @@ type Querier interface {
 	CountDeletedProjects(ctx context.Context) (int64, error)
 	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountPages(ctx context.Context) (int64, error)
-	CountProjectCycles(ctx context.Context, projectID uuid.UUID) (int64, error)
+	CountProjectCycles(ctx context.Context, arg CountProjectCyclesParams) (int64, error)
 	CountProjectMembers(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error)
 	CountProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)

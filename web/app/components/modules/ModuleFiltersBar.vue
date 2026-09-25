@@ -5,7 +5,12 @@ import { MODULE_STATUSES } from "~/types";
 
 const props = defineProps<{
   projectKey: string;
+  // Restricts the status dropdown (e.g. to the statuses of the visible
+  // Active/Completed tab). Defaults to every status.
+  statuses?: readonly ModuleStatus[];
 }>();
+
+const statusOptions = computed(() => props.statuses ?? MODULE_STATUSES);
 
 const model = defineModel<ModuleListFilters>({ required: true });
 
@@ -81,7 +86,7 @@ function selectLead(o: LeadOption) {
       </SelectTrigger>
       <SelectContent>
         <SelectItem :value="ALL_STATUSES">All statuses</SelectItem>
-        <SelectItem v-for="s in MODULE_STATUSES" :key="s" :value="s" class="capitalize">
+        <SelectItem v-for="s in statusOptions" :key="s" :value="s" class="capitalize">
           {{ s.replace("_", " ") }}
         </SelectItem>
       </SelectContent>

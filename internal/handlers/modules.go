@@ -536,6 +536,12 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 	// Free-text search over title and description; empty means "no filter".
 	search := strings.TrimSpace(c.QueryParam("search"))
 
+	// Tab-level grouping: active = anything not finished, completed = completed/cancelled.
+	statusGroup := c.QueryParam("status_group")
+	if statusGroup != "active" && statusGroup != "completed" {
+		statusGroup = ""
+	}
+
 	// Sort
 	sortBy := strings.TrimSpace(c.QueryParam("sort_by"))
 	switch sortBy {
@@ -552,28 +558,30 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	total, err := h.store.CountProjectModules(ctx, store.CountProjectModulesParams{
-		ProjectID:  projectID,
-		Status:     statusFilter,
-		LeadID:     leadParam,
-		StartAfter: startAfter,
-		EndBefore:  endBefore,
-		Search:     search,
+		ProjectID:   projectID,
+		Status:      statusFilter,
+		LeadID:      leadParam,
+		StartAfter:  startAfter,
+		EndBefore:   endBefore,
+		Search:      search,
+		StatusGroup: statusGroup,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count modules")
 	}
 
 	rows, err := h.store.ListProjectModules(ctx, store.ListProjectModulesParams{
-		ProjectID:  projectID,
-		Limit:      int32(perPage),
-		Offset:     int32(offset),
-		Status:     statusFilter,
-		LeadID:     leadParam,
-		StartAfter: startAfter,
-		EndBefore:  endBefore,
-		Search:     search,
-		SortBy:     sortBy,
-		SortDir:    sortDir,
+		ProjectID:   projectID,
+		Limit:       int32(perPage),
+		Offset:      int32(offset),
+		Status:      statusFilter,
+		LeadID:      leadParam,
+		StartAfter:  startAfter,
+		EndBefore:   endBefore,
+		Search:      search,
+		StatusGroup: statusGroup,
+		SortBy:      sortBy,
+		SortDir:     sortDir,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list modules")

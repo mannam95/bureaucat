@@ -15,6 +15,16 @@ const perPage = 12;
 // are listed latest-first server-side in both views.
 const viewMode = useViewMode("cycles.overview.view_mode");
 
+// Active/Completed tabs; each tab fetches only its own slice from the server.
+// A cycle counts as completed once its end date has passed; upcoming cycles
+// live on the Active tab. Session-only, defaults to Active.
+const statusGroup = ref<"active" | "completed">("active");
+const STATUS_TABS = [
+  { key: "active", label: "Active" },
+  { key: "completed", label: "Completed" },
+] as const;
+watch(statusGroup, () => fetchPage(1));
+
 // How many top-level tasks aren't in any cycle, for the backlog card that opens
 // the "Tasks Without a Cycle" view. Only shown to admins (adding is admin-only).
 const backlogCount = ref(0);
@@ -23,10 +33,12 @@ async function loadBacklogCount() {
   const r = await listUnassignedTasks(props.projectKey, "", 100);
   if (r.success && r.data) backlogCount.value = r.data.length;
 }
-const showBacklogCard = computed(() => props.isAdmin && backlogCount.value > 0);
+const showBacklogCard = computed(
+  () => props.isAdmin && backlogCount.value > 0 && statusGroup.value === "active"
+);
 
 function fetchPage(p = 1) {
-  listCycles(props.projectKey, p, perPage);
+  listCycles(props.projectKey, p, perPage, statusGroup.value);
 }
 
 function goToPage(p: number) {
@@ -35,7 +47,12 @@ function goToPage(p: number) {
 }
 
 function onCreated() {
-  fetchPage(1);
+  // A fresh cycle is (almost always) active; jump there so it's visible.
+  if (statusGroup.value !== "active") {
+    statusGroup.value = "active"; // the watcher refetches page 1
+  } else {
+    fetchPage(1);
+  }
 }
 
 onMounted(() => {
@@ -71,6 +88,21 @@ watch(
       </div>
     </div>
 
+    <div class="flex w-fit items-center rounded-md border p-0.5">
+      <button
+        v-for="t in STATUS_TABS"
+        :key="t.key"
+        type="button"
+        class="rounded px-3 py-1 text-sm font-medium transition-colors"
+        :class="statusGroup === t.key
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground hover:text-foreground'"
+        @click="statusGroup = t.key"
+      >
+        {{ t.label }}
+      </button>
+    </div>
+
     <div v-if="loading" class="flex items-center justify-center py-12">
       <Loader2 class="size-6 animate-spin text-muted-foreground" />
     </div>
@@ -82,14 +114,22 @@ watch(
       <div class="flex size-16 items-center justify-center rounded-full bg-muted">
         <Repeat class="size-8 text-muted-foreground" />
       </div>
-      <h3 class="mt-4 text-lg font-semibold">No cycles yet</h3>
-      <p class="mt-2 max-w-sm text-center text-sm text-muted-foreground">
-        Create a cycle to plan a batch of work across a time window.
-      </p>
-      <Button v-if="isAdmin" class="mt-4" @click="showCreate = true">
-        <Plus class="mr-2 size-4" />
-        New Cycle
-      </Button>
+      <template v-if="statusGroup === 'completed'">
+        <h3 class="mt-4 text-lg font-semibold">No completed cycles</h3>
+        <p class="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+          Cycles show up here once their end date has passed.
+        </p>
+      </template>
+      <template v-else>
+        <h3 class="mt-4 text-lg font-semibold">No active cycles</h3>
+        <p class="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+          Create a cycle to plan a batch of work across a time window.
+        </p>
+        <Button v-if="isAdmin" class="mt-4" @click="showCreate = true">
+          <Plus class="mr-2 size-4" />
+          New Cycle
+        </Button>
+      </template>
     </div>
 
     <template v-else>

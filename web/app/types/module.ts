@@ -131,6 +131,8 @@ export interface DuplicateModuleRequest {
 
 export interface ModuleListFilters {
   status?: ModuleStatus;
+  /** Tab-level grouping; session-only, never persisted to preferences. */
+  status_group?: "active" | "completed";
   search?: string;
   lead_id?: string;
   start_after?: string;

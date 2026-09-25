@@ -45,13 +45,19 @@ LEFT JOIN LATERAL (
     WHERE ct.cycle_id = c.id
 ) stats ON TRUE
 WHERE c.project_id = $1 AND c.deleted_at IS NULL
+  AND (sqlc.arg('status_group')::text = ''
+       OR (sqlc.arg('status_group')::text = 'active'    AND c.end_date >= CURRENT_DATE)
+       OR (sqlc.arg('status_group')::text = 'completed' AND c.end_date <  CURRENT_DATE))
 ORDER BY c.start_date DESC, c.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountProjectCycles :one
 SELECT COUNT(*)
-FROM cycles
-WHERE project_id = $1 AND deleted_at IS NULL;
+FROM cycles c
+WHERE c.project_id = $1 AND c.deleted_at IS NULL
+  AND (sqlc.arg('status_group')::text = ''
+       OR (sqlc.arg('status_group')::text = 'active'    AND c.end_date >= CURRENT_DATE)
+       OR (sqlc.arg('status_group')::text = 'completed' AND c.end_date <  CURRENT_DATE));
 
 -- name: ListProjectCyclesAll :many
 SELECT c.id, c.title, c.start_date, c.end_date

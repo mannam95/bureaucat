@@ -109,6 +109,9 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND (sqlc.narg('start_after')::date IS NULL OR m.start_date >= sqlc.narg('start_after')::date)
   AND (sqlc.narg('end_before')::date  IS NULL OR m.end_date   <= sqlc.narg('end_before')::date)
   AND (sqlc.arg('search')::text = '' OR m.title ILIKE '%' || sqlc.arg('search') || '%' OR COALESCE(m.description, '') ILIKE '%' || sqlc.arg('search') || '%')
+  AND (sqlc.arg('status_group')::text = ''
+       OR (sqlc.arg('status_group')::text = 'active'    AND m.status NOT IN ('completed', 'cancelled'))
+       OR (sqlc.arg('status_group')::text = 'completed' AND m.status IN ('completed', 'cancelled')))
 ORDER BY
     CASE WHEN sqlc.arg('sort_by')::text = 'end_date' AND sqlc.arg('sort_dir')::text = 'asc'
          THEN m.end_date END ASC NULLS LAST,
@@ -177,7 +180,10 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND (sqlc.narg('lead_id')::uuid   IS NULL  OR m.lead_id = sqlc.narg('lead_id')::uuid)
   AND (sqlc.narg('start_after')::date IS NULL OR m.start_date >= sqlc.narg('start_after')::date)
   AND (sqlc.narg('end_before')::date  IS NULL OR m.end_date   <= sqlc.narg('end_before')::date)
-  AND (sqlc.arg('search')::text = '' OR m.title ILIKE '%' || sqlc.arg('search') || '%' OR COALESCE(m.description, '') ILIKE '%' || sqlc.arg('search') || '%');
+  AND (sqlc.arg('search')::text = '' OR m.title ILIKE '%' || sqlc.arg('search') || '%' OR COALESCE(m.description, '') ILIKE '%' || sqlc.arg('search') || '%')
+  AND (sqlc.arg('status_group')::text = ''
+       OR (sqlc.arg('status_group')::text = 'active'    AND m.status NOT IN ('completed', 'cancelled'))
+       OR (sqlc.arg('status_group')::text = 'completed' AND m.status IN ('completed', 'cancelled')));
 
 -- ==================== MODULE MEMBERS ====================
 
