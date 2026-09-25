@@ -485,6 +485,7 @@ type ProjectView struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	DefaultTab  string             `json:"default_tab"`
+	IsDefault   bool               `json:"is_default"`
 }
 
 type RefreshToken struct {
