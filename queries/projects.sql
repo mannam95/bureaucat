@@ -87,8 +87,9 @@ SELECT COUNT(*) FROM projects WHERE deleted_at IS NOT NULL;
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $2 OFFSET $3;
 
 -- name: CountUserProjects :one
@@ -100,8 +101,9 @@ WHERE pm.user_id = $1 AND p.deleted_at IS NULL;
 -- name: ListAllProjects :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE p.deleted_at IS NULL
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $1 OFFSET $2;
 
 -- name: CountAllProjects :one
@@ -113,10 +115,11 @@ WHERE p.deleted_at IS NULL;
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
   AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%')
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $2 OFFSET $3;
 
 -- name: CountUserProjectsFiltered :one
@@ -130,10 +133,11 @@ WHERE pm.user_id = $1 AND p.deleted_at IS NULL
 -- name: ListAllProjectsFiltered :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE p.deleted_at IS NULL
   AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
   AND (sqlc.narg('search')::text IS NULL OR p.name ILIKE '%' || sqlc.narg('search') || '%' OR p.project_key ILIKE '%' || sqlc.narg('search') || '%' OR p.description ILIKE '%' || sqlc.narg('search') || '%')
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $1 OFFSET $2;
 
 -- name: CountAllProjectsFiltered :one
@@ -883,3 +887,12 @@ SELECT id, project_id, name, color, created_at
 FROM project_labels
 WHERE project_id = $1 AND name = $2
 LIMIT 1;
+
+-- name: ReorderProjects :exec
+-- Pass a JSON array of {id, new_position} objects. Site-admin only
+-- (enforced in the route); positions are one global order for everyone.
+INSERT INTO project_ordering (project_id, position)
+SELECT u.id, u.new_position
+FROM jsonb_to_recordset(@items::jsonb) AS u(id uuid, new_position int)
+WHERE EXISTS (SELECT 1 FROM projects pr WHERE pr.id = u.id AND pr.deleted_at IS NULL)
+ON CONFLICT (project_id) DO UPDATE SET position = EXCLUDED.position;

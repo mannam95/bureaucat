@@ -1322,8 +1322,9 @@ func (q *Queries) IsTaskWatcher(ctx context.Context, arg IsTaskWatcherParams) (b
 const listAllProjects = `-- name: ListAllProjects :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE p.deleted_at IS NULL
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $1 OFFSET $2
 `
 
@@ -1383,10 +1384,11 @@ func (q *Queries) ListAllProjects(ctx context.Context, arg ListAllProjectsParams
 const listAllProjectsFiltered = `-- name: ListAllProjectsFiltered :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, 'admin' AS role
 FROM projects p
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE p.deleted_at IS NULL
   AND ($3::uuid IS NULL OR p.workspace_id = $3)
   AND ($4::text IS NULL OR p.name ILIKE '%' || $4 || '%' OR p.project_key ILIKE '%' || $4 || '%' OR p.description ILIKE '%' || $4 || '%')
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $1 OFFSET $2
 `
 
@@ -2735,8 +2737,9 @@ const listUserProjects = `-- name: ListUserProjects :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $2 OFFSET $3
 `
 
@@ -2798,10 +2801,11 @@ const listUserProjectsFiltered = `-- name: ListUserProjectsFiltered :many
 SELECT p.id, p.project_key, p.name, p.description, p.icon_id, p.cover_id, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.workspace_id, pm.role
 FROM projects p
 JOIN project_members pm ON p.id = pm.project_id
+LEFT JOIN project_ordering po ON po.project_id = p.id
 WHERE pm.user_id = $1 AND p.deleted_at IS NULL
   AND ($4::uuid IS NULL OR p.workspace_id = $4)
   AND ($5::text IS NULL OR p.name ILIKE '%' || $5 || '%' OR p.project_key ILIKE '%' || $5 || '%' OR p.description ILIKE '%' || $5 || '%')
-ORDER BY p.name ASC
+ORDER BY po.position ASC NULLS LAST, p.name ASC
 LIMIT $2 OFFSET $3
 `
 
@@ -3079,6 +3083,21 @@ type RemoveTaskWatcherParams struct {
 
 func (q *Queries) RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error {
 	_, err := q.db.Exec(ctx, removeTaskWatcher, arg.TaskID, arg.UserID)
+	return err
+}
+
+const reorderProjects = `-- name: ReorderProjects :exec
+INSERT INTO project_ordering (project_id, position)
+SELECT u.id, u.new_position
+FROM jsonb_to_recordset($1::jsonb) AS u(id uuid, new_position int)
+WHERE EXISTS (SELECT 1 FROM projects pr WHERE pr.id = u.id AND pr.deleted_at IS NULL)
+ON CONFLICT (project_id) DO UPDATE SET position = EXCLUDED.position
+`
+
+// Pass a JSON array of {id, new_position} objects. Site-admin only
+// (enforced in the route); positions are one global order for everyone.
+func (q *Queries) ReorderProjects(ctx context.Context, items []byte) error {
+	_, err := q.db.Exec(ctx, reorderProjects, items)
 	return err
 }
 

@@ -90,6 +90,34 @@ export function useProjects() {
     }
   }
 
+  // Persist the global manual order of project cards (site admins only; the
+  // server rejects everyone else). `ordered` is the full new order of the
+  // currently listed page — the composable state is updated optimistically so
+  // the drop lands without a refetch flicker.
+  async function reorderProjects(
+    items: { id: string; position: number }[],
+    ordered: Project[]
+  ): Promise<{ success: boolean; error?: string }> {
+    const previous = state.projects;
+    state.projects = ordered;
+    try {
+      const response = await fetch(`/api/v1/projects/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ items }),
+      });
+      if (!response.ok) {
+        state.projects = previous;
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to reorder projects" };
+      }
+      return { success: true };
+    } catch {
+      state.projects = previous;
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function createProject(
     data: CreateProjectRequest
   ): Promise<{ success: boolean; data?: Project; error?: string }> {
@@ -753,6 +781,7 @@ export function useProjects() {
 
     // Projects
     listProjects,
+    reorderProjects,
     createProject,
     getProject,
     updateProject,

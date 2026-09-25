@@ -174,6 +174,8 @@ func (s *Server) registerRoutes() {
 		if s.projectHandler != nil {
 			protected.GET("/projects", s.projectHandler.ListProjects)
 			protected.POST("/projects", s.projectHandler.CreateProject)
+			// Global manual ordering of project cards; site admins only.
+			protected.PATCH("/projects/reorder", s.projectHandler.ReorderProjects, auth.AdminMiddleware())
 
 			// Reassign a project to another workspace (admin only). Registered
 			// outside the project group so it bypasses project membership and the

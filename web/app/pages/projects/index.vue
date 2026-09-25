@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, FolderKanban, Search, Loader2, ChevronLeft, ChevronRight, Link, Check } from "lucide-vue-next";
+import { Plus, FolderKanban, Search, Loader2, ChevronLeft, ChevronRight, Link, Check, Menu } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 
 definePageMeta({
@@ -16,7 +16,8 @@ function copyLink() {
   setTimeout(() => { copied.value = false; }, 2000);
 }
 
-const { projects, loading, listProjects, total, page, totalPages } = useProjects();
+const { projects, loading, listProjects, reorderProjects, total, page, totalPages } = useProjects();
+const { user } = useAuth();
 const { currentWorkspace } = useWorkspaces();
 // Shares the dashboard's "all workspaces" preference (same localStorage key).
 const { showAllWorkspaces } = useDashboardScope();
@@ -56,6 +57,54 @@ function goToPage(p: number) {
 onMounted(() => {
   fetchProjects(1);
 });
+
+// ---- Drag-and-drop ordering (site admins only) ----
+// One global order shared by everyone; the dashboard renders the same order
+// but only this page can change it. Disabled while searching, since the
+// positions are global and a filtered subset would scatter them.
+const canReorder = computed(
+  () => user.value?.user_type === "admin" && !searchQuery.value.trim()
+);
+const dragIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+// The HTML5 draggable flag is armed from the grip handle only, so the card's
+// link stays clickable and never starts a drag on its own.
+const armedIndex = ref<number | null>(null);
+
+function onDragStart(idx: number, e: DragEvent) {
+  if (!canReorder.value || armedIndex.value !== idx) {
+    e.preventDefault();
+    return;
+  }
+  dragIndex.value = idx;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox refuses to start a drag with no data attached.
+    e.dataTransfer.setData("text/plain", String(idx));
+  }
+}
+
+function onDragEnd() {
+  dragIndex.value = null;
+  dragOverIndex.value = null;
+  armedIndex.value = null;
+}
+
+async function onDrop(targetIdx: number) {
+  const from = dragIndex.value;
+  onDragEnd();
+  if (from === null || from === targetIdx) return;
+  const next = [...projects.value];
+  const moved = next.splice(from, 1)[0]!;
+  next.splice(targetIdx, 0, moved);
+  // Positions are global: page 1 gets 1..12, page 2 continues after it.
+  const items = next.map((p, i) => ({
+    id: p.id,
+    position: (page.value - 1) * perPage + i + 1,
+  }));
+  const res = await reorderProjects(items, next);
+  if (!res.success) toast.error(res.error || "Failed to reorder projects");
+}
 </script>
 
 <template>
@@ -154,12 +203,39 @@ onMounted(() => {
         <!-- Projects grid -->
         <template v-else>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <ProjectCard
-              v-for="project in projects"
+            <div
+              v-for="(project, idx) in projects"
               :key="project.id"
-              :project="project"
-              :show-workspace="showAllWorkspaces"
-            />
+              class="group/card relative h-full"
+              :class="[
+                dragOverIndex === idx && dragIndex !== null && dragIndex !== idx
+                  ? 'rounded-xl ring-2 ring-amber-500/50'
+                  : '',
+                dragIndex === idx ? 'opacity-50' : '',
+              ]"
+              :draggable="canReorder && armedIndex === idx ? true : undefined"
+              @dragstart="onDragStart(idx, $event)"
+              @dragover.prevent="canReorder && dragIndex !== null && (dragOverIndex = idx)"
+              @drop.prevent="canReorder && onDrop(idx)"
+              @dragend="onDragEnd"
+            >
+              <ProjectCard
+                class="block h-full"
+                :project="project"
+                :show-workspace="showAllWorkspaces"
+              />
+              <button
+                v-if="canReorder"
+                type="button"
+                aria-label="Drag to reorder"
+                title="Drag to reorder"
+                class="absolute bottom-2 right-2 cursor-grab rounded-md p-1.5 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover/card:opacity-100"
+                @mousedown="armedIndex = idx"
+                @mouseup="armedIndex = null"
+              >
+                <Menu class="size-4" />
+              </button>
+            </div>
           </div>
 
           <!-- Pagination -->

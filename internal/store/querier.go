@@ -335,6 +335,9 @@ type Querier interface {
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
+	// Pass a JSON array of {id, new_position} objects. Site-admin only
+	// (enforced in the route); positions are one global order for everyone.
+	ReorderProjects(ctx context.Context, items []byte) error
 	RestoreProject(ctx context.Context, id uuid.UUID) error
 	// Restores a deleted account back to Active (usable right away).
 	RestoreUser(ctx context.Context, id uuid.UUID) error

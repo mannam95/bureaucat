@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -222,6 +223,54 @@ func (h *ProjectHandler) ListProjects(c *echo.Context) error {
 		PerPage:    perPage,
 		TotalPages: totalPages,
 	})
+}
+
+// ReorderProjectsRequest is the body for PATCH /projects/reorder.
+type ReorderProjectsRequest struct {
+	Items []ReorderProjectItem `json:"items"`
+}
+
+type ReorderProjectItem struct {
+	ID       uuid.UUID `json:"id"`
+	Position int       `json:"position"`
+}
+
+// ReorderProjects saves the manual order of project cards. Site admins only
+// (route-gated): there is one global order, shared by everyone on /projects
+// and the dashboard.
+//
+//	@Summary		Reorder project cards
+//	@Tags			Projects
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		ReorderProjectsRequest	true	"Ordered list"
+//	@Success		200		{object}	MessageResponse
+//	@Security		BearerAuth
+//	@Router			/projects/reorder [patch]
+func (h *ProjectHandler) ReorderProjects(c *echo.Context) error {
+	var req ReorderProjectsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if len(req.Items) == 0 {
+		return c.JSON(http.StatusOK, map[string]string{"message": "nothing to reorder"})
+	}
+	type reorderRow struct {
+		ID          uuid.UUID `json:"id"`
+		NewPosition int       `json:"new_position"`
+	}
+	rows := make([]reorderRow, len(req.Items))
+	for i, item := range req.Items {
+		rows[i] = reorderRow{ID: item.ID, NewPosition: item.Position}
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to encode reorder payload")
+	}
+	if err := h.store.ReorderProjects(c.Request().Context(), payload); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to reorder projects")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "reordered"})
 }
 
 // CreateProject creates a new project.

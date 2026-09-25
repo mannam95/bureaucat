@@ -452,6 +452,11 @@ type ProjectMember struct {
 	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
 }
 
+type ProjectOrdering struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Position  int32     `json:"position"`
+}
+
 type ProjectState struct {
 	ID        uuid.UUID          `json:"id"`
 	ProjectID uuid.UUID          `json:"project_id"`
