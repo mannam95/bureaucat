@@ -8,19 +8,19 @@ INSERT INTO project_views (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, project_id, slug, name, description, visibility, owner_id,
           filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-          created_at, updated_at, deleted_at;
+          is_default, created_at, updated_at, deleted_at;
 
 -- name: GetProjectViewBySlug :one
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE project_id = $1 AND slug = $2 AND deleted_at IS NULL;
 
 -- name: GetProjectViewByID :one
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE id = $1 AND deleted_at IS NULL;
 
@@ -28,7 +28,7 @@ WHERE id = $1 AND deleted_at IS NULL;
 -- Returns every shared view in the project plus private views owned by the caller.
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE project_id = $1
   AND deleted_at IS NULL
@@ -56,7 +56,7 @@ SET name        = COALESCE(sqlc.narg('name'), name),
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_id, slug, name, description, visibility, owner_id,
           filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-          created_at, updated_at, deleted_at;
+          is_default, created_at, updated_at, deleted_at;
 
 -- name: SoftDeleteProjectView :exec
 UPDATE project_views
@@ -81,3 +81,16 @@ WHERE project_id = $1 AND owner_id = $2 AND visibility = 'shared' AND deleted_at
 UPDATE project_views
 SET deleted_at = NOW(), updated_at = NOW()
 WHERE project_id = $1 AND owner_id = $2 AND visibility = 'private' AND deleted_at IS NULL;
+
+-- name: SetProjectDefaultView :exec
+-- Points the project's single default at one view: sets the flag there and
+-- clears it everywhere else in one statement.
+UPDATE project_views
+SET is_default = (id = sqlc.arg('view_id')::uuid), updated_at = NOW()
+WHERE project_id = $1 AND deleted_at IS NULL
+  AND is_default IS DISTINCT FROM (id = sqlc.arg('view_id')::uuid);
+
+-- name: ClearProjectDefaultView :exec
+UPDATE project_views
+SET is_default = FALSE, updated_at = NOW()
+WHERE project_id = $1 AND is_default AND deleted_at IS NULL;

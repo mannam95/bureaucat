@@ -233,6 +233,8 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/views/:slug", s.viewHandler.GetView)
 				projectGroup.PATCH("/views/:slug", s.viewHandler.UpdateView, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/views/:slug", s.viewHandler.DeleteView, auth.ProjectRoleMiddleware("member"))
+				projectGroup.PUT("/views/:slug/default", s.viewHandler.SetDefaultView, auth.ProjectRoleMiddleware("admin"))
+				projectGroup.DELETE("/views/:slug/default", s.viewHandler.ClearDefaultView, auth.ProjectRoleMiddleware("admin"))
 			}
 
 			// Per-user preferences scoped to this project. Personal data, so

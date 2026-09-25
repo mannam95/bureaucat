@@ -40,6 +40,7 @@ type Querier interface {
 	// Soft-delete all children of a task (cascade-together on parent delete).
 	CascadeSoftDeleteSubtasks(ctx context.Context, parentID uuid.UUID) error
 	CheckCycleOverlap(ctx context.Context, arg CheckCycleOverlapParams) (int32, error)
+	ClearProjectDefaultView(ctx context.Context, projectID uuid.UUID) error
 	// Merge a new activity into an existing open notification: bump the count,
 	// update the latest actor/type/comment, and re-surface as unread.
 	CoalesceNotification(ctx context.Context, arg CoalesceNotificationParams) error
@@ -360,6 +361,9 @@ type Querier interface {
 	// Marks exactly one state as default for the project, clearing any previous
 	// default. Atomic in a single statement (no transaction needed).
 	SetDefaultProjectState(ctx context.Context, arg SetDefaultProjectStateParams) error
+	// Points the project's single default at one view: sets the flag there and
+	// clears it everywhere else in one statement.
+	SetProjectDefaultView(ctx context.Context, arg SetProjectDefaultViewParams) error
 	SetProjectDisabled(ctx context.Context, arg SetProjectDisabledParams) (Project, error)
 	// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
 	// as a subtask.

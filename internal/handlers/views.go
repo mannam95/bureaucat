@@ -43,6 +43,7 @@ type ViewResponse struct {
 	SortDir     string          `json:"sort_dir"`
 	DefaultTab  string          `json:"default_tab"`
 	Position    int             `json:"position"`
+	IsDefault   bool            `json:"is_default"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -120,28 +121,29 @@ type viewData struct {
 	SortDir     string
 	DefaultTab  string
 	Position    int32
+	IsDefault   bool
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
 
 func fromListRow(v store.ListProjectViewsRow) viewData {
-	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, IsDefault: v.IsDefault, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 }
 
 func fromCreateRow(v store.CreateProjectViewRow) viewData {
-	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, IsDefault: v.IsDefault, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 }
 
 func fromSlugRow(v store.GetProjectViewBySlugRow) viewData {
-	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, IsDefault: v.IsDefault, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 }
 
 func fromIDRow(v store.GetProjectViewByIDRow) viewData {
-	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, IsDefault: v.IsDefault, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 }
 
 func fromUpdateRow(v store.UpdateProjectViewRow) viewData {
-	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return viewData{ID: v.ID, ProjectID: v.ProjectID, Slug: v.Slug, Name: v.Name, Description: v.Description, Visibility: v.Visibility, OwnerID: v.OwnerID, FilterTree: v.FilterTree, GroupBy: v.GroupBy, SortBy: v.SortBy, SortDir: v.SortDir, DefaultTab: v.DefaultTab, Position: v.Position, IsDefault: v.IsDefault, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 }
 
 func viewToResponse(v viewData) ViewResponse {
@@ -158,6 +160,7 @@ func viewToResponse(v viewData) ViewResponse {
 		SortDir:    v.SortDir,
 		DefaultTab: v.DefaultTab,
 		Position:   int(v.Position),
+		IsDefault:  v.IsDefault,
 		CreatedAt:  v.CreatedAt.Time,
 		UpdatedAt:  v.UpdatedAt.Time,
 	}
@@ -414,7 +417,74 @@ func (h *ViewHandler) UpdateView(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update view")
 	}
+	// A private view can't stay the project default: if this update flipped the
+	// current default to private, drop the flag rather than leave a default
+	// that most members can't see.
+	if req.Visibility != nil && *req.Visibility == "private" && view.IsDefault {
+		if err := h.store.ClearProjectDefaultView(ctx, projectID); err == nil {
+			updated.IsDefault = false
+		}
+	}
 	return c.JSON(http.StatusOK, viewToResponse(fromUpdateRow(updated)))
+}
+
+// SetDefaultView marks a shared view as the project's default view. The
+// default auto-applies for members who haven't personalised their own view
+// state. Project admins only (enforced by route middleware).
+//
+//	@Summary		Set the project's default view
+//	@Tags			Views
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			slug		path		string	true	"View slug"
+//	@Success		200			{object}	MessageResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/views/{slug}/default [put]
+func (h *ViewHandler) SetDefaultView(c *echo.Context) error {
+	projectID, _, err := projectAndCaller(c)
+	if err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+	slugRow, err := h.store.GetProjectViewBySlug(ctx, store.GetProjectViewBySlugParams{
+		ProjectID: projectID,
+		Slug:      c.Param("slug"),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "view not found")
+	}
+	if slugRow.Visibility != "shared" {
+		return echo.NewHTTPError(http.StatusBadRequest, "only shared views can be the default")
+	}
+	if err := h.store.SetProjectDefaultView(ctx, store.SetProjectDefaultViewParams{
+		ProjectID: projectID,
+		ViewID:    slugRow.ID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to set default view")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "default view set"})
+}
+
+// ClearDefaultView removes the project's default view. Project admins only
+// (enforced by route middleware).
+//
+//	@Summary		Clear the project's default view
+//	@Tags			Views
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			slug		path		string	true	"View slug"
+//	@Success		200			{object}	MessageResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/views/{slug}/default [delete]
+func (h *ViewHandler) ClearDefaultView(c *echo.Context) error {
+	projectID, _, err := projectAndCaller(c)
+	if err != nil {
+		return err
+	}
+	if err := h.store.ClearProjectDefaultView(c.Request().Context(), projectID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to clear default view")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "default view cleared"})
 }
 
 // DeleteView soft-deletes a view.

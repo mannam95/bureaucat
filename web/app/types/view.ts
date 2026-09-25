@@ -18,6 +18,8 @@ export interface ProjectView {
   sort_dir: SortDir;
   default_tab: ViewDefaultTab;
   position: number;
+  /** True on the (single) shared view a project admin marked as the default. */
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }

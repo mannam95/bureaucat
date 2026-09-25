@@ -352,6 +352,61 @@ function applyDefaultCycleFilter() {
   addPredicate({ field: "cycle", op: "in", value: [cycle.id] });
 }
 
+// A user's stored view state still counts as untouched when it's either absent
+// or exactly what the system writes on its own: no saved view, default sort
+// and grouping, and at most the auto-applied current-cycle filter.
+function viewStateUntouched(key: "tasks.list.view_state" | "board.view_state"): boolean {
+  const vs = usePreferences().getProject<{
+    filter: FilterTree | null;
+    sortBy: string;
+    sortDir: string;
+    groupBy: string;
+    viewSlug: string | null;
+  }>(projectKey.value, key, {
+    filter: null,
+    sortBy: "created_at",
+    sortDir: "desc",
+    groupBy: "state",
+    viewSlug: null,
+  });
+  if (vs.viewSlug) return false;
+  if ((vs.sortBy ?? "created_at") !== "created_at") return false;
+  if ((vs.sortDir ?? "desc") !== "desc") return false;
+  if ((vs.groupBy ?? "state") !== "state") return false;
+  const children = vs.filter?.children ?? [];
+  if (children.length === 0) return true;
+  return (
+    children.length === 1 &&
+    children[0]?.predicate?.field === "cycle" &&
+    children[0]?.predicate?.op === "in"
+  );
+}
+
+// Apply the project's default view (the shared view a project admin pinned)
+// for members who haven't personalised their own view state. Runs on landing
+// before the cycle fallback, and never over a ?view= deep link. Applying it
+// stores the view like a manual apply would, so from then on the member has
+// their own state and can change or clear it freely.
+function applyProjectDefaultView() {
+  if (typeof route.query.view === "string" && route.query.view) return;
+  const dv = views.value.find((v) => v.is_default && v.visibility === "shared");
+  if (!dv) return;
+  if (!viewStateUntouched("tasks.list.view_state")) return;
+  if (!viewStateUntouched("board.view_state")) return;
+  const targetTab = applyViewState(dv);
+  // Only steer navigation when the user didn't deep-link a different tab.
+  const urlTab = typeof route.query.tab === "string" ? route.query.tab : "tasks";
+  if (!route.query.tab || urlTab === targetTab) {
+    router.replace({
+      query: {
+        ...route.query,
+        tab: targetTab === "tasks" ? undefined : targetTab,
+        view: dv.slug,
+      },
+    });
+  }
+}
+
 async function loadProject() {
   loading.value = true;
   error.value = null;
@@ -377,7 +432,9 @@ async function loadProject() {
   // The stored view state already carries the filter/sort/group and the active
   // view slug, so there's nothing to re-hydrate from a saved view here.
 
-  // Default to the current cycle when the user arrived with nothing applied.
+  // The admin-pinned default view first (only lands on untouched state), then
+  // fall back to the current cycle when the user arrived with nothing applied.
+  applyProjectDefaultView();
   applyDefaultCycleFilter();
 
   await loadTasks(currentPageFromUrl.value);
@@ -628,6 +685,9 @@ watch(
 const existingMemberIds = computed(() => members.value.map((m) => m.user_id));
 
 onMounted(async () => {
+  // Capture the deep-linked view up front: the default-view auto-apply inside
+  // loadProject may add ?view= itself, which must not re-trigger applyView.
+  const qView = typeof route.query.view === "string" ? route.query.view : "";
   // Load this project's stored view state before anything reads the filters, so
   // the toolbar and the first fetch reflect the saved filter, not the default.
   await hydrate();
@@ -635,8 +695,7 @@ onMounted(async () => {
   if (activeTab.value === "board") loadBoardTasks();
 
   // Deep links from the global /views page.
-  const qView = route.query.view;
-  if (typeof qView === "string" && qView) {
+  if (qView) {
     await applyView(qView);
   }
   // ?editView=slug opens the editor for that view (the /views "Edit" flow).

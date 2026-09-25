@@ -12,6 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearProjectDefaultView = `-- name: ClearProjectDefaultView :exec
+UPDATE project_views
+SET is_default = FALSE, updated_at = NOW()
+WHERE project_id = $1 AND is_default AND deleted_at IS NULL
+`
+
+func (q *Queries) ClearProjectDefaultView(ctx context.Context, projectID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearProjectDefaultView, projectID)
+	return err
+}
+
 const createProjectView = `-- name: CreateProjectView :one
 
 INSERT INTO project_views (
@@ -21,7 +32,7 @@ INSERT INTO project_views (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, project_id, slug, name, description, visibility, owner_id,
           filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-          created_at, updated_at, deleted_at
+          is_default, created_at, updated_at, deleted_at
 `
 
 type CreateProjectViewParams struct {
@@ -53,6 +64,7 @@ type CreateProjectViewRow struct {
 	SortDir     string             `json:"sort_dir"`
 	DefaultTab  string             `json:"default_tab"`
 	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
@@ -89,6 +101,7 @@ func (q *Queries) CreateProjectView(ctx context.Context, arg CreateProjectViewPa
 		&i.SortDir,
 		&i.DefaultTab,
 		&i.Position,
+		&i.IsDefault,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -99,7 +112,7 @@ func (q *Queries) CreateProjectView(ctx context.Context, arg CreateProjectViewPa
 const getProjectViewByID = `-- name: GetProjectViewByID :one
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -118,6 +131,7 @@ type GetProjectViewByIDRow struct {
 	SortDir     string             `json:"sort_dir"`
 	DefaultTab  string             `json:"default_tab"`
 	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
@@ -140,6 +154,7 @@ func (q *Queries) GetProjectViewByID(ctx context.Context, id uuid.UUID) (GetProj
 		&i.SortDir,
 		&i.DefaultTab,
 		&i.Position,
+		&i.IsDefault,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -150,7 +165,7 @@ func (q *Queries) GetProjectViewByID(ctx context.Context, id uuid.UUID) (GetProj
 const getProjectViewBySlug = `-- name: GetProjectViewBySlug :one
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE project_id = $1 AND slug = $2 AND deleted_at IS NULL
 `
@@ -174,6 +189,7 @@ type GetProjectViewBySlugRow struct {
 	SortDir     string             `json:"sort_dir"`
 	DefaultTab  string             `json:"default_tab"`
 	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
@@ -196,6 +212,7 @@ func (q *Queries) GetProjectViewBySlug(ctx context.Context, arg GetProjectViewBy
 		&i.SortDir,
 		&i.DefaultTab,
 		&i.Position,
+		&i.IsDefault,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -206,7 +223,7 @@ func (q *Queries) GetProjectViewBySlug(ctx context.Context, arg GetProjectViewBy
 const listProjectViews = `-- name: ListProjectViews :many
 SELECT id, project_id, slug, name, description, visibility, owner_id,
        filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-       created_at, updated_at, deleted_at
+       is_default, created_at, updated_at, deleted_at
 FROM project_views
 WHERE project_id = $1
   AND deleted_at IS NULL
@@ -233,6 +250,7 @@ type ListProjectViewsRow struct {
 	SortDir     string             `json:"sort_dir"`
 	DefaultTab  string             `json:"default_tab"`
 	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
@@ -262,6 +280,7 @@ func (q *Queries) ListProjectViews(ctx context.Context, arg ListProjectViewsPara
 			&i.SortDir,
 			&i.DefaultTab,
 			&i.Position,
+			&i.IsDefault,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -310,6 +329,25 @@ type ReorderProjectViewsParams struct {
 // Pass a JSON array of {id, new_position} objects.
 func (q *Queries) ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error {
 	_, err := q.db.Exec(ctx, reorderProjectViews, arg.ProjectID, arg.Items)
+	return err
+}
+
+const setProjectDefaultView = `-- name: SetProjectDefaultView :exec
+UPDATE project_views
+SET is_default = (id = $2::uuid), updated_at = NOW()
+WHERE project_id = $1 AND deleted_at IS NULL
+  AND is_default IS DISTINCT FROM (id = $2::uuid)
+`
+
+type SetProjectDefaultViewParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ViewID    uuid.UUID `json:"view_id"`
+}
+
+// Points the project's single default at one view: sets the flag there and
+// clears it everywhere else in one statement.
+func (q *Queries) SetProjectDefaultView(ctx context.Context, arg SetProjectDefaultViewParams) error {
+	_, err := q.db.Exec(ctx, setProjectDefaultView, arg.ProjectID, arg.ViewID)
 	return err
 }
 
@@ -374,7 +412,7 @@ SET name        = COALESCE($2, name),
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_id, slug, name, description, visibility, owner_id,
           filter_tree, group_by, sort_by, sort_dir, default_tab, position,
-          created_at, updated_at, deleted_at
+          is_default, created_at, updated_at, deleted_at
 `
 
 type UpdateProjectViewParams struct {
@@ -404,6 +442,7 @@ type UpdateProjectViewRow struct {
 	SortDir     string             `json:"sort_dir"`
 	DefaultTab  string             `json:"default_tab"`
 	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
@@ -437,6 +476,7 @@ func (q *Queries) UpdateProjectView(ctx context.Context, arg UpdateProjectViewPa
 		&i.SortDir,
 		&i.DefaultTab,
 		&i.Position,
+		&i.IsDefault,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

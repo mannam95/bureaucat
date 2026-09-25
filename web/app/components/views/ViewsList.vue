@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Lock, Users as UsersIcon, Play, Pencil, Trash2, Filter, Layers, Calendar, Loader2 } from "lucide-vue-next";
+import { Lock, Users as UsersIcon, Play, Pencil, Trash2, Filter, Layers, Calendar, Loader2, Pin, PinOff } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ProjectView } from "~/types";
 
@@ -17,11 +17,47 @@ const emit = defineEmits<{
   "refresh": [];
 }>();
 
-const { deleteView } = useViews();
+const { deleteView, setDefaultView, clearDefaultView } = useViews();
 
 const showDeleteDialog = ref(false);
 const deleting = ref(false);
 const viewToDelete = ref<ProjectView | null>(null);
+
+// Default-view pin (project admins, shared views only). One default per
+// project; setting or removing it always goes through a confirm dialog since
+// it changes what everyone else lands on.
+const showDefaultDialog = ref(false);
+const savingDefault = ref(false);
+const defaultTarget = ref<ProjectView | null>(null);
+const defaultAction = computed<"set" | "clear">(() =>
+  defaultTarget.value?.is_default ? "clear" : "set"
+);
+
+function requestDefaultChange(view: ProjectView) {
+  defaultTarget.value = view;
+  showDefaultDialog.value = true;
+}
+
+async function confirmDefaultChange() {
+  const v = defaultTarget.value;
+  if (!v) return;
+  savingDefault.value = true;
+  const res = v.is_default
+    ? await clearDefaultView(props.projectKey, v.slug)
+    : await setDefaultView(props.projectKey, v.slug);
+  savingDefault.value = false;
+  showDefaultDialog.value = false;
+  if (res.success) {
+    toast.success(
+      v.is_default
+        ? "Default view removed"
+        : `"${v.name}" is now the default view for this project`
+    );
+  } else {
+    toast.error(res.error || "Failed to update default view");
+  }
+  defaultTarget.value = null;
+}
 
 function requestDelete(view: ProjectView) {
   viewToDelete.value = view;
@@ -117,6 +153,14 @@ function groupByLabel(groupBy: string): string {
               >
                 active
               </span>
+              <span
+                v-if="v.is_default"
+                class="flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-sky-700 dark:text-sky-300"
+                title="Applied automatically for members who haven't customised their filters"
+              >
+                <Pin class="size-2.5" />
+                default
+              </span>
             </div>
             <p
               v-if="v.description"
@@ -154,6 +198,18 @@ function groupByLabel(groupBy: string): string {
               Apply
             </Button>
             <Button
+              v-if="isAdmin && v.visibility === 'shared'"
+              size="sm"
+              variant="ghost"
+              class="h-7 w-7 p-0"
+              :class="v.is_default ? 'text-sky-600 dark:text-sky-400' : 'text-muted-foreground'"
+              :aria-label="v.is_default ? 'Remove as default view' : 'Make default view'"
+              :title="v.is_default ? 'Remove as default view' : 'Make this the default view for everyone'"
+              @click="requestDefaultChange(v)"
+            >
+              <component :is="v.is_default ? PinOff : Pin" class="size-3.5" />
+            </Button>
+            <Button
               v-if="canEdit(v)"
               size="sm"
               variant="ghost"
@@ -178,6 +234,38 @@ function groupByLabel(groupBy: string): string {
         </div>
       </div>
     </div>
+
+    <Dialog v-model:open="showDefaultDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {{ defaultAction === "set" ? "Set default view" : "Remove default view" }}
+          </DialogTitle>
+          <DialogDescription>
+            <template v-if="defaultAction === 'set'">
+              <strong>"{{ defaultTarget?.name }}"</strong> will be the default
+              view for everyone in this project. It is applied automatically for
+              members who haven't customised their own filters; anyone can still
+              change or clear the filters afterwards.
+            </template>
+            <template v-else>
+              <strong>"{{ defaultTarget?.name }}"</strong> will no longer be the
+              default view. Members without their own filters will land on the
+              standard task list instead.
+            </template>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" :disabled="savingDefault" @click="showDefaultDialog = false">
+            Cancel
+          </Button>
+          <Button :disabled="savingDefault" @click="confirmDefaultChange">
+            <Loader2 v-if="savingDefault" class="mr-2 size-4 animate-spin" />
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="showDeleteDialog">
       <DialogContent>

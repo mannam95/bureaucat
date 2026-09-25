@@ -91,6 +91,34 @@ export function useViews() {
     }
   }
 
+  async function setDefaultView(projectKey: string, slug: string) {
+    try {
+      const resp = await fetch(`/api/v1/projects/${projectKey}/views/${slug}/default`, {
+        method: "PUT",
+        headers: getAuthHeader(),
+      });
+      if (!resp.ok) return { success: false, error: await readError(resp) };
+      state.views = state.views.map((v) => ({ ...v, is_default: v.slug === slug }));
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function clearDefaultView(projectKey: string, slug: string) {
+    try {
+      const resp = await fetch(`/api/v1/projects/${projectKey}/views/${slug}/default`, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      });
+      if (!resp.ok) return { success: false, error: await readError(resp) };
+      state.views = state.views.map((v) => ({ ...v, is_default: false }));
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function reorderViews(
     projectKey: string,
     items: { id: string; position: number }[]
@@ -116,6 +144,8 @@ export function useViews() {
     createView,
     updateView,
     deleteView,
+    setDefaultView,
+    clearDefaultView,
     reorderViews,
   };
 }
