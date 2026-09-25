@@ -44,6 +44,7 @@ export interface CycleTask {
   start_date?: string;
   due_date?: string;
   assignees: TaskAssignee[];
+  watchers: TaskAssignee[];
 }
 
 export interface CycleStateBucket {

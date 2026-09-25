@@ -148,6 +148,7 @@ type ModuleTaskResponse struct {
 	StartDate  *time.Time         `json:"start_date,omitempty"`
 	DueDate    *time.Time         `json:"due_date,omitempty"`
 	Assignees  []AssigneeResponse `json:"assignees"`
+	Watchers   []AssigneeResponse `json:"watchers"`
 }
 
 // ModuleMetricsResponse mirrors CycleMetricsResponse for modules.
@@ -1017,6 +1018,11 @@ func (h *ModuleHandler) ListModuleTasks(c *echo.Context) error {
 		}
 	}
 
+	watchersByTask, err := watchersForTasks(ctx, h.store, ids)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load watchers")
+	}
+
 	out := make([]ModuleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = ModuleTaskResponse{
@@ -1035,9 +1041,13 @@ func (h *ModuleHandler) ListModuleTasks(c *echo.Context) error {
 			StartDate:      timestamptzToTimePtr(t.StartDate),
 			DueDate:        timestamptzToTimePtr(t.DueDate),
 			Assignees:      assigneesByTask[t.ID],
+			Watchers:       watchersByTask[t.ID],
 		}
 		if out[i].Assignees == nil {
 			out[i].Assignees = []AssigneeResponse{}
+		}
+		if out[i].Watchers == nil {
+			out[i].Watchers = []AssigneeResponse{}
 		}
 	}
 	return c.JSON(http.StatusOK, out)
@@ -1262,6 +1272,11 @@ func (h *ModuleHandler) ListTasksInNoModule(c *echo.Context) error {
 		}
 	}
 
+	watchersByTask, err := watchersForTasks(ctx, h.store, ids)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load watchers")
+	}
+
 	out := make([]ModuleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = ModuleTaskResponse{
@@ -1278,9 +1293,13 @@ func (h *ModuleHandler) ListTasksInNoModule(c *echo.Context) error {
 			PriorityRating: int(t.PriorityRating),
 			CycleTitle:     textToStringPtr(t.CycleTitle),
 			Assignees:      assigneesByTask[t.ID],
+			Watchers:       watchersByTask[t.ID],
 		}
 		if out[i].Assignees == nil {
 			out[i].Assignees = []AssigneeResponse{}
+		}
+		if out[i].Watchers == nil {
+			out[i].Watchers = []AssigneeResponse{}
 		}
 	}
 	return c.JSON(http.StatusOK, out)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,6 +90,7 @@ type CycleTaskResponse struct {
 	StartDate      *time.Time         `json:"start_date,omitempty"`
 	DueDate        *time.Time         `json:"due_date,omitempty"`
 	Assignees      []AssigneeResponse `json:"assignees"`
+	Watchers       []AssigneeResponse `json:"watchers"`
 }
 
 // CycleMetricsResponse combines top-level counts, state breakdown, and assignees.
@@ -491,6 +493,32 @@ func (h *CycleHandler) DeleteCycle(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "cycle deleted"})
 }
 
+// watchersForTasks batch-loads watchers for a set of tasks, shaped like the
+// assignee decoration so collection task rows can carry both and the shared
+// toolbar can filter on either.
+func watchersForTasks(ctx context.Context, s store.Querier, ids []uuid.UUID) (map[uuid.UUID][]AssigneeResponse, error) {
+	byTask := map[uuid.UUID][]AssigneeResponse{}
+	if len(ids) == 0 {
+		return byTask, nil
+	}
+	watchers, err := s.ListWatchersForTasks(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range watchers {
+		byTask[w.TaskID] = append(byTask[w.TaskID], AssigneeResponse{
+			ID:        w.ID,
+			UserID:    w.UserID,
+			Username:  w.Username,
+			Email:     w.Email,
+			FirstName: w.FirstName,
+			LastName:  w.LastName,
+			AvatarURL: textToStringPtr(w.AvatarUrl),
+		})
+	}
+	return byTask, nil
+}
+
 // ListCycleTasks returns the tasks in a cycle, optionally filtered by assignee.
 func (h *CycleHandler) ListCycleTasks(c *echo.Context) error {
 	cycleID, err := uuid.Parse(c.Param("cycleId"))
@@ -550,6 +578,11 @@ func (h *CycleHandler) ListCycleTasks(c *echo.Context) error {
 		}
 	}
 
+	watchersByTask, err := watchersForTasks(ctx, h.store, ids)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load watchers")
+	}
+
 	out := make([]CycleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = CycleTaskResponse{
@@ -567,9 +600,13 @@ func (h *CycleHandler) ListCycleTasks(c *echo.Context) error {
 			StartDate:      timestamptzToTimePtr(t.StartDate),
 			DueDate:        timestamptzToTimePtr(t.DueDate),
 			Assignees:      assigneesByTask[t.ID],
+			Watchers:       watchersByTask[t.ID],
 		}
 		if out[i].Assignees == nil {
 			out[i].Assignees = []AssigneeResponse{}
+		}
+		if out[i].Watchers == nil {
+			out[i].Watchers = []AssigneeResponse{}
 		}
 	}
 
@@ -800,6 +837,11 @@ func (h *CycleHandler) ListUnassignedTasks(c *echo.Context) error {
 		}
 	}
 
+	watchersByTask, err := watchersForTasks(ctx, h.store, ids)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load watchers")
+	}
+
 	out := make([]CycleTaskResponse, len(rows))
 	for i, t := range rows {
 		out[i] = CycleTaskResponse{
@@ -815,9 +857,13 @@ func (h *CycleHandler) ListUnassignedTasks(c *echo.Context) error {
 			Priority:       int(t.Priority),
 			PriorityRating: int(t.PriorityRating),
 			Assignees:      assigneesByTask[t.ID],
+			Watchers:       watchersByTask[t.ID],
 		}
 		if out[i].Assignees == nil {
 			out[i].Assignees = []AssigneeResponse{}
+		}
+		if out[i].Watchers == nil {
+			out[i].Watchers = []AssigneeResponse{}
 		}
 	}
 	return c.JSON(http.StatusOK, out)

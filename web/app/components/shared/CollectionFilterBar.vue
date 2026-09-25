@@ -2,15 +2,18 @@
 /**
  * Harmonised toolbar for a collection's task list (cycle or module), matching
  * the project Tasks/Board toolbar: Search first, then a "+ Filter" popover
- * (State + Assignee, including "Unassigned") and a "Sort" menu (State, Priority
- * rating, Title, Assignee). Everything is applied client-side over the already
- * loaded tasks, and the component emits the final filtered + sorted list, so the
- * table stays a plain renderer with no controls of its own.
+ * (Assignee incl. "Unassigned", Watchers incl. "Not watched", State) and a
+ * "Sort" menu (State, Priority rating, Title, Assignee). Everything is applied
+ * client-side over the already loaded tasks, and the component emits the final
+ * filtered + sorted list, so the table stays a plain renderer with no controls
+ * of its own.
  *
  * Options are derived from the loaded tasks (modules carry no assignee summary),
- * which is also what makes the "Unassigned" option possible.
+ * which is also what makes the "Unassigned" / "Not watched" options possible.
+ * The Watchers section only renders when the rows actually carry watcher data,
+ * so surfaces that don't load it don't show a dead filter.
  */
-import { Search, Plus, ArrowUpDown, ArrowUp, ArrowDown, Check, UserX, X } from "lucide-vue-next";
+import { Search, Plus, ArrowUpDown, ArrowUp, ArrowDown, Check, UserX, EyeOff, X } from "lucide-vue-next";
 import EntityMultiSelect from "~/components/shared/EntityMultiSelect.vue";
 
 interface FilterAssignee {
@@ -29,6 +32,7 @@ interface FilterableTask {
   state_color: string;
   priority_rating?: number;
   assignees?: FilterAssignee[];
+  watchers?: FilterAssignee[];
 }
 
 interface StateOption {
@@ -41,6 +45,8 @@ type SortKey = "state_name" | "priority_rating" | "title" | "assignee";
 
 /** Sentinel id for "no one is assigned". Never collides with a user UUID. */
 const UNASSIGNED = "__unassigned__";
+/** Sentinel id for "nobody watches this task". Never collides with a user UUID. */
+const UNWATCHED = "__unwatched__";
 
 const props = withDefaults(
   defineProps<{
@@ -62,6 +68,7 @@ const filterOpen = ref(false);
 
 const stateFilter = ref<Set<string>>(new Set());
 const assigneeFilter = ref<Set<string>>(new Set());
+const watcherFilter = ref<Set<string>>(new Set());
 const searchQuery = ref("");
 
 const sortKey = ref<SortKey | null>(null);
@@ -114,7 +121,32 @@ function displayName(a: FilterAssignee): string {
   return `${a.first_name} ${a.last_name}`.trim() || a.username;
 }
 
-const filterCount = computed(() => stateFilter.value.size + assigneeFilter.value.size);
+// Watcher data is optional per surface; only offer the filter when the loaded
+// rows actually carry it.
+const hasWatcherData = computed(() => props.tasks.some((t) => t.watchers !== undefined));
+
+const watcherOptions = computed<FilterAssignee[]>(() => {
+  if (!hasWatcherData.value) return [];
+  const seen = new Map<string, FilterAssignee>();
+  let anyUnwatched = false;
+  for (const t of props.tasks) {
+    const people = t.watchers ?? [];
+    if (people.length === 0) anyUnwatched = true;
+    for (const w of people) {
+      if (!seen.has(w.user_id)) seen.set(w.user_id, w);
+    }
+  }
+  const people = [...seen.values()].sort((a, b) =>
+    displayName(a).localeCompare(displayName(b))
+  );
+  return anyUnwatched
+    ? [{ user_id: UNWATCHED, username: "Not watched", first_name: "Not watched", last_name: "" }, ...people]
+    : people;
+});
+
+const filterCount = computed(
+  () => stateFilter.value.size + assigneeFilter.value.size + watcherFilter.value.size
+);
 const anyFilterActive = computed(
   () => filterCount.value > 0 || searchQuery.value.trim() !== "" || sortKey.value !== null
 );
@@ -131,6 +163,14 @@ const filtered = computed(() => {
       const people = t.assignees ?? [];
       if (wantUnassigned && people.length === 0) return true;
       return people.some((a) => assigneeFilter.value.has(a.user_id));
+    });
+  }
+  if (watcherFilter.value.size > 0) {
+    const wantUnwatched = watcherFilter.value.has(UNWATCHED);
+    list = list.filter((t) => {
+      const people = t.watchers ?? [];
+      if (wantUnwatched && people.length === 0) return true;
+      return people.some((w) => watcherFilter.value.has(w.user_id));
     });
   }
   const q = searchQuery.value.trim().toLowerCase();
@@ -160,13 +200,16 @@ const filteredSorted = computed(() => {
 });
 
 // Drop filter entries whose option disappeared (task moved out, member removed).
-watch([stateOptions, assigneeOptions], ([states, people]) => {
+watch([stateOptions, assigneeOptions, watcherOptions], ([states, people, watchers]) => {
   const stateIds = new Set(states.map((s) => s.state_id));
   const userIds = new Set(people.map((p) => p.user_id));
+  const watcherIds = new Set(watchers.map((w) => w.user_id));
   const nextStates = new Set([...stateFilter.value].filter((id) => stateIds.has(id)));
   const nextUsers = new Set([...assigneeFilter.value].filter((id) => userIds.has(id)));
+  const nextWatchers = new Set([...watcherFilter.value].filter((id) => watcherIds.has(id)));
   if (nextStates.size !== stateFilter.value.size) stateFilter.value = nextStates;
   if (nextUsers.size !== assigneeFilter.value.size) assigneeFilter.value = nextUsers;
+  if (nextWatchers.size !== watcherFilter.value.size) watcherFilter.value = nextWatchers;
 });
 
 watch(filteredSorted, (v) => emit("update:filtered", v), { immediate: true });
@@ -177,6 +220,9 @@ function setStateFilter(ids: string[]) {
 }
 function setAssigneeFilter(ids: string[]) {
   assigneeFilter.value = new Set(ids);
+}
+function setWatcherFilter(ids: string[]) {
+  watcherFilter.value = new Set(ids);
 }
 
 // Key and direction are set independently (like the Tasks Sort menu): picking a
@@ -202,6 +248,7 @@ watch(
 function clear() {
   stateFilter.value = new Set();
   assigneeFilter.value = new Set();
+  watcherFilter.value = new Set();
   searchQuery.value = "";
   resetSort();
 }
@@ -264,6 +311,39 @@ defineExpose({ clear });
               </template>
             </template>
           </EntityMultiSelect>
+
+          <template v-if="hasWatcherData">
+            <div class="border-y px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Watchers
+            </div>
+            <EntityMultiSelect
+              :items="watcherOptions"
+              item-key="user_id"
+              :model-value="[...watcherFilter]"
+              placeholder="Find member…"
+              empty-message="No watchers"
+              max-height-class="max-h-40"
+              @update:model-value="setWatcherFilter"
+            >
+              <template #option="{ item }">
+                <template v-if="(item as FilterAssignee).user_id === UNWATCHED">
+                  <span class="flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+                    <EyeOff class="size-3" />
+                  </span>
+                  <span class="truncate text-muted-foreground">Not watched</span>
+                </template>
+                <template v-else>
+                  <Avatar class="size-5">
+                    <AvatarImage v-if="(item as FilterAssignee).avatar_url" :src="(item as FilterAssignee).avatar_url!" />
+                    <AvatarFallback class="text-[9px]" :seed="(item as FilterAssignee).user_id">
+                      {{ ((item as FilterAssignee).first_name[0] || "") + ((item as FilterAssignee).last_name[0] || "") }}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span class="truncate">{{ displayName(item as FilterAssignee) }}</span>
+                </template>
+              </template>
+            </EntityMultiSelect>
+          </template>
 
           <div class="border-y px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             State

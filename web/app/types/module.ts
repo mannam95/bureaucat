@@ -78,6 +78,7 @@ export interface ModuleTask {
   start_date?: string;
   due_date?: string;
   assignees: TaskAssignee[];
+  watchers: TaskAssignee[];
 }
 
 export interface ModuleStateBucket {
