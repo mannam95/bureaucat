@@ -7,9 +7,15 @@ set -e
 # admin HTTP port exposed.
 
 CONTAINER="${GARAGE_CONTAINER:-bureaucat-garage}"
-BUCKET="${FILES_BUCKET_NAME:-bureaucat}"
 KEY_NAME=bureaucat-bucket-key
 ENV_FILE="./.env"
+
+# The app reads its bucket name from .env, so that value must win here too.
+# An ambient FILES_BUCKET_NAME in the caller's shell (say, exported for another
+# deployment) would otherwise make us provision a bucket the app never looks at,
+# and the API then fails startup with HeadBucket 404.
+ENV_BUCKET=$(sed -n 's/^FILES_BUCKET_NAME=//p' "$ENV_FILE" 2>/dev/null | head -n1 | tr -d '"' | tr -d "'")
+BUCKET="${ENV_BUCKET:-${FILES_BUCKET_NAME:-bureaucat}}"
 
 g() { docker exec "$CONTAINER" /garage "$@" 2>/dev/null; }
 
