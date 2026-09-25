@@ -145,13 +145,17 @@ export function useFilterTree(getSurface: () => FilterSurface) {
     searchQuery.value = "";
   }
 
-  // Reset everything the toolbar owns — filter, view, sort, and search.
+  // Reset everything the toolbar owns — filter, view, sort, grouping, and
+  // search. Grouping matters: leaving a view's group-by behind would keep the
+  // stored state "personalised", which (among other things) blocks the
+  // project default view from auto-applying on the next visit.
   function resetAll() {
     writeVS({
       filter: null,
       viewSlug: null,
       sortBy: DEFAULT_SORT_BY,
       sortDir: DEFAULT_SORT_DIR,
+      groupBy: DEFAULT_GROUP_BY,
     });
     searchQuery.value = "";
   }

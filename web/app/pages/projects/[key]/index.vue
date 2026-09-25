@@ -391,8 +391,12 @@ function applyProjectDefaultView() {
   if (typeof route.query.view === "string" && route.query.view) return;
   const dv = views.value.find((v) => v.is_default && v.visibility === "shared");
   if (!dv) return;
-  if (!viewStateUntouched("tasks.list.view_state")) return;
-  if (!viewStateUntouched("board.view_state")) return;
+  // Only the surface the default view lands on has to be untouched — applying
+  // it never overwrites the other surface, so personalising the Board must not
+  // block a Tasks default (and vice versa).
+  const targetKey =
+    dv.default_tab === "board" ? "board.view_state" : "tasks.list.view_state";
+  if (!viewStateUntouched(targetKey)) return;
   const targetTab = applyViewState(dv);
   // Only steer navigation when the user didn't deep-link a different tab.
   const urlTab = typeof route.query.tab === "string" ? route.query.tab : "tasks";
