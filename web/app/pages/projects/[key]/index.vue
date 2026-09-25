@@ -316,7 +316,14 @@ const currentPageFromUrl = computed(() => {
 
 function setPageInUrl(page: number) {
   router.replace({
-    query: { ...route.query, page: page > 1 ? String(page) : undefined },
+    query: {
+      ...route.query,
+      page: page > 1 ? String(page) : undefined,
+      // Never resurrect ?view= once the working state has left the view: this
+      // runs from the reload watcher with a possibly stale route.query, which
+      // used to re-add the param right after Reset/exit stripped it.
+      view: activeViewSlug.value ?? undefined,
+    },
   });
 }
 
