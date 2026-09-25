@@ -1283,6 +1283,16 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
 
+	// Decorate exactly like GetTask: the frontend replaces its current task with
+	// this response, so any field missing here (cycle, modules, parent info)
+	// would blank on screen until a manual refresh. Sub-tasks surface their
+	// parent's cycle/module links.
+	linkTaskID := fullTask.ID
+	if p := pgUUIDToUUIDPtr(fullTask.ParentTaskID); p != nil {
+		linkTaskID = *p
+	}
+	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
+
 	return c.JSON(http.StatusOK, TaskResponse{
 		ID:               fullTask.ID,
 		ProjectKey:       projectKey,
@@ -1307,6 +1317,13 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		Assignees:        assignees,
 		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
+		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
+		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
+		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
+		SubtaskCount:     int(fullTask.SubtaskCount),
+		CycleID:          cycleID,
+		CycleTitle:       cycleTitle,
+		Modules:          h.getTaskModules(ctx, linkTaskID),
 		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
 		Branch:           textToStringPtr(fullTask.Branch),
 		PullRequest:      textToStringPtr(fullTask.PullRequest),
