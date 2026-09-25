@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Layers, Loader2, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { Plus, Layers, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-vue-next";
 import type { ModuleListFilters } from "~/types";
 
 const props = defineProps<{
@@ -38,8 +38,20 @@ async function loadBacklogCount() {
 }
 const showBacklogCard = computed(() => props.isAdmin && backlogCount.value > 0);
 
+// Free-text search over module titles/descriptions. Session-only on purpose
+// (like the tasks search): it is merged into the fetch, never persisted.
+const searchQuery = ref("");
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+watch(searchQuery, () => {
+  if (searchDebounce) clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => fetchPage(1), 300);
+});
+
 function fetchPage(p = 1) {
-  listModules(props.projectKey, p, perPage, filters.value);
+  listModules(props.projectKey, p, perPage, {
+    ...filters.value,
+    search: searchQuery.value.trim() || undefined,
+  });
 }
 
 function goToPage(p: number) {
@@ -90,7 +102,13 @@ watch(
       </div>
     </div>
 
-    <ModuleFiltersBar v-model="filters" :project-key="projectKey" />
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="relative w-full sm:max-w-xs">
+        <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input v-model="searchQuery" placeholder="Search modules…" class="h-9 pl-9" />
+      </div>
+      <ModuleFiltersBar v-model="filters" :project-key="projectKey" />
+    </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
       <Loader2 class="size-6 animate-spin text-muted-foreground" />

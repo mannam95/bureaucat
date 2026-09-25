@@ -533,6 +533,9 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 		endBefore = d
 	}
 
+	// Free-text search over title and description; empty means "no filter".
+	search := strings.TrimSpace(c.QueryParam("search"))
+
 	// Sort
 	sortBy := strings.TrimSpace(c.QueryParam("sort_by"))
 	switch sortBy {
@@ -554,6 +557,7 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 		LeadID:     leadParam,
 		StartAfter: startAfter,
 		EndBefore:  endBefore,
+		Search:     search,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count modules")
@@ -567,6 +571,7 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 		LeadID:     leadParam,
 		StartAfter: startAfter,
 		EndBefore:  endBefore,
+		Search:     search,
 		SortBy:     sortBy,
 		SortDir:    sortDir,
 	})

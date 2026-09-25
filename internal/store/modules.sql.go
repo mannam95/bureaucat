@@ -77,6 +77,7 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND ($3::uuid   IS NULL  OR m.lead_id = $3::uuid)
   AND ($4::date IS NULL OR m.start_date >= $4::date)
   AND ($5::date  IS NULL OR m.end_date   <= $5::date)
+  AND ($6::text = '' OR m.title ILIKE '%' || $6 || '%' OR COALESCE(m.description, '') ILIKE '%' || $6 || '%')
 `
 
 type CountProjectModulesParams struct {
@@ -85,6 +86,7 @@ type CountProjectModulesParams struct {
 	LeadID     pgtype.UUID `json:"lead_id"`
 	StartAfter pgtype.Date `json:"start_after"`
 	EndBefore  pgtype.Date `json:"end_before"`
+	Search     string      `json:"search"`
 }
 
 func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error) {
@@ -94,6 +96,7 @@ func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModul
 		arg.LeadID,
 		arg.StartAfter,
 		arg.EndBefore,
+		arg.Search,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -711,30 +714,31 @@ WHERE m.project_id = $1 AND m.deleted_at IS NULL
   AND ($5::uuid   IS NULL  OR m.lead_id = $5::uuid)
   AND ($6::date IS NULL OR m.start_date >= $6::date)
   AND ($7::date  IS NULL OR m.end_date   <= $7::date)
+  AND ($8::text = '' OR m.title ILIKE '%' || $8 || '%' OR COALESCE(m.description, '') ILIKE '%' || $8 || '%')
 ORDER BY
-    CASE WHEN $8::text = 'end_date' AND $9::text = 'asc'
+    CASE WHEN $9::text = 'end_date' AND $10::text = 'asc'
          THEN m.end_date END ASC NULLS LAST,
-    CASE WHEN $8::text = 'end_date' AND $9::text = 'desc'
+    CASE WHEN $9::text = 'end_date' AND $10::text = 'desc'
          THEN m.end_date END DESC NULLS LAST,
-    CASE WHEN $8::text = 'progress' AND $9::text = 'asc'
+    CASE WHEN $9::text = 'progress' AND $10::text = 'asc'
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END ASC NULLS LAST,
-    CASE WHEN $8::text = 'progress' AND $9::text = 'desc'
+    CASE WHEN $9::text = 'progress' AND $10::text = 'desc'
          THEN CASE WHEN COALESCE(stats.total_tasks, 0) = 0 THEN 0
                    ELSE (COALESCE(stats.completed_tasks, 0)::float / stats.total_tasks::float)
               END END DESC NULLS LAST,
-    CASE WHEN $8::text = 'priority_rating' AND $9::text = 'asc'
+    CASE WHEN $9::text = 'priority_rating' AND $10::text = 'asc'
          THEN m.priority_rating END ASC NULLS LAST,
-    CASE WHEN $8::text = 'priority_rating' AND $9::text = 'desc'
+    CASE WHEN $9::text = 'priority_rating' AND $10::text = 'desc'
          THEN m.priority_rating END DESC NULLS LAST,
-    CASE WHEN $8::text = 'title' AND $9::text = 'asc'
+    CASE WHEN $9::text = 'title' AND $10::text = 'asc'
          THEN m.title END ASC NULLS LAST,
-    CASE WHEN $8::text = 'title' AND $9::text = 'desc'
+    CASE WHEN $9::text = 'title' AND $10::text = 'desc'
          THEN m.title END DESC NULLS LAST,
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc'
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'asc'
          THEN m.created_at END ASC NULLS LAST,
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc'
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'desc'
          THEN m.created_at END DESC NULLS LAST,
     m.created_at DESC
 LIMIT $2 OFFSET $3
@@ -748,6 +752,7 @@ type ListProjectModulesParams struct {
 	LeadID     pgtype.UUID `json:"lead_id"`
 	StartAfter pgtype.Date `json:"start_after"`
 	EndBefore  pgtype.Date `json:"end_before"`
+	Search     string      `json:"search"`
 	SortBy     string      `json:"sort_by"`
 	SortDir    string      `json:"sort_dir"`
 }
@@ -784,6 +789,7 @@ func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModules
 		arg.LeadID,
 		arg.StartAfter,
 		arg.EndBefore,
+		arg.Search,
 		arg.SortBy,
 		arg.SortDir,
 	)

@@ -131,6 +131,7 @@ export interface DuplicateModuleRequest {
 
 export interface ModuleListFilters {
   status?: ModuleStatus;
+  search?: string;
   lead_id?: string;
   start_after?: string;
   end_before?: string;

@@ -42,6 +42,7 @@ function qs(filters?: ModuleListFilters) {
   const p = new URLSearchParams();
   if (!filters) return p;
   if (filters.status) p.set("status", filters.status);
+  if (filters.search) p.set("search", filters.search);
   if (filters.lead_id) p.set("lead_id", filters.lead_id);
   if (filters.start_after) p.set("start_after", filters.start_after);
   if (filters.end_before) p.set("end_before", filters.end_before);
