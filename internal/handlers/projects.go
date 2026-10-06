@@ -1090,6 +1090,10 @@ type StateResponse struct {
 	Position  int       `json:"position"`
 	IsDefault bool      `json:"is_default"`
 	CreatedAt time.Time `json:"created_at"`
+	// TaskCount is how many (non-deleted) tasks sit in this state. Only filled
+	// on the list endpoint, where the settings UI uses it to warn what a state
+	// edit touches.
+	TaskCount int `json:"task_count"`
 }
 
 // CreateStateRequest represents the request to create a state.
@@ -1105,6 +1109,10 @@ type UpdateStateRequest struct {
 	Name     *string `json:"name"`
 	Color    *string `json:"color"`
 	Position *int    `json:"position"`
+	// StateType re-categorises the state (and so every task in it) across
+	// progress metrics, grouping and filters. Tasks reference states by id, so
+	// no task data changes — the category of the state row does.
+	StateType *string `json:"state_type"`
 }
 
 // ListStates returns project states.
@@ -1142,6 +1150,7 @@ func (h *ProjectHandler) ListStates(c *echo.Context) error {
 			Position:  int(s.Position),
 			IsDefault: s.IsDefault,
 			CreatedAt: s.CreatedAt.Time,
+			TaskCount: int(s.TaskCount),
 		}
 	}
 
@@ -1245,15 +1254,29 @@ func (h *ProjectHandler) UpdateState(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
+	stateType := ""
+	if req.StateType != nil {
+		validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true, "archived": true}
+		if !validTypes[*req.StateType] {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid state_type")
+		}
+		stateType = *req.StateType
+	}
+
 	ctx := c.Request().Context()
 
 	state, err := h.store.UpdateProjectState(ctx, store.UpdateProjectStateParams{
-		ID:       stateID,
-		Name:     stringToPgtypeText(req.Name),
-		Color:    stringToPgtypeText(req.Color),
-		Position: intToPgtypeInt4(req.Position),
+		ID:        stateID,
+		Name:      stringToPgtypeText(req.Name),
+		Color:     stringToPgtypeText(req.Color),
+		Position:  intToPgtypeInt4(req.Position),
+		StateType: stateType,
 	})
 	if err != nil {
+		// State names are unique per project; surface a rename collision clearly.
+		if strings.Contains(err.Error(), "duplicate key") {
+			return echo.NewHTTPError(http.StatusConflict, "a state with that name already exists in this project")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update state")
 	}
 

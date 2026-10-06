@@ -210,10 +210,16 @@ FROM project_states
 WHERE id = $1;
 
 -- name: UpdateProjectState :one
+-- `state_type` is passed as plain text; when empty string, no change. Avoids
+-- narg around the enum type under the string override.
 UPDATE project_states
 SET name = COALESCE(sqlc.narg('name'), name),
     color = COALESCE(sqlc.narg('color'), color),
-    position = COALESCE(sqlc.narg('position'), position)
+    position = COALESCE(sqlc.narg('position'), position),
+    state_type = CASE
+                   WHEN sqlc.arg('state_type')::text = '' THEN state_type
+                   ELSE sqlc.arg('state_type')::state_type
+                 END
 WHERE id = $1
 RETURNING id, project_id, state_type, name, color, position, is_default, created_at;
 
@@ -228,10 +234,12 @@ SET is_default = (id = sqlc.arg('state_id'))
 WHERE project_id = sqlc.arg('project_id');
 
 -- name: ListProjectStates :many
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
-FROM project_states
-WHERE project_id = $1
-ORDER BY position ASC, created_at ASC;
+-- task_count lets the settings UI warn how many tasks a state edit touches.
+SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at,
+       (SELECT COUNT(*) FROM tasks t WHERE t.state_id = ps.id AND t.deleted_at IS NULL)::int AS task_count
+FROM project_states ps
+WHERE ps.project_id = $1
+ORDER BY ps.position ASC, ps.created_at ASC;
 
 -- name: GetDefaultProjectState :one
 SELECT id, project_id, state_type, name, color, position, is_default, created_at

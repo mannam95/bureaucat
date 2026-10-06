@@ -1813,21 +1813,35 @@ func (q *Queries) ListProjectMembersMissingFromWorkspace(ctx context.Context, ar
 }
 
 const listProjectStates = `-- name: ListProjectStates :many
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
-FROM project_states
-WHERE project_id = $1
-ORDER BY position ASC, created_at ASC
+SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at,
+       (SELECT COUNT(*) FROM tasks t WHERE t.state_id = ps.id AND t.deleted_at IS NULL)::int AS task_count
+FROM project_states ps
+WHERE ps.project_id = $1
+ORDER BY ps.position ASC, ps.created_at ASC
 `
 
-func (q *Queries) ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error) {
+type ListProjectStatesRow struct {
+	ID        uuid.UUID          `json:"id"`
+	ProjectID uuid.UUID          `json:"project_id"`
+	StateType string             `json:"state_type"`
+	Name      string             `json:"name"`
+	Color     pgtype.Text        `json:"color"`
+	Position  int32              `json:"position"`
+	IsDefault bool               `json:"is_default"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	TaskCount int32              `json:"task_count"`
+}
+
+// task_count lets the settings UI warn how many tasks a state edit touches.
+func (q *Queries) ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ListProjectStatesRow, error) {
 	rows, err := q.db.Query(ctx, listProjectStates, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ProjectState{}
+	items := []ListProjectStatesRow{}
 	for rows.Next() {
-		var i ProjectState
+		var i ListProjectStatesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProjectID,
@@ -1837,6 +1851,7 @@ func (q *Queries) ListProjectStates(ctx context.Context, projectID uuid.UUID) ([
 			&i.Position,
 			&i.IsDefault,
 			&i.CreatedAt,
+			&i.TaskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -3605,24 +3620,32 @@ const updateProjectState = `-- name: UpdateProjectState :one
 UPDATE project_states
 SET name = COALESCE($2, name),
     color = COALESCE($3, color),
-    position = COALESCE($4, position)
+    position = COALESCE($4, position),
+    state_type = CASE
+                   WHEN $5::text = '' THEN state_type
+                   ELSE $5::state_type
+                 END
 WHERE id = $1
 RETURNING id, project_id, state_type, name, color, position, is_default, created_at
 `
 
 type UpdateProjectStateParams struct {
-	ID       uuid.UUID   `json:"id"`
-	Name     pgtype.Text `json:"name"`
-	Color    pgtype.Text `json:"color"`
-	Position pgtype.Int4 `json:"position"`
+	ID        uuid.UUID   `json:"id"`
+	Name      pgtype.Text `json:"name"`
+	Color     pgtype.Text `json:"color"`
+	Position  pgtype.Int4 `json:"position"`
+	StateType string      `json:"state_type"`
 }
 
+// `state_type` is passed as plain text; when empty string, no change. Avoids
+// narg around the enum type under the string override.
 func (q *Queries) UpdateProjectState(ctx context.Context, arg UpdateProjectStateParams) (ProjectState, error) {
 	row := q.db.QueryRow(ctx, updateProjectState,
 		arg.ID,
 		arg.Name,
 		arg.Color,
 		arg.Position,
+		arg.StateType,
 	)
 	var i ProjectState
 	err := row.Scan(

@@ -52,6 +52,8 @@ export interface ProjectState {
   position: number;
   is_default: boolean;
   created_at: string;
+  /** Non-deleted tasks currently in this state (filled on the list endpoint). */
+  task_count: number;
 }
 
 export type StateType = "backlog" | "unstarted" | "started" | "completed" | "cancelled" | "archived";
@@ -99,6 +101,8 @@ export interface UpdateStateRequest {
   name?: string;
   color?: string;
   position?: number;
+  /** Re-categorises the state (and every task in it) across metrics and filters. */
+  state_type?: StateType;
 }
 
 export interface CreateLabelRequest {

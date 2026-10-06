@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Trash2, GripVertical, Loader2, Star } from "lucide-vue-next";
+import { Plus, Trash2, GripVertical, Loader2, Star, Pencil, TriangleAlert } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ProjectState, StateType } from "~/types";
 
@@ -73,9 +73,55 @@ async function handleCreate() {
   }
 }
 
-async function handleUpdate(state: ProjectState, updates: { name?: string; color?: string }) {
+// Inline edit: name, type and color. Tasks reference states by id, so an edit
+// applies to every task in the state instantly — a type change re-categorises
+// them across progress, filters and the board, which the form warns about.
+const editForm = ref({
+  name: "",
+  state_type: "unstarted" as StateType,
+  color: "#3B82F6",
+});
+
+const editingState = computed(
+  () => props.states.find((s) => s.id === editingId.value) ?? null
+);
+const editTypeChanged = computed(
+  () => !!editingState.value && editForm.value.state_type !== editingState.value.state_type
+);
+
+function typeLabel(t: StateType): string {
+  return stateTypes.find((x) => x.value === t)?.label ?? t;
+}
+
+function openEdit(state: ProjectState) {
+  editingId.value = state.id;
+  editForm.value = {
+    name: state.name,
+    state_type: state.state_type,
+    color: state.color || "#6B7280",
+  };
+}
+
+function cancelEdit() {
+  editingId.value = null;
+}
+
+async function handleSaveEdit() {
+  const s = editingState.value;
+  if (!s || !editForm.value.name.trim()) return;
+
+  // Send only what changed.
+  const updates: { name?: string; color?: string; state_type?: StateType } = {};
+  if (editForm.value.name.trim() !== s.name) updates.name = editForm.value.name.trim();
+  if (editForm.value.color !== (s.color || "#6B7280")) updates.color = editForm.value.color;
+  if (editForm.value.state_type !== s.state_type) updates.state_type = editForm.value.state_type;
+  if (Object.keys(updates).length === 0) {
+    editingId.value = null;
+    return;
+  }
+
   loading.value = true;
-  const result = await updateState(props.projectKey, state.id, updates);
+  const result = await updateState(props.projectKey, s.id, updates);
   loading.value = false;
 
   if (result.success) {
@@ -209,47 +255,126 @@ async function handleDelete(state: ProjectState) {
         <div
           v-for="state in groupedStates[type.value]"
           :key="state.id"
-          class="flex items-center gap-3 rounded-lg border px-3 py-2"
+          class="rounded-lg border px-3 py-2"
         >
-          <div
-            class="size-3 rounded-full"
-            :style="{ backgroundColor: state.color }"
-          />
-          <span class="flex-1 text-sm font-medium">{{ state.name }}</span>
-          <Badge v-if="state.is_default" variant="outline" class="gap-1 text-xs">
-            <Star class="size-3 fill-current" />
-            Default
-          </Badge>
-          <Button
-            v-else-if="isAdmin"
-            variant="ghost"
-            size="sm"
-            class="h-8 gap-1.5 text-muted-foreground"
-            :disabled="settingDefaultId === state.id"
-            @click="handleSetDefault(state)"
+          <!-- Inline edit form -->
+          <form
+            v-if="editingId === state.id"
+            class="space-y-3 py-1"
+            @submit.prevent="handleSaveEdit"
           >
-            <Loader2
-              v-if="settingDefaultId === state.id"
-              class="size-3.5 animate-spin"
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div class="space-y-1.5">
+                <Label>Name</Label>
+                <Input v-model="editForm.name" :disabled="loading" />
+              </div>
+              <div class="space-y-1.5">
+                <Label>Type</Label>
+                <NativeSelect v-model="editForm.state_type" :disabled="loading">
+                  <option v-for="t in stateTypes" :key="t.value" :value="t.value">
+                    {{ t.label }}
+                  </option>
+                </NativeSelect>
+              </div>
+              <div class="space-y-1.5">
+                <Label>Color</Label>
+                <div class="flex flex-wrap gap-1 pt-1">
+                  <button
+                    v-for="color in presetColors"
+                    :key="color"
+                    type="button"
+                    :aria-label="`Select color ${color}`"
+                    class="size-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none"
+                    :class="{
+                      'border-foreground scale-110': editForm.color === color,
+                      'border-transparent': editForm.color !== color,
+                    }"
+                    :style="{ backgroundColor: color }"
+                    @click="editForm.color = color"
+                  />
+                </div>
+              </div>
+            </div>
+            <p
+              v-if="editTypeChanged && state.task_count > 0"
+              class="flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+            >
+              <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {{ state.task_count }} task{{ state.task_count === 1 ? "" : "s" }} in this
+                state will immediately count as "{{ typeLabel(editForm.state_type) }}"
+                in progress, filters and the board.
+              </span>
+            </p>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" :disabled="loading" @click="cancelEdit">
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" :disabled="loading || !editForm.name.trim()">
+                <Loader2 v-if="loading" class="mr-1.5 size-4 animate-spin" />
+                Save
+              </Button>
+            </div>
+          </form>
+
+          <!-- Normal row -->
+          <div v-else class="flex items-center gap-3">
+            <div
+              class="size-3 rounded-full"
+              :style="{ backgroundColor: state.color }"
             />
-            <Star v-else class="size-3.5" />
-            Set default
-          </Button>
-          <Button
-            v-if="isAdmin && !state.is_default"
-            variant="ghost"
-            size="icon"
-            aria-label="Delete state"
-            class="size-8 text-destructive hover:text-destructive"
-            :disabled="deletingId === state.id"
-            @click="handleDelete(state)"
-          >
-            <Loader2
-              v-if="deletingId === state.id"
-              class="size-4 animate-spin"
-            />
-            <Trash2 v-else class="size-4" />
-          </Button>
+            <span class="text-sm font-medium">{{ state.name }}</span>
+            <span v-if="state.task_count > 0" class="text-xs text-muted-foreground">
+              {{ state.task_count }} task{{ state.task_count === 1 ? "" : "s" }}
+            </span>
+            <span class="flex-1" />
+            <Badge v-if="state.is_default" variant="outline" class="gap-1 text-xs">
+              <Star class="size-3 fill-current" />
+              Default
+            </Badge>
+            <Button
+              v-else-if="isAdmin"
+              variant="ghost"
+              size="sm"
+              class="h-8 gap-1.5 text-muted-foreground"
+              :disabled="settingDefaultId === state.id"
+              @click="handleSetDefault(state)"
+            >
+              <Loader2
+                v-if="settingDefaultId === state.id"
+                class="size-3.5 animate-spin"
+              />
+              <Star v-else class="size-3.5" />
+              Set default
+            </Button>
+            <Button
+              v-if="isAdmin"
+              variant="ghost"
+              size="icon"
+              aria-label="Edit state"
+              title="Edit name, type or color"
+              class="size-8 text-muted-foreground"
+              @click="openEdit(state)"
+            >
+              <Pencil class="size-4" />
+            </Button>
+            <Button
+              v-if="isAdmin && !state.is_default"
+              variant="ghost"
+              size="icon"
+              aria-label="Delete state"
+              :title="state.task_count > 0 ? 'Cannot delete: move or finish its tasks first' : 'Delete state'"
+              class="size-8 text-destructive hover:text-destructive"
+              :disabled="deletingId === state.id || state.task_count > 0"
+              @click="handleDelete(state)"
+            >
+              <Loader2
+                v-if="deletingId === state.id"
+                class="size-4 animate-spin"
+              />
+              <Trash2 v-else class="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

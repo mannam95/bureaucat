@@ -256,7 +256,8 @@ type Querier interface {
 	// (HTML tags stripped from content so markup/attributes don't produce matches).
 	ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error)
 	ListProjectPreferences(ctx context.Context, arg ListProjectPreferencesParams) ([]ListProjectPreferencesRow, error)
-	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ProjectState, error)
+	// task_count lets the settings UI warn how many tasks a state edit touches.
+	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ListProjectStatesRow, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
 	// Backlog source ("Tasks Without an Epic"): project top-level tasks that are in
 	// no module at all. Unlike the picker above, this excludes tasks in ANY module.
@@ -400,6 +401,8 @@ type Querier interface {
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateProjectLabel(ctx context.Context, arg UpdateProjectLabelParams) (ProjectLabel, error)
 	UpdateProjectMemberRole(ctx context.Context, arg UpdateProjectMemberRoleParams) error
+	// `state_type` is passed as plain text; when empty string, no change. Avoids
+	// narg around the enum type under the string override.
 	UpdateProjectState(ctx context.Context, arg UpdateProjectStateParams) (ProjectState, error)
 	UpdateProjectView(ctx context.Context, arg UpdateProjectViewParams) (UpdateProjectViewRow, error)
 	UpdateProjectWorkspace(ctx context.Context, arg UpdateProjectWorkspaceParams) (Project, error)
