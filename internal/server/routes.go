@@ -350,6 +350,7 @@ func (s *Server) registerRoutes() {
 		admin := api.Group("/admin", auth.Middleware(s.authManager, s.store), auth.RejectPAT(), auth.AdminMiddleware())
 		admin.GET("/users", s.adminHandler.ListUsers)
 		admin.POST("/users", s.adminHandler.CreateUser)
+		admin.PATCH("/users/:id", s.adminHandler.UpdateUserProfile)
 		admin.DELETE("/users/:id", s.adminHandler.DeleteUser)
 		admin.POST("/users/:id/restore", s.adminHandler.RestoreUser)
 		admin.PUT("/users/:id/role", s.adminHandler.UpdateUserRole)

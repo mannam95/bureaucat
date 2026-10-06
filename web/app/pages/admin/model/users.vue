@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw, Pencil } from "lucide-vue-next";
 
 definePageMeta({
   middleware: ["admin"],
@@ -7,7 +7,7 @@ definePageMeta({
 
 useSeoMeta({ title: "Manage Users" });
 
-const { listUsers, createUser, deleteUser, updateUserRole, resetUserPassword, setUserActive, restoreUser } = useAdmin();
+const { listUsers, createUser, deleteUser, updateUserRole, updateUserProfile, resetUserPassword, setUserActive, restoreUser } = useAdmin();
 
 type UserStatus = "active" | "deactivated" | "deleted";
 
@@ -126,6 +126,53 @@ const newPassword = ref("");
 const showRestoreDialog = ref(false);
 const restoreLoading = ref(false);
 const userToRestore = ref<User | null>(null);
+
+// Edit profile dialog state
+const showEditDialog = ref(false);
+const editLoading = ref(false);
+const editError = ref<string | null>(null);
+const userToEdit = ref<User | null>(null);
+const editForm = ref({ username: "", email: "", first_name: "", last_name: "" });
+
+function openEdit(user: User) {
+  userToEdit.value = user;
+  editForm.value = {
+    username: user.username,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+  };
+  editError.value = null;
+  showEditDialog.value = true;
+}
+
+async function handleEditUser() {
+  const u = userToEdit.value;
+  if (!u) return;
+  // Send only the fields that actually changed.
+  const fields: Record<string, string> = {};
+  if (editForm.value.username.trim() !== u.username) fields.username = editForm.value.username.trim();
+  if (editForm.value.email.trim() !== u.email) fields.email = editForm.value.email.trim();
+  if (editForm.value.first_name.trim() !== u.first_name) fields.first_name = editForm.value.first_name.trim();
+  if (editForm.value.last_name.trim() !== u.last_name) fields.last_name = editForm.value.last_name.trim();
+  if (Object.keys(fields).length === 0) {
+    showEditDialog.value = false;
+    return;
+  }
+
+  editLoading.value = true;
+  editError.value = null;
+  const result = await updateUserProfile(u.id, fields);
+  editLoading.value = false;
+
+  if (result.success) {
+    showEditDialog.value = false;
+    userToEdit.value = null;
+    await fetchUsers();
+  } else {
+    editError.value = result.error || "Failed to update user";
+  }
+}
 
 async function fetchUsers() {
   loading.value = true;
@@ -450,8 +497,17 @@ onMounted(() => {
                       </Button>
                     </div>
 
-                    <!-- Deactivated tab: reactivate or delete. -->
+                    <!-- Deactivated tab: edit, reactivate or delete. -->
                     <div v-else-if="status === 'deactivated'" class="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Edit profile"
+                        title="Edit profile"
+                        @click="openEdit(user)"
+                      >
+                        <Pencil class="size-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -473,8 +529,17 @@ onMounted(() => {
                       </Button>
                     </div>
 
-                    <!-- Active tab: role, deactivate, reset password, delete. -->
+                    <!-- Active tab: edit, role, deactivate, reset password, delete. -->
                     <div v-else class="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Edit profile"
+                        title="Edit profile"
+                        @click="openEdit(user)"
+                      >
+                        <Pencil class="size-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -584,6 +649,51 @@ onMounted(() => {
                 <Button type="submit" :disabled="createLoading">
                   <Loader2 v-if="createLoading" class="mr-2 size-4 animate-spin" />
                   Create
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <!-- Edit Profile Dialog -->
+        <Dialog v-model:open="showEditDialog">
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update the profile of "{{ userToEdit?.username }}". A changed email or
+                username takes effect immediately as their sign-in identifier.
+              </DialogDescription>
+            </DialogHeader>
+            <form class="space-y-4" @submit.prevent="handleEditUser">
+              <div v-if="editError" role="alert" class="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {{ editError }}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <Label for="edit_first_name">First Name</Label>
+                  <Input id="edit_first_name" v-model="editForm.first_name" required :disabled="editLoading" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="edit_last_name">Last Name</Label>
+                  <Input id="edit_last_name" v-model="editForm.last_name" required :disabled="editLoading" />
+                </div>
+              </div>
+              <div class="space-y-2">
+                <Label for="edit_username">Username</Label>
+                <Input id="edit_username" v-model="editForm.username" required :disabled="editLoading" />
+              </div>
+              <div class="space-y-2">
+                <Label for="edit_email">Email</Label>
+                <Input id="edit_email" type="email" v-model="editForm.email" required :disabled="editLoading" />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" :disabled="editLoading" @click="showEditDialog = false">
+                  Cancel
+                </Button>
+                <Button type="submit" :disabled="editLoading">
+                  <Loader2 v-if="editLoading" class="mr-2 size-4 animate-spin" />
+                  Save
                 </Button>
               </DialogFooter>
             </form>

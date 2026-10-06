@@ -156,6 +156,26 @@ UPDATE users
 SET password_hash = $2, updated_at = NOW()
 WHERE id = $1;
 
+-- name: UpdateUserProfile :one
+-- Admin edit of a user's identity fields. Nil args leave a field unchanged.
+UPDATE users
+SET username   = COALESCE(sqlc.narg('username'), username),
+    email      = COALESCE(sqlc.narg('email'), email),
+    first_name = COALESCE(sqlc.narg('first_name'), first_name),
+    last_name  = COALESCE(sqlc.narg('last_name'), last_name),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at;
+
+-- name: UserConflictsWithOther :one
+-- Whether a DIFFERENT user (active, deactivated or soft-deleted alike) already
+-- owns this email or username. Used by admin profile edits, where the target's
+-- own current values must not count as a conflict.
+SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE (email = $1 OR username = $2) AND id <> $3
+) AS exists;
+
 -- name: IsUserActive :one
 SELECT is_active FROM users WHERE id = $1;
 

@@ -907,6 +907,61 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 	return err
 }
 
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET username   = COALESCE($2, username),
+    email      = COALESCE($3, email),
+    first_name = COALESCE($4, first_name),
+    last_name  = COALESCE($5, last_name),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, username, email, first_name, last_name, user_type, is_active, created_at, updated_at
+`
+
+type UpdateUserProfileParams struct {
+	ID        uuid.UUID   `json:"id"`
+	Username  pgtype.Text `json:"username"`
+	Email     pgtype.Text `json:"email"`
+	FirstName pgtype.Text `json:"first_name"`
+	LastName  pgtype.Text `json:"last_name"`
+}
+
+type UpdateUserProfileRow struct {
+	ID        uuid.UUID          `json:"id"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	UserType  string             `json:"user_type"`
+	IsActive  bool               `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Admin edit of a user's identity fields. Nil args leave a field unchanged.
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.ID,
+		arg.Username,
+		arg.Email,
+		arg.FirstName,
+		arg.LastName,
+	)
+	var i UpdateUserProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.FirstName,
+		&i.LastName,
+		&i.UserType,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserType = `-- name: UpdateUserType :exec
 UPDATE users
 SET user_type = $2, updated_at = NOW()
@@ -921,6 +976,29 @@ type UpdateUserTypeParams struct {
 func (q *Queries) UpdateUserType(ctx context.Context, arg UpdateUserTypeParams) error {
 	_, err := q.db.Exec(ctx, updateUserType, arg.ID, arg.UserType)
 	return err
+}
+
+const userConflictsWithOther = `-- name: UserConflictsWithOther :one
+SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE (email = $1 OR username = $2) AND id <> $3
+) AS exists
+`
+
+type UserConflictsWithOtherParams struct {
+	Email    string    `json:"email"`
+	Username string    `json:"username"`
+	ID       uuid.UUID `json:"id"`
+}
+
+// Whether a DIFFERENT user (active, deactivated or soft-deleted alike) already
+// owns this email or username. Used by admin profile edits, where the target's
+// own current values must not count as a conflict.
+func (q *Queries) UserConflictsWithOther(ctx context.Context, arg UserConflictsWithOtherParams) (bool, error) {
+	row := q.db.QueryRow(ctx, userConflictsWithOther, arg.Email, arg.Username, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const userExistsByEmailOrUsername = `-- name: UserExistsByEmailOrUsername :one

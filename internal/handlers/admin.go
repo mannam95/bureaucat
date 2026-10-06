@@ -650,6 +650,125 @@ func (h *AdminHandler) ResetUserPassword(c *echo.Context) error {
 }
 
 // SetUserActiveRequest represents the request to activate or deactivate a user.
+// UpdateUserProfileRequest is the body for PATCH /admin/users/:id. Every field
+// is optional; a present field must be non-empty (there is no "clear" here —
+// these are identity fields).
+type UpdateUserProfileRequest struct {
+	Username  *string `json:"username"`
+	Email     *string `json:"email"`
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+}
+
+// UpdateUserProfile lets an admin edit a user's identity fields: username,
+// email, first and last name. The email doubles as the login identifier and
+// takes effect immediately (there is no verification flow; admins are trusted).
+//
+//	@Summary		Update a user's profile
+//	@Description	Admin edit of username, email, first and last name.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string						true	"User ID"
+//	@Param			body	body		UpdateUserProfileRequest	true	"Fields to update"
+//	@Success		200		{object}	UserResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/users/{id} [patch]
+func (h *AdminHandler) UpdateUserProfile(c *echo.Context) error {
+	userID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+	var req UpdateUserProfileRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	ctx := c.Request().Context()
+	user, err := h.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	params := store.UpdateUserProfileParams{ID: userID}
+	newUsername, newEmail := user.Username, user.Email
+	if req.Username != nil {
+		v := strings.TrimSpace(*req.Username)
+		if v == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "username cannot be empty")
+		}
+		params.Username = pgtype.Text{String: v, Valid: true}
+		newUsername = v
+	}
+	if req.Email != nil {
+		v := strings.TrimSpace(*req.Email)
+		if !isValidEmail(v) {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid email format")
+		}
+		// The break-glass superadmin is identified by its email; changing it
+		// would silently strip the account's protections.
+		if h.isSuperAdmin(user.Email) && !strings.EqualFold(v, user.Email) {
+			return echo.NewHTTPError(http.StatusForbidden, "cannot change the email of the break-glass superadmin account")
+		}
+		params.Email = pgtype.Text{String: v, Valid: true}
+		newEmail = v
+	}
+	if req.FirstName != nil {
+		v := strings.TrimSpace(*req.FirstName)
+		if v == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "first name cannot be empty")
+		}
+		params.FirstName = pgtype.Text{String: v, Valid: true}
+	}
+	if req.LastName != nil {
+		v := strings.TrimSpace(*req.LastName)
+		if v == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "last name cannot be empty")
+		}
+		params.LastName = pgtype.Text{String: v, Valid: true}
+	}
+	if req.Username == nil && req.Email == nil && req.FirstName == nil && req.LastName == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "nothing to update")
+	}
+
+	// A soft-deleted or deactivated user still owns its email and username, so
+	// the conflict check spans every account state — except the target itself.
+	if newUsername != user.Username || newEmail != user.Email {
+		conflict, err := h.store.UserConflictsWithOther(ctx, store.UserConflictsWithOtherParams{
+			Email:    newEmail,
+			Username: newUsername,
+			ID:       userID,
+		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to check for conflicts")
+		}
+		if conflict {
+			return echo.NewHTTPError(http.StatusConflict, "That email or username already belongs to another user (possibly deactivated or deleted).")
+		}
+	}
+
+	updated, err := h.store.UpdateUserProfile(ctx, params)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user")
+	}
+	return c.JSON(http.StatusOK, UserResponse{
+		ID:            updated.ID,
+		Username:      updated.Username,
+		Email:         updated.Email,
+		FirstName:     updated.FirstName,
+		LastName:      updated.LastName,
+		UserType:      updated.UserType,
+		CreatedAt:     updated.CreatedAt.Time,
+		IsSuperAdmin:  h.isSuperAdmin(updated.Email),
+		IsDeactivated: !updated.IsActive,
+	})
+}
+
 type SetUserActiveRequest struct {
 	Active *bool `json:"active"`
 }

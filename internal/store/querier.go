@@ -407,6 +407,8 @@ type Querier interface {
 	UpdateTaskTemplate(ctx context.Context, arg UpdateTaskTemplateParams) (TaskTemplate, error)
 	UpdateUserAvatarURL(ctx context.Context, arg UpdateUserAvatarURLParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// Admin edit of a user's identity fields. Nil args leave a field unchanged.
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpdateUserType(ctx context.Context, arg UpdateUserTypeParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 	// On a matching revision the row is bumped; on a stale revision no row is
@@ -415,6 +417,10 @@ type Querier interface {
 	UpsertGlobalPreference(ctx context.Context, arg UpsertGlobalPreferenceParams) (UpsertGlobalPreferenceRow, error)
 	UpsertProjectPreference(ctx context.Context, arg UpsertProjectPreferenceParams) (UpsertProjectPreferenceRow, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) (Setting, error)
+	// Whether a DIFFERENT user (active, deactivated or soft-deleted alike) already
+	// owns this email or username. Used by admin profile edits, where the target's
+	// own current values must not count as a conflict.
+	UserConflictsWithOther(ctx context.Context, arg UserConflictsWithOtherParams) (bool, error)
 	UserExistsByEmailOrUsername(ctx context.Context, arg UserExistsByEmailOrUsernameParams) (bool, error)
 	VerifyActivityChain(ctx context.Context, taskID uuid.UUID) ([]ActivityLog, error)
 	ViewsCreatedPerDay(ctx context.Context, arg ViewsCreatedPerDayParams) ([]ViewsCreatedPerDayRow, error)

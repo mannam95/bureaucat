@@ -315,6 +315,36 @@ export function useAdmin() {
     }
   }
 
+  async function updateUserProfile(
+    userId: string,
+    fields: { username?: string; email?: string; first_name?: string; last_name?: string }
+  ): Promise<{
+    success: boolean;
+    data?: User;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(fields),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to update user" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function resetUserPassword(userId: string, password: string): Promise<{
     success: boolean;
     error?: string;
@@ -464,6 +494,7 @@ export function useAdmin() {
     createUser,
     deleteUser,
     updateUserRole,
+    updateUserProfile,
     resetUserPassword,
     setUserActive,
     restoreUser,
