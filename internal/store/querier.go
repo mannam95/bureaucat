@@ -138,8 +138,6 @@ type Querier interface {
 	CyclesCreatedPerDay(ctx context.Context, arg CyclesCreatedPerDayParams) ([]CyclesCreatedPerDayRow, error)
 	DeactivateUser(ctx context.Context, arg DeactivateUserParams) error
 	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
-	// Returns the upload_id so the caller can clean up the underlying file once no
-	// attachment references it anymore.
 	// Scoped to the routed entity so a cross-task/comment id can't delete someone
 	// else's attachment. Returns the upload_id so the caller can clean up the
 	// underlying file once no attachment references it anymore.
@@ -159,7 +157,6 @@ type Querier interface {
 	DeleteTaskTemplate(ctx context.Context, id uuid.UUID) error
 	DeleteUpload(ctx context.Context, id uuid.UUID) error
 	DeleteUserByID(ctx context.Context, id uuid.UUID) error
-	// Turns a subtask back into a top-level task, only if it belongs to parent_id.
 	GetBlockerTaskRef(ctx context.Context, id uuid.UUID) (GetBlockerTaskRefRow, error)
 	GetCommentByID(ctx context.Context, id uuid.UUID) (GetCommentByIDRow, error)
 	GetCycleByID(ctx context.Context, id uuid.UUID) (GetCycleByIDRow, error)

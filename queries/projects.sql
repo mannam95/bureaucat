@@ -452,12 +452,6 @@ UPDATE tasks
 SET parent_task_id = sqlc.narg('parent_task_id'), updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL;
 
--- name: DetachSubtask :execrows
--- Turns a subtask back into a top-level task, only if it belongs to parent_id.
-UPDATE tasks
-SET parent_task_id = NULL, updated_at = NOW()
-WHERE id = sqlc.arg('id')::uuid AND parent_task_id = sqlc.arg('parent_id')::uuid AND deleted_at IS NULL;
-
 -- name: ListProjectTasks :many
 SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.created_by, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,

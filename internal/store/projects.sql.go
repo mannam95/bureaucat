@@ -899,26 +899,6 @@ func (q *Queries) DeleteTaskTemplate(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const detachSubtask = `-- name: DetachSubtask :execrows
-UPDATE tasks
-SET parent_task_id = NULL, updated_at = NOW()
-WHERE id = $1::uuid AND parent_task_id = $2::uuid AND deleted_at IS NULL
-`
-
-type DetachSubtaskParams struct {
-	ID       uuid.UUID `json:"id"`
-	ParentID uuid.UUID `json:"parent_id"`
-}
-
-// Turns a subtask back into a top-level task, only if it belongs to parent_id.
-func (q *Queries) DetachSubtask(ctx context.Context, arg DetachSubtaskParams) (int64, error) {
-	result, err := q.db.Exec(ctx, detachSubtask, arg.ID, arg.ParentID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getBlockerTaskRef = `-- name: GetBlockerTaskRef :one
 SELECT id, project_id, task_number, title
 FROM tasks
