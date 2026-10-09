@@ -4,9 +4,10 @@ VALUES ($1, $2, $3, $4)
 RETURNING id, upload_id, entity_type, entity_id, created_by, created_at;
 
 -- name: DeleteAttachment :one
--- Returns the upload_id so the caller can clean up the underlying file once no
--- attachment references it anymore.
-DELETE FROM attachments WHERE id = $1 RETURNING upload_id;
+-- Scoped to the routed entity so a cross-task/comment id can't delete someone
+-- else's attachment. Returns the upload_id so the caller can clean up the
+-- underlying file once no attachment references it anymore.
+DELETE FROM attachments WHERE id = $1 AND entity_type = $2 AND entity_id = $3 RETURNING upload_id;
 
 -- name: CountAttachmentsByUpload :one
 SELECT count(*) FROM attachments WHERE upload_id = $1;

@@ -1,0 +1,96 @@
+map $http_accept $home_page {
+    default             /index.html;
+    "~*text/markdown"   /index.md;
+}
+
+map $http_accept $not_found_page {
+    default             /index.html;
+    "~*text/markdown"   /404.md;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    gzip on;
+    gzip_types text/css text/plain text/markdown text/xml application/xml application/javascript application/manifest+json application/linkset+json image/svg+xml;
+
+    location = / {
+        rewrite ^ $home_page last;
+    }
+
+    # The app URL is injected into index.html at serve time so one image fits every deployment.
+    location = /index.html {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        add_header Vary "Accept" always;
+        add_header Link '</index.md>; rel="alternate"; type="text/markdown", </llms.txt>; rel="describedby"; type="text/plain", </sitemap.xml>; rel="sitemap"; type="application/xml", </.well-known/api-catalog>; rel="api-catalog"' always;
+        sub_filter "__APP_URL__" "${APP_URL}";
+        sub_filter_once off;
+    }
+
+    location ~ \.md$ {
+        include /etc/nginx/snippets/security-headers.conf;
+        types { }
+        default_type text/markdown;
+        charset utf-8;
+        charset_types text/markdown;
+        add_header Cache-Control "no-cache" always;
+        add_header Vary "Accept" always;
+        sub_filter "__APP_URL__" "${APP_URL}";
+        sub_filter_once off;
+        sub_filter_types text/markdown;
+    }
+
+    location = /llms.txt {
+        include /etc/nginx/snippets/security-headers.conf;
+        charset utf-8;
+        add_header Cache-Control "public, max-age=3600" always;
+        sub_filter "__APP_URL__" "${APP_URL}";
+        sub_filter_once off;
+        sub_filter_types text/plain;
+    }
+
+    location = /.well-known/api-catalog {
+        include /etc/nginx/snippets/security-headers.conf;
+        types { }
+        default_type application/linkset+json;
+        add_header Cache-Control "public, max-age=3600" always;
+        sub_filter "__APP_URL__" "${APP_URL}";
+        sub_filter_once off;
+        sub_filter_types application/linkset+json;
+    }
+
+    location ~ ^/(robots\.txt|sitemap\.xml)$ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    location ^~ /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    location ~* \.(png|ico|svg|woff2|webmanifest)$ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=604800" always;
+        try_files $uri =404;
+    }
+
+    # Unknown paths get a real 404: the landing page for browsers, a short Markdown body for agents.
+    error_page 404 $not_found_page;
+
+    location = /openapi.json {
+        return 302 ${APP_URL}/api/v1/openapi.json;
+    }
+
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        sub_filter "__APP_URL__" "${APP_URL}";
+        sub_filter_once off;
+        try_files $uri $uri.html $uri/ =404;
+    }
+}

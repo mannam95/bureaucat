@@ -268,6 +268,256 @@ func (q *Queries) CyclesCreatedPerDay(ctx context.Context, arg CyclesCreatedPerD
 	return items, nil
 }
 
+const listBlockerLinksForGraph = `-- name: ListBlockerLinksForGraph :many
+SELECT task_id, blocker_task_id
+FROM task_blockers
+WHERE task_id = ANY($1::uuid[])
+  AND blocker_task_id = ANY($1::uuid[])
+`
+
+type ListBlockerLinksForGraphRow struct {
+	TaskID        uuid.UUID `json:"task_id"`
+	BlockerTaskID uuid.UUID `json:"blocker_task_id"`
+}
+
+// Blocker links where both tasks are already on the graph.
+func (q *Queries) ListBlockerLinksForGraph(ctx context.Context, taskIds []uuid.UUID) ([]ListBlockerLinksForGraphRow, error) {
+	rows, err := q.db.Query(ctx, listBlockerLinksForGraph, taskIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBlockerLinksForGraphRow{}
+	for rows.Next() {
+		var i ListBlockerLinksForGraphRow
+		if err := rows.Scan(&i.TaskID, &i.BlockerTaskID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGraphProjectOptions = `-- name: ListGraphProjectOptions :many
+SELECT p.project_key, p.name, w.workspace_key
+FROM projects p
+JOIN workspaces w ON p.workspace_id = w.id
+WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
+  AND ($1::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM project_members vm WHERE vm.project_id = p.id AND vm.user_id = $1::uuid))
+ORDER BY p.project_key ASC
+`
+
+type ListGraphProjectOptionsRow struct {
+	ProjectKey   string `json:"project_key"`
+	Name         string `json:"name"`
+	WorkspaceKey string `json:"workspace_key"`
+}
+
+func (q *Queries) ListGraphProjectOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphProjectOptionsRow, error) {
+	rows, err := q.db.Query(ctx, listGraphProjectOptions, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGraphProjectOptionsRow{}
+	for rows.Next() {
+		var i ListGraphProjectOptionsRow
+		if err := rows.Scan(&i.ProjectKey, &i.Name, &i.WorkspaceKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGraphUserOptions = `-- name: ListGraphUserOptions :many
+SELECT u.username, u.email, u.first_name, u.last_name
+FROM users u
+WHERE $1::uuid IS NULL OR EXISTS (
+    SELECT 1 FROM project_members um
+    JOIN project_members vm ON vm.project_id = um.project_id
+    JOIN projects p ON p.id = um.project_id AND p.deleted_at IS NULL
+    WHERE um.user_id = u.id AND vm.user_id = $1::uuid)
+ORDER BY u.first_name ASC, u.last_name ASC
+`
+
+type ListGraphUserOptionsRow struct {
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+func (q *Queries) ListGraphUserOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphUserOptionsRow, error) {
+	rows, err := q.db.Query(ctx, listGraphUserOptions, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGraphUserOptionsRow{}
+	for rows.Next() {
+		var i ListGraphUserOptionsRow
+		if err := rows.Scan(
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGraphWorkspaceOptions = `-- name: ListGraphWorkspaceOptions :many
+SELECT w.workspace_key, w.name
+FROM workspaces w
+WHERE w.deleted_at IS NULL
+  AND ($1::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM projects p
+      JOIN project_members vm ON vm.project_id = p.id
+      WHERE p.workspace_id = w.id AND p.deleted_at IS NULL AND vm.user_id = $1::uuid))
+ORDER BY w.name ASC
+`
+
+type ListGraphWorkspaceOptionsRow struct {
+	WorkspaceKey string `json:"workspace_key"`
+	Name         string `json:"name"`
+}
+
+func (q *Queries) ListGraphWorkspaceOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphWorkspaceOptionsRow, error) {
+	rows, err := q.db.Query(ctx, listGraphWorkspaceOptions, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGraphWorkspaceOptionsRow{}
+	for rows.Next() {
+		var i ListGraphWorkspaceOptionsRow
+		if err := rows.Scan(&i.WorkspaceKey, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskAssignmentsForGraph = `-- name: ListTaskAssignmentsForGraph :many
+SELECT t.id AS task_id, t.task_number, t.title,
+       (t.parent_task_id IS NOT NULL)::boolean AS is_subtask, t.parent_task_id,
+       p.project_key, p.name AS project_name,
+       w.id AS workspace_id, w.workspace_key, w.name AS workspace_name,
+       ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       u.id AS user_id, u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN workspaces w ON p.workspace_id = w.id
+JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN task_assignees ta ON ta.task_id = t.id
+LEFT JOIN users u ON ta.user_id = u.id
+WHERE t.deleted_at IS NULL
+  AND p.deleted_at IS NULL
+  AND w.deleted_at IS NULL
+  AND ($1::text IS NULL OR w.workspace_key = $1::text)
+  AND (COALESCE(cardinality($2::text[]), 0) = 0 OR p.project_key = ANY($2::text[]))
+  AND (COALESCE(cardinality($3::text[]), 0) = 0 OR ps.state_type::text = ANY($3::text[]))
+  AND (COALESCE(cardinality($4::text[]), 0) = 0 OR u.username = ANY($4::text[]))
+  AND ($5::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM project_members vm WHERE vm.project_id = p.id AND vm.user_id = $5::uuid))
+ORDER BY p.project_key ASC, t.task_number ASC
+`
+
+type ListTaskAssignmentsForGraphParams struct {
+	WorkspaceKey pgtype.Text `json:"workspace_key"`
+	ProjectKeys  []string    `json:"project_keys"`
+	StateTypes   []string    `json:"state_types"`
+	Usernames    []string    `json:"usernames"`
+	ViewerID     pgtype.UUID `json:"viewer_id"`
+}
+
+type ListTaskAssignmentsForGraphRow struct {
+	TaskID        uuid.UUID   `json:"task_id"`
+	TaskNumber    int32       `json:"task_number"`
+	Title         string      `json:"title"`
+	IsSubtask     bool        `json:"is_subtask"`
+	ParentTaskID  pgtype.UUID `json:"parent_task_id"`
+	ProjectKey    string      `json:"project_key"`
+	ProjectName   string      `json:"project_name"`
+	WorkspaceID   uuid.UUID   `json:"workspace_id"`
+	WorkspaceKey  string      `json:"workspace_key"`
+	WorkspaceName string      `json:"workspace_name"`
+	StateName     string      `json:"state_name"`
+	StateType     string      `json:"state_type"`
+	StateColor    pgtype.Text `json:"state_color"`
+	UserID        pgtype.UUID `json:"user_id"`
+	Username      pgtype.Text `json:"username"`
+	Email         pgtype.Text `json:"email"`
+	FirstName     pgtype.Text `json:"first_name"`
+	LastName      pgtype.Text `json:"last_name"`
+	AvatarUrl     pgtype.Text `json:"avatar_url"`
+}
+
+// One row per (task, assignee); unassigned tasks come back once with NULL user columns.
+func (q *Queries) ListTaskAssignmentsForGraph(ctx context.Context, arg ListTaskAssignmentsForGraphParams) ([]ListTaskAssignmentsForGraphRow, error) {
+	rows, err := q.db.Query(ctx, listTaskAssignmentsForGraph,
+		arg.WorkspaceKey,
+		arg.ProjectKeys,
+		arg.StateTypes,
+		arg.Usernames,
+		arg.ViewerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskAssignmentsForGraphRow{}
+	for rows.Next() {
+		var i ListTaskAssignmentsForGraphRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.TaskNumber,
+			&i.Title,
+			&i.IsSubtask,
+			&i.ParentTaskID,
+			&i.ProjectKey,
+			&i.ProjectName,
+			&i.WorkspaceID,
+			&i.WorkspaceKey,
+			&i.WorkspaceName,
+			&i.StateName,
+			&i.StateType,
+			&i.StateColor,
+			&i.UserID,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const modulesCreatedPerDay = `-- name: ModulesCreatedPerDay :many
 SELECT d::date AS day, COUNT(m.id)::int AS count
 FROM generate_series(

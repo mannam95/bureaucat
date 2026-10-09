@@ -17,7 +17,7 @@ const emit = defineEmits<{
     <!-- Do not add `relative` here: DialogContent is already `fixed`, and a
          second position utility overrides it and throws off the centering. The
          download link below uses `absolute`, which anchors to this fixed box. -->
-    <DialogContent class="max-w-[90vw] max-h-[90vh] border-none bg-transparent p-0 shadow-none sm:max-w-[90vw]">
+    <DialogContent class="w-auto max-w-[95vw] sm:max-w-[95vw] max-h-[95vh] border-none bg-transparent p-0 shadow-none">
       <DialogTitle class="sr-only">{{ alt || 'Image preview' }}</DialogTitle>
 
       <!-- Download the image while viewing it in-app. -->
@@ -37,7 +37,7 @@ const emit = defineEmits<{
       <img
         :src="src"
         :alt="alt || 'Image preview'"
-        class="max-h-[85vh] w-full rounded-lg bg-white object-contain"
+        class="h-auto max-h-[90vh] w-auto max-w-[95vw] rounded-lg bg-white object-contain"
       />
     </DialogContent>
   </Dialog>

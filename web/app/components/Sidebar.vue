@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LayoutDashboard, FolderKanban, Eye, Repeat, Layers, Timer, MessageCircle, BookOpen, Shield, Settings } from "lucide-vue-next";
+import { LayoutDashboard, FolderKanban, Eye, Repeat, Layers, Network, Timer, MessageCircle, Newspaper, BookOpen, Shield, Settings } from "lucide-vue-next";
 
 const { user } = useAuth();
 const route = useRoute();
@@ -15,9 +15,34 @@ function isActive(path: string): boolean {
 }
 
 const showFeedback = ref(false);
+const showReleases = ref(false);
+
+const SEEN_VERSION_KEY = "bureaucat:last-seen-version";
+const appVersion = ref("");
+const hasUnseenRelease = ref(false);
+
+async function checkUnseenRelease() {
+  try {
+    const res = await fetch("/api/v1/health");
+    if (!res.ok) return;
+    appVersion.value = (await res.json()).version || "";
+    hasUnseenRelease.value = !!appVersion.value && localStorage.getItem(SEEN_VERSION_KEY) !== appVersion.value;
+  } catch {}
+}
+
+function openReleases() {
+  showReleases.value = true;
+  hasUnseenRelease.value = false;
+  if (appVersion.value) {
+    try {
+      localStorage.setItem(SEEN_VERSION_KEY, appVersion.value);
+    } catch {}
+  }
+}
 
 onMounted(() => {
   fetchFeedbackPublicSettings();
+  checkUnseenRelease();
 });
 </script>
 
@@ -93,6 +118,15 @@ onMounted(() => {
       >
         <Layers class="size-4.5" />
       </NuxtLink>
+
+      <NuxtLink
+        to="/graph"
+        title="Graph"
+        class="flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        :class="isActive('/graph') && 'bg-amber-500/15 text-amber-700 dark:text-amber-400'"
+      >
+        <Network class="size-4.5" />
+      </NuxtLink>
     </nav>
 
     <!-- Pomodoro + feedback + settings at bottom -->
@@ -116,6 +150,21 @@ onMounted(() => {
         @click="showFeedback = true"
       >
         <MessageCircle class="size-4.5" />
+      </button>
+
+      <button
+        type="button"
+        title="What's new"
+        aria-label="What's new"
+        class="relative flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        @click="openReleases"
+      >
+        <Newspaper class="size-4.5" />
+        <span
+          v-if="hasUnseenRelease"
+          class="absolute right-2 top-2 size-1.5 rounded-full bg-red-500"
+          aria-hidden="true"
+        />
       </button>
 
       <NuxtLink
@@ -149,5 +198,6 @@ onMounted(() => {
 
     <!-- HIDDEN (self-host): upstream feedback dialog, re-enable with the sidebar button above -->
     <FeedbackDialog v-if="false" v-model:open="showFeedback" />
+    <ReleasesDialog v-model:open="showReleases" />
   </aside>
 </template>

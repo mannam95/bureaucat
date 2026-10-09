@@ -1,4 +1,15 @@
 services:
+  landing:
+    image: codingcoffee/bureaucat-landing:${VERSION:-latest}
+    build:
+      context: ./
+      dockerfile: landing/Dockerfile
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:3042:3042
+    environment:
+      APP_URL: ${APP_URL:?set APP_URL to the app's public URL, e.g. https://app.example.com}
+
   app:
     image: docker.io/mvsrinath/sprintboard:${VERSION:-latest}
     build:
@@ -8,7 +19,7 @@ services:
         VERSION: ${VERSION:-dev}
     restart: unless-stopped
     ports:
-      - 1341:1341
+      - 127.0.0.1:1341:1341
     depends_on:
       postgres:
         condition: service_healthy

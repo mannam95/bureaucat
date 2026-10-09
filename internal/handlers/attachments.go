@@ -1,13 +1,14 @@
 package handlers
 
 import (
-	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/activity"
@@ -142,11 +143,6 @@ func (h *AttachmentHandler) ListTaskAttachments(c *echo.Context) error {
 
 // DeleteTaskAttachment deletes an attachment from a task.
 func (h *AttachmentHandler) DeleteTaskAttachment(c *echo.Context) error {
-	attachmentIDStr := c.Param("attachmentId")
-	attachmentID, err := uuid.Parse(attachmentIDStr)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid attachment ID")
-	}
 	task, err := h.resolveTask(c)
 	if err != nil {
 		return err
@@ -156,13 +152,11 @@ func (h *AttachmentHandler) DeleteTaskAttachment(c *echo.Context) error {
 		return err
 	}
 
-	ctx := c.Request().Context()
-
-	if err := h.deleteAttachment(ctx, attachmentID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
+	if err := h.deleteAttachment(c, "task", task.ID); err != nil {
+		return err
 	}
 
-	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+	h.activityService.LogActivity(c.Request().Context(), activity.LogActivityParams{
 		TaskID:       task.ID,
 		ActivityType: activity.AttachmentRemoved,
 		ActorID:      userID,
@@ -178,10 +172,9 @@ func (h *AttachmentHandler) AttachToComment(c *echo.Context) error {
 		return err
 	}
 
-	commentIDStr := c.Param("commentId")
-	commentID, err := uuid.Parse(commentIDStr)
+	commentID, err := h.resolveCommentID(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid comment ID")
+		return err
 	}
 
 	var req AttachRequest
@@ -223,10 +216,9 @@ func (h *AttachmentHandler) AttachToComment(c *echo.Context) error {
 
 // ListCommentAttachments lists all attachments for a comment.
 func (h *AttachmentHandler) ListCommentAttachments(c *echo.Context) error {
-	commentIDStr := c.Param("commentId")
-	commentID, err := uuid.Parse(commentIDStr)
+	commentID, err := h.resolveCommentID(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid comment ID")
+		return err
 	}
 
 	ctx := c.Request().Context()
@@ -258,35 +250,46 @@ func (h *AttachmentHandler) ListCommentAttachments(c *echo.Context) error {
 
 // DeleteCommentAttachment deletes an attachment from a comment.
 func (h *AttachmentHandler) DeleteCommentAttachment(c *echo.Context) error {
-	attachmentIDStr := c.Param("attachmentId")
-	attachmentID, err := uuid.Parse(attachmentIDStr)
+	commentID, err := h.resolveCommentID(c)
+	if err != nil {
+		return err
+	}
+	if err := h.deleteAttachment(c, "comment", commentID); err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// deleteAttachment removes the attachment link, scoped to the routed entity so
+// a cross-task/comment id cannot delete someone else's attachment. When the
+// link was the last reference to the underlying upload, the upload record and
+// its stored file are deleted too - otherwise the file and row would be
+// orphaned forever. Uploads can legitimately be shared across attachments (the
+// schema allows it), so the file is only removed once no attachment points at
+// it.
+func (h *AttachmentHandler) deleteAttachment(c *echo.Context, entityType string, entityID uuid.UUID) error {
+	attachmentID, err := uuid.Parse(c.Param("attachmentId"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid attachment ID")
 	}
 
 	ctx := c.Request().Context()
 
-	if err := h.deleteAttachment(ctx, attachmentID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
-	}
-
-	return c.NoContent(http.StatusNoContent)
-}
-
-// deleteAttachment removes the attachment link and, when it was the last
-// reference to the underlying upload, deletes the upload record and its stored
-// file too - otherwise the file and row would be orphaned forever. Uploads can
-// legitimately be shared across attachments (the schema allows it), so the file
-// is only removed once no attachment points at it.
-func (h *AttachmentHandler) deleteAttachment(ctx context.Context, attachmentID uuid.UUID) error {
-	uploadID, err := h.store.DeleteAttachment(ctx, attachmentID)
+	uploadID, err := h.store.DeleteAttachment(ctx, store.DeleteAttachmentParams{
+		ID:         attachmentID,
+		EntityType: entityType,
+		EntityID:   entityID,
+	})
 	if err != nil {
-		return err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return echo.NewHTTPError(http.StatusNotFound, "attachment not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
 	}
 
 	remaining, err := h.store.CountAttachmentsByUpload(ctx, uploadID)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
 	}
 	if remaining > 0 {
 		return nil
@@ -300,7 +303,29 @@ func (h *AttachmentHandler) deleteAttachment(ctx context.Context, attachmentID u
 			log.Printf("attachment delete: failed to remove stored file %q: %v", upload.StoredName, delErr)
 		}
 	}
-	return h.store.DeleteUpload(ctx, uploadID)
+	if err := h.store.DeleteUpload(ctx, uploadID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete attachment")
+	}
+	return nil
+}
+
+// resolveCommentID returns the routed comment ID after checking it belongs to the routed task.
+func (h *AttachmentHandler) resolveCommentID(c *echo.Context) (uuid.UUID, error) {
+	commentID, err := uuid.Parse(c.Param("commentId"))
+	if err != nil {
+		return uuid.Nil, echo.NewHTTPError(http.StatusBadRequest, "invalid comment ID")
+	}
+
+	task, err := h.resolveTask(c)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	comment, err := h.store.GetCommentByID(c.Request().Context(), commentID)
+	if err != nil || comment.TaskID != task.ID {
+		return uuid.Nil, echo.NewHTTPError(http.StatusNotFound, "comment not found")
+	}
+	return commentID, nil
 }
 
 // resolveTask looks up a task by project key and task number from route params.

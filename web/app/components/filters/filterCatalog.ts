@@ -270,11 +270,11 @@ export function stateTypeLabel(kind: string): string {
     case "backlog":
       return "Backlog";
     case "unstarted":
-      return "To Do";
+      return "Unstarted";
     case "started":
-      return "In Progress";
+      return "Started";
     case "completed":
-      return "Done";
+      return "Completed";
     case "cancelled":
       return "Cancelled";
     case "archived":
@@ -286,9 +286,9 @@ export function stateTypeLabel(kind: string): string {
 
 export const STATE_TYPE_OPTIONS = [
   { id: "backlog", label: "Backlog" },
-  { id: "unstarted", label: "To Do" },
-  { id: "started", label: "In Progress" },
-  { id: "completed", label: "Done" },
+  { id: "unstarted", label: "Unstarted" },
+  { id: "started", label: "Started" },
+  { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
   { id: "archived", label: "Archived" },
 ];

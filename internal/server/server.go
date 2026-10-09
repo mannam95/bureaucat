@@ -60,6 +60,7 @@ type Server struct {
 	patHandler           *handlers.PATHandler
 	feedbackHandler      *handlers.FeedbackHandler
 	searchHandler        *handlers.SearchHandler
+	releasesHandler      *handlers.ReleasesHandler
 	activityService      *activity.Service
 	notificationService  *notifier.Service
 	notificationsService *notifications.Service
@@ -117,7 +118,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		ensureSuperAdmin(context.Background(), srv.store, superAdminEmail)
 
 		srv.authHandler = handlers.NewAuthHandler(srv.store, srv.authManager, devMode)
-		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.authManager, devMode, superAdminEmail)
+		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.pool, srv.authManager, devMode, superAdminEmail)
 
 		// Initialize upload service (S3-backed)
 		maxUploadSize := int64(10 * 1024 * 1024) // 10MB default
@@ -186,6 +187,7 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		srv.patHandler = handlers.NewPATHandler(srv.store)
 		srv.feedbackHandler = handlers.NewFeedbackHandler(srv.pool, srv.store)
 		srv.searchHandler = handlers.NewSearchHandler(srv.store)
+		srv.releasesHandler = handlers.NewReleasesHandler()
 	}
 
 	// Register routes

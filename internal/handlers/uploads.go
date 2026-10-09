@@ -15,6 +15,14 @@ import (
 	"bereaucat/internal/uploads"
 )
 
+var inlineMediaTypes = map[string]bool{
+	"image/png":       true,
+	"image/jpeg":      true,
+	"image/gif":       true,
+	"image/webp":      true,
+	"application/pdf": true,
+}
+
 // UploadHandler handles file upload endpoints.
 type UploadHandler struct {
 	store         store.Querier
@@ -169,12 +177,11 @@ func (h *UploadHandler) Serve(c *echo.Context) error {
 	}
 	defer reader.Close()
 
-	// Set response headers. The browser previews a file inline only when the
-	// Content-Type is meaningful, so recover from a missing or generic stored
-	// type by inferring from the extension. This is what lets an image render
-	// and a PDF open in the browser's viewer instead of downloading — matters
-	// especially for attachments uploaded via the API (e.g. the Taiga
-	// migration), which often arrive as application/octet-stream.
+	// Resolve the Content-Type first. The browser previews a file inline only
+	// when the type is meaningful, so recover from a missing or generic stored
+	// type by inferring from the extension — matters especially for attachments
+	// uploaded via the API (e.g. the Taiga migration), which often arrive as
+	// application/octet-stream.
 	contentType := upload.MimeType
 	if contentType == "" || contentType == "application/octet-stream" {
 		if inferred := mime.TypeByExtension(filepath.Ext(upload.Filename)); inferred != "" {
@@ -183,8 +190,21 @@ func (h *UploadHandler) Serve(c *echo.Context) error {
 			contentType = "application/octet-stream"
 		}
 	}
-	c.Response().Header().Set("Content-Type", contentType)
-	c.Response().Header().Set("Cache-Control", "public, max-age=3600")
+
+	header := c.Response().Header()
+	header.Set("Content-Type", contentType)
+	header.Set("Cache-Control", "public, max-age=3600")
+	header.Set("X-Content-Type-Options", "nosniff")
+	// The type is ultimately client-supplied (stored MIME or the uploaded
+	// filename's extension), so anything that could execute on our origin is
+	// forced to download; only known-safe raster images and PDFs render inline.
+	if mediaType, _, _ := mime.ParseMediaType(contentType); !inlineMediaTypes[mediaType] {
+		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": upload.Filename})
+		if disposition == "" {
+			disposition = "attachment"
+		}
+		header.Set("Content-Disposition", disposition)
+	}
 
 	c.Response().WriteHeader(http.StatusOK)
 	_, err = io.Copy(c.Response(), reader)

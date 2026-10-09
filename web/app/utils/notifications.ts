@@ -15,7 +15,9 @@ import {
   MessageSquarePlus,
   MessageSquareDiff,
   MessageSquareX,
-  AtSign,
+  AtSign,,
+  Link2,
+  Link2Off,
 } from "lucide-vue-next";
 import type { ActivityType, NotificationEntry } from "~/types";
 
@@ -41,6 +43,8 @@ export const NOTIFICATION_ICONS: Partial<Record<ActivityType, Component>> = {
   comment_updated: MessageSquareDiff,
   comment_deleted: MessageSquareX,
   mentioned: AtSign,
+  blocker_added: Link2,
+  blocker_removed: Link2Off,
 };
 
 // Compact "just now / 5m ago / Mar 3" relative time used across notifications.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/auth"
@@ -34,6 +35,7 @@ type CleanupResponse struct {
 // AdminHandler handles admin-only endpoints.
 type AdminHandler struct {
 	store       store.Querier
+	pool        *pgxpool.Pool
 	authManager *auth.Manager
 	devMode     bool
 	// superAdminEmail is the break-glass account's email, taken from the
@@ -44,10 +46,12 @@ type AdminHandler struct {
 }
 
 // NewAdminHandler creates a new admin handler. superAdminEmail (may be empty)
-// designates the protected break-glass account.
-func NewAdminHandler(store store.Querier, authManager *auth.Manager, devMode bool, superAdminEmail string) *AdminHandler {
+// designates the protected break-glass account; pool backs the transactional
+// admin actions (user merge).
+func NewAdminHandler(store store.Querier, pool *pgxpool.Pool, authManager *auth.Manager, devMode bool, superAdminEmail string) *AdminHandler {
 	return &AdminHandler{
 		store:           store,
+		pool:            pool,
 		authManager:     authManager,
 		devMode:         devMode,
 		superAdminEmail: strings.TrimSpace(superAdminEmail),
@@ -1148,6 +1152,292 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// GraphUser is a user node in the admin task graph.
+type GraphUser struct {
+	ID        string  `json:"id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	FirstName string  `json:"first_name"`
+	LastName  string  `json:"last_name"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
+// GraphTask is a task node in the admin task graph.
+type GraphTask struct {
+	ID            string     `json:"id"`
+	ProjectKey    string     `json:"project_key"`
+	ProjectName   string     `json:"project_name"`
+	TaskNumber    int32      `json:"task_number"`
+	Title         string     `json:"title"`
+	IsSubtask     bool       `json:"is_subtask"`
+	ParentID      *uuid.UUID `json:"parent_id,omitempty"`
+	WorkspaceID   string     `json:"workspace_id"`
+	WorkspaceKey  string     `json:"workspace_key"`
+	WorkspaceName string     `json:"workspace_name"`
+	StateName     string     `json:"state_name"`
+	StateType     string     `json:"state_type"`
+	StateColor    *string    `json:"state_color,omitempty"`
+}
+
+// GraphEdge links a user to a task they are assigned to.
+type GraphEdge struct {
+	UserID string `json:"user_id"`
+	TaskID string `json:"task_id"`
+}
+
+// GraphBlockerEdge links a blocker task to the task it blocks.
+type GraphBlockerEdge struct {
+	BlockerID string `json:"blocker_id"`
+	BlockedID string `json:"blocked_id"`
+}
+
+// GraphWorkspaceOption is a workspace choice for the graph view filters.
+type GraphWorkspaceOption struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// GraphProjectOption is a project choice for the graph view filters.
+type GraphProjectOption struct {
+	Key          string `json:"key"`
+	Name         string `json:"name"`
+	WorkspaceKey string `json:"workspace_key"`
+}
+
+// GraphUserOption is a user choice for the graph view filters.
+type GraphUserOption struct {
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+// TaskGraphFiltersResponse lists the choices for the graph view filters.
+type TaskGraphFiltersResponse struct {
+	Workspaces []GraphWorkspaceOption `json:"workspaces"`
+	Projects   []GraphProjectOption   `json:"projects"`
+	Users      []GraphUserOption      `json:"users"`
+}
+
+// TaskGraphResponse is the payload for the admin graph view.
+type TaskGraphResponse struct {
+	Users        []GraphUser        `json:"users"`
+	Tasks        []GraphTask        `json:"tasks"`
+	Edges        []GraphEdge        `json:"edges"`
+	BlockerEdges []GraphBlockerEdge `json:"blocker_edges"`
+}
+
+// splitCSVParam splits a comma-separated query value, dropping empty entries.
+func splitCSVParam(v string) []string {
+	out := []string{}
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// GetTaskGraphFilters returns the workspace, project and user choices for the graph view.
+//
+//	@Summary		Get admin task graph filters
+//	@Description	Returns workspace, project and user options for the admin graph view filters.
+//	@Tags			Admin - Stats
+//	@Produce		json
+//	@Success		200	{object}	TaskGraphFiltersResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/graph/filters [get]
+func (h *AdminHandler) GetTaskGraphFilters(c *echo.Context) error {
+	return h.taskGraphFilters(c, pgtype.UUID{})
+}
+
+// GetMyTaskGraphFilters returns graph view filter choices limited to the caller's member projects.
+//
+//	@Summary		Get task graph filters
+//	@Description	Returns workspace, project and user options for the graph view, limited to projects the caller is a member of.
+//	@Tags			Graph
+//	@Produce		json
+//	@Success		200	{object}	TaskGraphFiltersResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/graph/filters [get]
+func (h *AdminHandler) GetMyTaskGraphFilters(c *echo.Context) error {
+	viewer, err := graphViewer(c)
+	if err != nil {
+		return err
+	}
+	return h.taskGraphFilters(c, viewer)
+}
+
+// graphViewer returns the caller's ID for scoping graph queries to their member projects.
+func graphViewer(c *echo.Context) (pgtype.UUID, error) {
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return pgtype.UUID{}, echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	return pgtype.UUID{Bytes: userID, Valid: true}, nil
+}
+
+// taskGraphFilters lists filter choices; a null viewer means no membership scoping.
+func (h *AdminHandler) taskGraphFilters(c *echo.Context, viewer pgtype.UUID) error {
+	ctx := c.Request().Context()
+
+	workspaces, err := h.store.ListGraphWorkspaceOptions(ctx, viewer)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load workspaces")
+	}
+	projects, err := h.store.ListGraphProjectOptions(ctx, viewer)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load projects")
+	}
+	users, err := h.store.ListGraphUserOptions(ctx, viewer)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load users")
+	}
+
+	resp := TaskGraphFiltersResponse{
+		Workspaces: make([]GraphWorkspaceOption, len(workspaces)),
+		Projects:   make([]GraphProjectOption, len(projects)),
+		Users:      make([]GraphUserOption, len(users)),
+	}
+	for i, w := range workspaces {
+		resp.Workspaces[i] = GraphWorkspaceOption{Key: w.WorkspaceKey, Name: w.Name}
+	}
+	for i, p := range projects {
+		resp.Projects[i] = GraphProjectOption{Key: p.ProjectKey, Name: p.Name, WorkspaceKey: p.WorkspaceKey}
+	}
+	for i, u := range users {
+		resp.Users[i] = GraphUserOption{Username: u.Username, Email: u.Email, FirstName: u.FirstName, LastName: u.LastName}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// GetTaskGraph returns tasks and the users assigned to them.
+//
+//	@Summary		Get admin task graph
+//	@Description	Returns task nodes (assigned or not), user nodes and assignment edges for the admin graph view.
+//	@Tags			Admin - Stats
+//	@Produce		json
+//	@Param			workspace	query		string	false	"Workspace key"
+//	@Param			projects	query		string	false	"Comma-separated project keys"
+//	@Param			state_types	query		string	false	"Comma-separated state types"
+//	@Param			users		query		string	false	"Comma-separated usernames"
+//	@Success		200			{object}	TaskGraphResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/graph [get]
+func (h *AdminHandler) GetTaskGraph(c *echo.Context) error {
+	return h.taskGraph(c, pgtype.UUID{})
+}
+
+// GetMyTaskGraph returns the task graph limited to the caller's member projects.
+//
+//	@Summary		Get task graph
+//	@Description	Returns task nodes (assigned or not), user nodes and assignment edges, limited to projects the caller is a member of.
+//	@Tags			Graph
+//	@Produce		json
+//	@Param			workspace	query		string	false	"Workspace key"
+//	@Param			projects	query		string	false	"Comma-separated project keys"
+//	@Param			state_types	query		string	false	"Comma-separated state types"
+//	@Param			users		query		string	false	"Comma-separated usernames"
+//	@Success		200			{object}	TaskGraphResponse
+//	@Failure		401			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/graph [get]
+func (h *AdminHandler) GetMyTaskGraph(c *echo.Context) error {
+	viewer, err := graphViewer(c)
+	if err != nil {
+		return err
+	}
+	return h.taskGraph(c, viewer)
+}
+
+// taskGraph builds the graph payload; a null viewer means no membership scoping.
+func (h *AdminHandler) taskGraph(c *echo.Context, viewer pgtype.UUID) error {
+	ctx := c.Request().Context()
+
+	params := store.ListTaskAssignmentsForGraphParams{
+		ProjectKeys: splitCSVParam(c.QueryParam("projects")),
+		StateTypes:  splitCSVParam(c.QueryParam("state_types")),
+		Usernames:   splitCSVParam(c.QueryParam("users")),
+		ViewerID:    viewer,
+	}
+	if ws := strings.TrimSpace(c.QueryParam("workspace")); ws != "" {
+		params.WorkspaceKey = pgtype.Text{String: ws, Valid: true}
+	}
+
+	rows, err := h.store.ListTaskAssignmentsForGraph(ctx, params)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task graph")
+	}
+
+	resp := TaskGraphResponse{Users: []GraphUser{}, Tasks: []GraphTask{}, Edges: []GraphEdge{}, BlockerEdges: []GraphBlockerEdge{}}
+	taskIDs := []uuid.UUID{}
+	seenUsers := make(map[string]bool)
+	seenTasks := make(map[string]bool)
+
+	for _, r := range rows {
+		taskID := r.TaskID.String()
+
+		if !seenTasks[taskID] {
+			seenTasks[taskID] = true
+			taskIDs = append(taskIDs, r.TaskID)
+			resp.Tasks = append(resp.Tasks, GraphTask{
+				ID:            taskID,
+				ProjectKey:    r.ProjectKey,
+				ProjectName:   r.ProjectName,
+				TaskNumber:    r.TaskNumber,
+				Title:         r.Title,
+				IsSubtask:     r.IsSubtask,
+				ParentID:      pgUUIDToUUIDPtr(r.ParentTaskID),
+				WorkspaceID:   r.WorkspaceID.String(),
+				WorkspaceKey:  r.WorkspaceKey,
+				WorkspaceName: r.WorkspaceName,
+				StateName:     r.StateName,
+				StateType:     r.StateType,
+				StateColor:    textToStringPtr(r.StateColor),
+			})
+		}
+
+		// Unassigned tasks have no user row; they're shown as free-floating nodes.
+		if !r.UserID.Valid {
+			continue
+		}
+		userID := uuid.UUID(r.UserID.Bytes).String()
+		if !seenUsers[userID] {
+			seenUsers[userID] = true
+			resp.Users = append(resp.Users, GraphUser{
+				ID:        userID,
+				Username:  r.Username.String,
+				Email:     r.Email.String,
+				FirstName: r.FirstName.String,
+				LastName:  r.LastName.String,
+				AvatarURL: textToStringPtr(r.AvatarUrl),
+			})
+		}
+		resp.Edges = append(resp.Edges, GraphEdge{UserID: userID, TaskID: taskID})
+	}
+
+	if len(taskIDs) > 0 {
+		links, err := h.store.ListBlockerLinksForGraph(ctx, taskIDs)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task graph")
+		}
+		for _, l := range links {
+			resp.BlockerEdges = append(resp.BlockerEdges, GraphBlockerEdge{
+				BlockerID: l.BlockerTaskID.String(),
+				BlockedID: l.TaskID.String(),
+			})
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
 // DeletedProjectResponse represents a soft-deleted project in admin responses.
 type DeletedProjectResponse struct {
 	ID              uuid.UUID `json:"id"`
@@ -1264,4 +1554,103 @@ func (h *AdminHandler) RestoreProject(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, MessageResponse{Message: "project restored"})
+}
+
+// MergeUserRequest is the body for POST /admin/users/:id/merge.
+type MergeUserRequest struct {
+	TargetUserID uuid.UUID `json:"target_user_id"`
+}
+
+// MergeUserResponse reports how many rows were copied to the target user.
+type MergeUserResponse struct {
+	Workspaces   int64 `json:"workspaces"`
+	Projects     int64 `json:"projects"`
+	Assignments  int64 `json:"assignments"`
+	Modules      int64 `json:"modules"`
+	WatchedTasks int64 `json:"watched_tasks"`
+	Views        int64 `json:"views"`
+}
+
+// MergeUser grants the target user everything the source user (:id) has.
+//
+//	@Summary		Merge user
+//	@Description	Additively copies the source user's workspace/project/module memberships, task assignments and private views to the target user, and makes the target watch tasks the source created, watched, or commented on. The source user is left unchanged.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string				true	"Source user ID"
+//	@Param			body	body		MergeUserRequest	true	"Target user"
+//	@Success		200		{object}	MergeUserResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/users/{id}/merge [post]
+func (h *AdminHandler) MergeUser(c *echo.Context) error {
+	sourceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+
+	var req MergeUserRequest
+	if err := c.Bind(&req); err != nil || req.TargetUserID == uuid.Nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "target_user_id is required")
+	}
+	if req.TargetUserID == sourceID {
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot merge a user into themselves")
+	}
+
+	ctx := c.Request().Context()
+
+	if _, err := h.store.GetUserByID(ctx, sourceID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "source user not found")
+	}
+	if _, err := h.store.GetUserByID(ctx, req.TargetUserID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "target user not found")
+	}
+
+	tx, err := h.pool.Begin(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to merge user")
+	}
+	defer tx.Rollback(ctx)
+	q := store.New(tx)
+
+	var resp MergeUserResponse
+	steps := []struct {
+		count *int64
+		run   func() (int64, error)
+	}{
+		{&resp.Workspaces, func() (int64, error) {
+			return q.MergeCopyWorkspaceMembers(ctx, store.MergeCopyWorkspaceMembersParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.Projects, func() (int64, error) {
+			return q.MergeCopyProjectMembers(ctx, store.MergeCopyProjectMembersParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.Assignments, func() (int64, error) {
+			return q.MergeCopyTaskAssignees(ctx, store.MergeCopyTaskAssigneesParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.Modules, func() (int64, error) {
+			return q.MergeCopyModuleMembers(ctx, store.MergeCopyModuleMembersParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.WatchedTasks, func() (int64, error) {
+			return q.MergeWatchSourceTasks(ctx, store.MergeWatchSourceTasksParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.Views, func() (int64, error) {
+			return q.MergeCopyPrivateViews(ctx, store.MergeCopyPrivateViewsParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+	}
+	for _, step := range steps {
+		n, err := step.run()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to merge user")
+		}
+		*step.count = n
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to merge user")
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }

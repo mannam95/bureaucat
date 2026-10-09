@@ -718,6 +718,9 @@ func (h *CycleHandler) AddCycleTasks(c *echo.Context) error {
 		}
 		ids = append(ids, id)
 	}
+	if err := requireProjectTasks(ctx, h.store, projectID, ids); err != nil {
+		return err
+	}
 
 	if err := h.store.AddTasksToCycle(ctx, store.AddTasksToCycleParams{
 		CycleID: cycleID,
@@ -737,6 +740,24 @@ func (h *CycleHandler) AddCycleTasks(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{"added": len(ids)})
+}
+
+// requireProjectTasks rejects the request unless every id is a live task in projectID.
+func requireProjectTasks(ctx context.Context, q store.Querier, projectID uuid.UUID, ids []uuid.UUID) error {
+	found, err := q.ListProjectTaskIDsIn(ctx, store.ListProjectTaskIDsInParams{ProjectID: projectID, TaskIds: ids})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to verify tasks")
+	}
+	inProject := make(map[uuid.UUID]bool, len(found))
+	for _, id := range found {
+		inProject[id] = true
+	}
+	for _, id := range ids {
+		if !inProject[id] {
+			return echo.NewHTTPError(http.StatusBadRequest, "task not in project: "+id.String())
+		}
+	}
+	return nil
 }
 
 // RemoveCycleTask detaches a single task from a cycle.

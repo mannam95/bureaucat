@@ -1613,28 +1613,13 @@ func (h *TaskHandler) ListSubtasks(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list subtasks")
 	}
 
-	// Batch-load assignees for all child tasks (mirrors decorateTasks).
-	assigneesByTask := map[uuid.UUID][]AssigneeResponse{}
-	if len(rows) > 0 {
-		ids := make([]uuid.UUID, len(rows))
-		for i, t := range rows {
-			ids[i] = t.ID
-		}
-		assignees, err := h.store.ListAssigneesForTasks(ctx, ids)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to load subtask assignees")
-		}
-		for _, a := range assignees {
-			assigneesByTask[a.TaskID] = append(assigneesByTask[a.TaskID], AssigneeResponse{
-				ID:        a.ID,
-				UserID:    a.UserID,
-				Username:  a.Username,
-				Email:     a.Email,
-				FirstName: a.FirstName,
-				LastName:  a.LastName,
-				AvatarURL: textToStringPtr(a.AvatarUrl),
-			})
-		}
+	ids := make([]uuid.UUID, len(rows))
+	for i, t := range rows {
+		ids[i] = t.ID
+	}
+	assigneesByTask, err := h.assigneesForTasks(ctx, ids)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load subtask assignees")
 	}
 
 	out := make([]SubtaskResponse, len(rows))
@@ -1662,6 +1647,30 @@ func (h *TaskHandler) ListSubtasks(c *echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, out)
+}
+
+// assigneesForTasks batch-loads assignees keyed by task id (mirrors decorateTasks).
+func (h *TaskHandler) assigneesForTasks(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]AssigneeResponse, error) {
+	out := map[uuid.UUID][]AssigneeResponse{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	assignees, err := h.store.ListAssigneesForTasks(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range assignees {
+		out[a.TaskID] = append(out[a.TaskID], AssigneeResponse{
+			ID:        a.ID,
+			UserID:    a.UserID,
+			Username:  a.Username,
+			Email:     a.Email,
+			FirstName: a.FirstName,
+			LastName:  a.LastName,
+			AvatarURL: textToStringPtr(a.AvatarUrl),
+		})
+	}
+	return out, nil
 }
 
 // SubtaskCandidateResponse is a task offered in the "attach existing subtask"
@@ -3287,8 +3296,8 @@ func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjec
 }
 
 // moveOneWithinTx moves a single task to dest within an existing transaction:
-// remaps state and labels by name and drops cycle/module links. It returns the
-// new (destination-local) task number. The task's parent_task_id is preserved.
+// remaps state and labels by name and drops cycle/module/blocker links. It
+// returns the new (destination-local) task number. The task's parent_task_id is preserved.
 func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, taskID uuid.UUID, stateName string, dest store.Project, actorID uuid.UUID) (int32, error) {
 	// Remap state by name; fall back to the destination's default state.
 	var newStateID uuid.UUID
@@ -3344,11 +3353,14 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		return 0, err
 	}
 
-	// Drop project-scoped cycle/module associations.
+	// Drop project-scoped cycle/module/blocker associations.
 	if err := q.DeleteTaskCycleLinks(ctx, taskID); err != nil {
 		return 0, err
 	}
 	if err := q.DeleteTaskModuleLinks(ctx, taskID); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteTaskBlockerLinks(ctx, taskID); err != nil {
 		return 0, err
 	}
 

@@ -178,3 +178,64 @@ LEFT JOIN modules m
     AND m.deleted_at IS NULL
 GROUP BY d
 ORDER BY d ASC;
+
+-- name: ListTaskAssignmentsForGraph :many
+-- One row per (task, assignee); unassigned tasks come back once with NULL user columns.
+SELECT t.id AS task_id, t.task_number, t.title,
+       (t.parent_task_id IS NOT NULL)::boolean AS is_subtask, t.parent_task_id,
+       p.project_key, p.name AS project_name,
+       w.id AS workspace_id, w.workspace_key, w.name AS workspace_name,
+       ps.name AS state_name, ps.state_type, ps.color AS state_color,
+       u.id AS user_id, u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN workspaces w ON p.workspace_id = w.id
+JOIN project_states ps ON t.state_id = ps.id
+LEFT JOIN task_assignees ta ON ta.task_id = t.id
+LEFT JOIN users u ON ta.user_id = u.id
+WHERE t.deleted_at IS NULL
+  AND p.deleted_at IS NULL
+  AND w.deleted_at IS NULL
+  AND (sqlc.narg('workspace_key')::text IS NULL OR w.workspace_key = sqlc.narg('workspace_key')::text)
+  AND (COALESCE(cardinality(sqlc.arg('project_keys')::text[]), 0) = 0 OR p.project_key = ANY(sqlc.arg('project_keys')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('state_types')::text[]), 0) = 0 OR ps.state_type::text = ANY(sqlc.arg('state_types')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('usernames')::text[]), 0) = 0 OR u.username = ANY(sqlc.arg('usernames')::text[]))
+  AND (sqlc.narg('viewer_id')::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM project_members vm WHERE vm.project_id = p.id AND vm.user_id = sqlc.narg('viewer_id')::uuid))
+ORDER BY p.project_key ASC, t.task_number ASC;
+
+-- name: ListBlockerLinksForGraph :many
+-- Blocker links where both tasks are already on the graph.
+SELECT task_id, blocker_task_id
+FROM task_blockers
+WHERE task_id = ANY(sqlc.arg('task_ids')::uuid[])
+  AND blocker_task_id = ANY(sqlc.arg('task_ids')::uuid[]);
+
+-- name: ListGraphWorkspaceOptions :many
+SELECT w.workspace_key, w.name
+FROM workspaces w
+WHERE w.deleted_at IS NULL
+  AND (sqlc.narg('viewer_id')::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM projects p
+      JOIN project_members vm ON vm.project_id = p.id
+      WHERE p.workspace_id = w.id AND p.deleted_at IS NULL AND vm.user_id = sqlc.narg('viewer_id')::uuid))
+ORDER BY w.name ASC;
+
+-- name: ListGraphProjectOptions :many
+SELECT p.project_key, p.name, w.workspace_key
+FROM projects p
+JOIN workspaces w ON p.workspace_id = w.id
+WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
+  AND (sqlc.narg('viewer_id')::uuid IS NULL OR EXISTS (
+      SELECT 1 FROM project_members vm WHERE vm.project_id = p.id AND vm.user_id = sqlc.narg('viewer_id')::uuid))
+ORDER BY p.project_key ASC;
+
+-- name: ListGraphUserOptions :many
+SELECT u.username, u.email, u.first_name, u.last_name
+FROM users u
+WHERE sqlc.narg('viewer_id')::uuid IS NULL OR EXISTS (
+    SELECT 1 FROM project_members um
+    JOIN project_members vm ON vm.project_id = um.project_id
+    JOIN projects p ON p.id = um.project_id AND p.deleted_at IS NULL
+    WHERE um.user_id = u.id AND vm.user_id = sqlc.narg('viewer_id')::uuid)
+ORDER BY u.first_name ASC, u.last_name ASC;

@@ -119,6 +119,10 @@ func (s *Server) registerRoutes() {
 			protected.POST("/me/feedback", s.feedbackHandler.SubmitLocalFeedback)
 		}
 
+		if s.releasesHandler != nil {
+			protected.GET("/releases", s.releasesHandler.ListReleases)
+		}
+
 		// Personal Access Token routes (not accessible via PAT)
 		if s.patHandler != nil {
 			patGroup := protected.Group("", auth.RejectPAT())
@@ -144,6 +148,8 @@ func (s *Server) registerRoutes() {
 		protected.GET("/users/:id", s.authHandler.GetUserProfile)
 		protected.GET("/users/:id/activity", s.authHandler.GetUserActivity)
 		protected.GET("/users/:id/activity/graph", s.authHandler.GetUserActivityGraph)
+		protected.GET("/graph", s.adminHandler.GetMyTaskGraph)
+		protected.GET("/graph/filters", s.adminHandler.GetMyTaskGraphFilters)
 
 		// File uploads (authenticated)
 		if s.uploadHandler != nil {
@@ -323,6 +329,12 @@ func (s *Server) registerRoutes() {
 				// Promote a sub-task to a stand-alone top-level task.
 				projectGroup.POST("/tasks/:taskNum/promote", s.taskHandler.PromoteSubtask, auth.ProjectRoleMiddleware("member"))
 
+				// Task blockers (same-project links, both directions)
+				projectGroup.GET("/tasks/:taskNum/blockers", s.taskHandler.ListTaskBlockers)
+				projectGroup.GET("/tasks/:taskNum/blockers/candidates", s.taskHandler.ListBlockerCandidates)
+				projectGroup.POST("/tasks/:taskNum/blockers", s.taskHandler.AddTaskBlockers, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/tasks/:taskNum/blockers/:taskId", s.taskHandler.RemoveTaskBlocker, auth.ProjectRoleMiddleware("member"))
+
 				// Task assignees
 				projectGroup.POST("/tasks/:taskNum/assignees", s.taskHandler.AddAssignee, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/assignees/:userId", s.taskHandler.RemoveAssignee, auth.ProjectRoleMiddleware("member"))
@@ -378,10 +390,13 @@ func (s *Server) registerRoutes() {
 		admin.PUT("/users/:id/role", s.adminHandler.UpdateUserRole)
 		admin.PUT("/users/:id/password", s.adminHandler.ResetUserPassword)
 		admin.PUT("/users/:id/active", s.adminHandler.SetUserActive)
+		admin.POST("/users/:id/merge", s.adminHandler.MergeUser)
 		admin.GET("/tokens", s.adminHandler.ListTokens)
 		admin.DELETE("/tokens/:id", s.adminHandler.RevokeToken)
 		admin.DELETE("/tokens/expired", s.adminHandler.CleanupExpiredTokens)
 		admin.GET("/stats", s.adminHandler.GetStats)
+		admin.GET("/graph", s.adminHandler.GetTaskGraph)
+		admin.GET("/graph/filters", s.adminHandler.GetTaskGraphFilters)
 		admin.GET("/projects/deleted", s.adminHandler.ListDeletedProjects)
 		admin.POST("/projects/:id/restore", s.adminHandler.RestoreProject)
 

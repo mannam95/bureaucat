@@ -56,13 +56,20 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 }
 
 const deleteAttachment = `-- name: DeleteAttachment :one
-DELETE FROM attachments WHERE id = $1 RETURNING upload_id
+DELETE FROM attachments WHERE id = $1 AND entity_type = $2 AND entity_id = $3 RETURNING upload_id
 `
 
-// Returns the upload_id so the caller can clean up the underlying file once no
-// attachment references it anymore.
-func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, deleteAttachment, id)
+type DeleteAttachmentParams struct {
+	ID         uuid.UUID `json:"id"`
+	EntityType string    `json:"entity_type"`
+	EntityID   uuid.UUID `json:"entity_id"`
+}
+
+// Scoped to the routed entity so a cross-task/comment id can't delete someone
+// else's attachment. Returns the upload_id so the caller can clean up the
+// underlying file once no attachment references it anymore.
+func (q *Queries) DeleteAttachment(ctx context.Context, arg DeleteAttachmentParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteAttachment, arg.ID, arg.EntityType, arg.EntityID)
 	var upload_id uuid.UUID
 	err := row.Scan(&upload_id)
 	return upload_id, err

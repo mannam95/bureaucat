@@ -24,6 +24,7 @@ import type {
   ProjectPriority,
   Comment,
 } from "~/types";
+import { renderRichText } from "~/utils/markdown";
 
 const props = withDefaults(
   defineProps<{
@@ -81,8 +82,7 @@ const priority = computed(() => ({
 
 const renderedDescription = computed(() => {
   const desc = task.value?.description;
-  if (!desc) return "";
-  return desc.startsWith("<") ? desc : (marked(desc) as string);
+  return renderRichText(desc);
 });
 
 const taskLink = computed(() => `/projects/${props.projectKey}/tasks/${props.taskNumber}`);
@@ -752,6 +752,15 @@ onMounted(() => {
         <!-- Assignees (editable) -->
         <TaskAssignees
           :assignees="task.assignees || []"
+          :project-key="projectKey"
+          :task-num="taskNumber"
+          :members="members"
+          :is-member="isMember"
+          @refresh="onRelationChanged"
+        />
+
+        <TaskWatchers
+          :watchers="task.watchers || []"
           :project-key="projectKey"
           :task-num="taskNumber"
           :members="members"

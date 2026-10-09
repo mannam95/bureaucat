@@ -39,7 +39,7 @@ func (e *EmailNotifier) Name() string { return "email" }
 // Send composes and delivers the notification email to recipientEmail.
 func (e *EmailNotifier) Send(_ context.Context, recipientEmail string, n Notification) error {
 	subject, body := renderEmail(n)
-	msg := buildMessage(e.cfg.From, recipientEmail, subject, body)
+	msg := buildMessage(e.cfg.From, recipientEmail, subject, body, renderEmailHTML(n))
 	addr := net.JoinHostPort(e.cfg.Host, e.cfg.Port)
 	from := senderAddress(e.cfg.From)
 
@@ -130,16 +130,32 @@ func renderEmail(n Notification) (subject, body string) {
 	return subject, body
 }
 
-// buildMessage assembles a minimal RFC 5322 plain-text message.
-func buildMessage(from, to, subject, body string) []byte {
+// buildMessage assembles an RFC 5322 message. With an htmlBody it becomes
+// multipart/alternative (plain text first, HTML preferred); without one it
+// stays a minimal plain-text message, so delivery never depends on the
+// template rendering.
+func buildMessage(from, to, subject, body, htmlBody string) []byte {
 	var b strings.Builder
 	b.WriteString("From: " + from + "\r\n")
 	b.WriteString("To: " + to + "\r\n")
 	b.WriteString("Subject: " + subject + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
+	if htmlBody == "" {
+		b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
+		b.WriteString("\r\n")
+		b.WriteString(strings.ReplaceAll(body, "\n", "\r\n"))
+		return []byte(b.String())
+	}
+	const boundary = "bcat-alt-7f3a9c"
+	b.WriteString("Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n")
 	b.WriteString("\r\n")
+	b.WriteString("--" + boundary + "\r\n")
+	b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(body, "\n", "\r\n"))
+	b.WriteString("\r\n--" + boundary + "\r\n")
+	b.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n\r\n")
+	b.WriteString(strings.ReplaceAll(htmlBody, "\n", "\r\n"))
+	b.WriteString("\r\n--" + boundary + "--\r\n")
 	return []byte(b.String())
 }
 
