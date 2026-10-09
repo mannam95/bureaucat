@@ -8,6 +8,7 @@ import type {
   ProjectMember,
   TaskTemplate,
   SubtaskCandidate,
+  CycleSibling,
 } from "~/types";
 import { mdToHtml } from "~/utils/markdown";
 
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 const { user, getAuthHeader } = useAuth();
 const { currentWorkspace } = useWorkspaces();
 const { createTask, listSubtaskCandidates, attachSubtasks } = useTasks();
+const { listAllCycles, addTasksToCycle } = useCycles();
 // Files picked in the description toolbar before the task exists; linked to it
 // right after creation.
 const {
@@ -137,6 +139,10 @@ const form = ref({
   originators: [] as string[],
   // Watchers (user ids) who will follow the task. Optional; zero or more.
   watchers: [] as string[],
+  // Cycle the new task is planned into. Defaults to the running sprint (see
+  // loadCycles); clearable. Hidden in subtask mode — subtasks inherit the
+  // parent's cycle.
+  cycle_id: "",
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -187,10 +193,36 @@ function resetForm() {
     // Self-raised by default: pre-fill the requester with the current user.
     originators: user.value?.id ? [user.value.id] : [],
     watchers: [],
+    cycle_id: "",
   };
   selectedTemplateId.value = "";
   error.value = null;
   clearPendingFiles();
+}
+
+// --- Cycle preselection ---
+// New tickets default to the running sprint (latest start if several overlap),
+// or the most recently finished one when nothing is active, so planning into
+// the current cycle needs no manual pick. Always changeable or clearable.
+const availableCycles = ref<CycleSibling[]>([]);
+
+function defaultCycleId(cycles: CycleSibling[]): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const active = [...cycles]
+    .filter((c) => c.start_date <= today && today <= c.end_date)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date));
+  if (active.length > 0) return active[0]!.id;
+  const past = [...cycles]
+    .filter((c) => c.end_date < today)
+    .sort((a, b) => b.end_date.localeCompare(a.end_date));
+  return past[0]?.id ?? "";
+}
+
+async function loadCycles(key: string) {
+  if (isSubtaskMode.value) return; // subtasks inherit the parent's cycle
+  const r = await listAllCycles(key);
+  availableCycles.value = r.success && r.data ? r.data : [];
+  form.value.cycle_id = defaultCycleId(availableCycles.value);
 }
 
 async function loadProjectMeta(key: string) {
@@ -205,6 +237,7 @@ async function loadProjectMeta(key: string) {
   fetchedLabels.value = l.data ?? [];
   fetchedMembers.value = m.data ?? [];
   fetchedTemplates.value = t.data ?? [];
+  await loadCycles(key);
   metaLoading.value = false;
   // Reset project-dependent fields now that metadata is available.
   form.value.state_id = defaultState.value?.id || "";
@@ -309,6 +342,9 @@ watch(open, async (isOpen) => {
       });
     }
     resetForm();
+    if (!selectable.value && props.projectKey) {
+      await loadCycles(props.projectKey);
+    }
     titleDraft.restore();
     descriptionDraft.restore();
   }
@@ -344,6 +380,10 @@ async function handleSubmit() {
 
   if (result.success && result.data) {
     await attachPendingFiles(result.data.project_key, result.data.task_number);
+    // Plan the new task into the chosen cycle (top-level tasks only).
+    if (form.value.cycle_id && props.parentTaskNumber == null) {
+      await addTasksToCycle(result.data.project_key, form.value.cycle_id, [result.data.id]);
+    }
   }
 
   loading.value = false;
@@ -457,6 +497,13 @@ const priorityValue = computed({
   get: () => String(form.value.priority),
   set: (v: string) => {
     form.value.priority = Number(v);
+  },
+});
+const NO_CYCLE = "__none__";
+const cycleValue = computed({
+  get: () => form.value.cycle_id || NO_CYCLE,
+  set: (v: string) => {
+    form.value.cycle_id = v === NO_CYCLE ? "" : v;
   },
 });
 
@@ -746,6 +793,21 @@ function removeLabel(labelId: string) {
                 <SelectContent>
                   <SelectItem v-for="p in priorities" :key="p.value" :value="String(p.value)">
                     {{ p.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div v-if="!isSubtaskMode && availableCycles.length > 0" class="space-y-2">
+              <Label for="cycle">Cycle</Label>
+              <Select v-model="cycleValue" :disabled="loading">
+                <SelectTrigger id="cycle" class="w-full">
+                  <SelectValue placeholder="No cycle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem :value="NO_CYCLE">No cycle</SelectItem>
+                  <SelectItem v-for="c in availableCycles" :key="c.id" :value="c.id">
+                    {{ c.title }}
                   </SelectItem>
                 </SelectContent>
               </Select>

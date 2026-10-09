@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronLeft, Loader2, Plus, X, Search } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { ProjectState, ProjectLabel, ProjectMember, TaskTemplate } from "~/types";
+import type { ProjectState, ProjectLabel, ProjectMember, TaskTemplate, CycleSibling } from "~/types";
 import { mdToHtml } from "~/utils/markdown";
 
 definePageMeta({
@@ -30,6 +30,7 @@ const {
 } = useProjects();
 
 const { createTask } = useTasks();
+const { listAllCycles, addTasksToCycle } = useCycles();
 // Files picked in the description toolbar before the task exists; linked to it
 // right after creation.
 const {
@@ -52,6 +53,8 @@ const form = ref({
   priority: 0,
   assignees: [] as string[],
   labels: [] as string[],
+  // Cycle the new task is planned into; defaults to the running sprint.
+  cycle_id: "",
 });
 
 const titleDraft = useDraft(
@@ -103,7 +106,27 @@ async function loadProjectData() {
     form.value.state_id = defaultState.value.id;
   }
 
+  // New tickets default to the running sprint (latest start if several
+  // overlap), or the most recently finished one when nothing is active.
+  const cyclesRes = await listAllCycles(projectKey.value);
+  availableCycles.value = cyclesRes.success && cyclesRes.data ? cyclesRes.data : [];
+  form.value.cycle_id = defaultCycleId(availableCycles.value);
+
   pageLoading.value = false;
+}
+
+const availableCycles = ref<CycleSibling[]>([]);
+
+function defaultCycleId(cycles: CycleSibling[]): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const active = [...cycles]
+    .filter((c) => c.start_date <= today && today <= c.end_date)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date));
+  if (active.length > 0) return active[0]!.id;
+  const past = [...cycles]
+    .filter((c) => c.end_date < today)
+    .sort((a, b) => b.end_date.localeCompare(a.end_date));
+  return past[0]?.id ?? "";
 }
 
 watch(selectedTemplateId, (id) => {
@@ -132,6 +155,9 @@ async function handleSubmit() {
 
   if (result.success && result.data) {
     await attachPendingFiles(projectKey.value, result.data.task_number);
+    if (form.value.cycle_id) {
+      await addTasksToCycle(projectKey.value, form.value.cycle_id, [result.data.id]);
+    }
   }
 
   loading.value = false;
@@ -167,6 +193,13 @@ const priorityValue = computed({
   get: () => String(form.value.priority),
   set: (v: string) => {
     form.value.priority = Number(v);
+  },
+});
+const NO_CYCLE = "__none__";
+const cycleValue = computed({
+  get: () => form.value.cycle_id || NO_CYCLE,
+  set: (v: string) => {
+    form.value.cycle_id = v === NO_CYCLE ? "" : v;
   },
 });
 
@@ -357,6 +390,21 @@ onMounted(() => {
                   <SelectContent>
                     <SelectItem v-for="p in priorities" :key="p.value" :value="String(p.value)">
                       {{ p.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div v-if="availableCycles.length > 0" class="space-y-2">
+                <Label for="cycle">Cycle</Label>
+                <Select v-model="cycleValue" :disabled="loading">
+                  <SelectTrigger id="cycle" class="w-full">
+                    <SelectValue placeholder="No cycle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="NO_CYCLE">No cycle</SelectItem>
+                    <SelectItem v-for="c in availableCycles" :key="c.id" :value="c.id">
+                      {{ c.title }}
                     </SelectItem>
                   </SelectContent>
                 </Select>

@@ -19,6 +19,7 @@ import {
   X,
   Lock,
   Trash2,
+  Pin,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task, ViewGroupBy, SortKey, SortDir, ViewDefaultTab, ViewVisibility } from "~/types";
@@ -552,6 +553,26 @@ const activeView = computed<ProjectView | null>(
   () => views.value.find((v) => v.slug === activeViewSlug.value) ?? null
 );
 
+// The admin-pinned default view, and whether the current working state has
+// drifted from it — that is when the "Default view" button offers the way back
+// (without a refresh, and without overloading Reset, which keeps meaning
+// "clear everything").
+const defaultView = computed<ProjectView | null>(
+  () => views.value.find((v) => v.is_default && v.visibility === "shared") ?? null
+);
+const offDefaultView = computed(() => {
+  const dv = defaultView.value;
+  if (!dv) return false;
+  if (activeViewSlug.value !== dv.slug) return true;
+  return (
+    JSON.stringify(tree.value ?? { children: [] }) !==
+      JSON.stringify(dv.filter_tree ?? { children: [] }) ||
+    sortBy.value !== dv.sort_by ||
+    sortDir.value !== dv.sort_dir ||
+    groupBy.value !== dv.group_by
+  );
+});
+
 // Whether the current user may update/delete the active view (owner, or admin of
 // a shared view) — mirrors the backend rule.
 const canEditActiveView = computed(() => {
@@ -878,6 +899,18 @@ onMounted(async () => {
                         <X class="size-3.5" />
                       </button>
                     </span>
+                  </template>
+                  <template v-if="defaultView && offDefaultView" #actions>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="gap-1.5"
+                      :title="`Apply the project default view: ${defaultView.name}`"
+                      @click="applyView(defaultView.slug)"
+                    >
+                      <Pin class="size-3.5" />
+                      Default view
+                    </Button>
                   </template>
                 </FilterBar>
                 <div v-if="canWrite" class="flex items-center">

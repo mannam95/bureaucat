@@ -132,6 +132,10 @@ function updatePredicate(index: number, p: Predicate) {
         <X class="mr-1 size-3.5" />
         Reset
       </Button>
+
+      <!-- Caller-supplied toolbar actions (e.g. "Default view" on the project
+           page). Rendered after Reset so the row reads: narrow, clear, restore. -->
+      <slot name="actions" />
     </div>
 
     <!-- Active filter chips (implicit AND between all chips). The leading slot

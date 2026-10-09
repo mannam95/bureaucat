@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Lock, Users as UsersIcon, Play, Pencil, Trash2, Filter, Layers, Calendar, Loader2, Pin, PinOff } from "lucide-vue-next";
+import { Lock, Users as UsersIcon, Play, Pencil, Trash2, Filter, Layers, Calendar, Loader2, Pin, PinOff, GripVertical } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ProjectView } from "~/types";
 
@@ -17,7 +17,7 @@ const emit = defineEmits<{
   "refresh": [];
 }>();
 
-const { deleteView, setDefaultView, clearDefaultView } = useViews();
+const { deleteView, setDefaultView, clearDefaultView, reorderViews } = useViews();
 
 const showDeleteDialog = ref(false);
 const deleting = ref(false);
@@ -78,6 +78,60 @@ async function confirmDelete() {
   viewToDelete.value = null;
 }
 
+// ---- Drag-and-drop ordering (project admins only) ----
+// One shared order for the whole project; the backend endpoint has existed
+// since saved views shipped, this is just the missing UI. Native HTML5 drag,
+// armed from the grip handle so rows stay clickable.
+const localOrder = ref<ProjectView[] | null>(null);
+const displayViews = computed(() => localOrder.value ?? props.views);
+watch(
+  () => props.views,
+  () => {
+    localOrder.value = null;
+  }
+);
+
+const dragIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+const armedIndex = ref<number | null>(null);
+
+function onDragStart(idx: number, e: DragEvent) {
+  if (!props.isAdmin || armedIndex.value !== idx) {
+    e.preventDefault();
+    return;
+  }
+  dragIndex.value = idx;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox refuses to start a drag with no data attached.
+    e.dataTransfer.setData("text/plain", String(idx));
+  }
+}
+
+function onDragEnd() {
+  dragIndex.value = null;
+  dragOverIndex.value = null;
+  armedIndex.value = null;
+}
+
+async function onDrop(targetIdx: number) {
+  const from = dragIndex.value;
+  onDragEnd();
+  if (from === null || from === targetIdx) return;
+  const next = [...displayViews.value];
+  const moved = next.splice(from, 1)[0]!;
+  next.splice(targetIdx, 0, moved);
+  localOrder.value = next;
+  const items = next.map((v, i) => ({ id: v.id, position: i + 1 }));
+  const res = await reorderViews(props.projectKey, items);
+  if (res.success) {
+    emit("refresh");
+  } else {
+    localOrder.value = null;
+    toast.error(res.error || "Failed to reorder views");
+  }
+}
+
 function isOwner(v: ProjectView): boolean {
   return props.currentUserId !== undefined && v.owner_id === props.currentUserId;
 }
@@ -120,12 +174,32 @@ function groupByLabel(groupBy: string): string {
 
     <div v-else class="space-y-2">
       <div
-        v-for="v in views"
+        v-for="(v, idx) in displayViews"
         :key="v.id"
         class="group relative rounded-lg border bg-card transition-colors hover:border-border/80 hover:bg-accent/30"
-        :class="activeSlug === v.slug ? 'border-amber-500/40 bg-amber-500/5' : ''"
+        :class="[
+          activeSlug === v.slug ? 'border-amber-500/40 bg-amber-500/5' : '',
+          dragOverIndex === idx && dragIndex !== null && dragIndex !== idx ? 'ring-2 ring-amber-500/50' : '',
+          dragIndex === idx ? 'opacity-50' : '',
+        ]"
+        :draggable="isAdmin && armedIndex === idx ? true : undefined"
+        @dragstart="onDragStart(idx, $event)"
+        @dragover.prevent="isAdmin && dragIndex !== null && (dragOverIndex = idx)"
+        @drop.prevent="isAdmin && onDrop(idx)"
+        @dragend="onDragEnd"
       >
         <div class="flex items-center gap-4 px-4 py-3">
+          <button
+            v-if="isAdmin"
+            type="button"
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+            class="-ml-1 shrink-0 cursor-grab text-muted-foreground/40 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
+            @mousedown="armedIndex = idx"
+            @mouseup="armedIndex = null"
+          >
+            <GripVertical class="size-4" />
+          </button>
           <!-- Visibility icon -->
           <div
             class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50"
