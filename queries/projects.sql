@@ -410,6 +410,23 @@ WHERE t.project_id = $1 AND t.deleted_at IS NULL
 ORDER BY t.created_at DESC
 LIMIT $2;
 
+-- name: ListParentCandidates :many
+-- Picker source for re-parenting a sub-task: top-level tasks that could be its
+-- parent. One level only, so tasks that are themselves sub-tasks are out.
+-- Server-searched and capped — never meant to list a whole project.
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN project_states ps ON t.state_id = ps.id
+WHERE t.project_id = $1 AND t.deleted_at IS NULL
+  AND t.parent_task_id IS NULL
+  AND t.id <> sqlc.arg('exclude_id')::uuid
+  AND (sqlc.narg('search')::text IS NULL
+       OR t.title ILIKE '%' || sqlc.narg('search') || '%')
+ORDER BY t.created_at DESC
+LIMIT $2;
+
 -- name: GetTaskAttachEligibility :one
 -- Validates a candidate before attaching it as a subtask: its project and
 -- whether it already has children (which would break the one-level rule).

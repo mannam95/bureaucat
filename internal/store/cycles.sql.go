@@ -81,6 +81,21 @@ func (q *Queries) CountProjectCycles(ctx context.Context, arg CountProjectCycles
 	return count, err
 }
 
+const countUnassignedProjectTasks = `-- name: CountUnassignedProjectTasks :one
+SELECT COUNT(*)
+FROM tasks t
+WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM cycle_tasks ct WHERE ct.task_id = t.id)
+`
+
+// Count-only sibling of ListUnassignedProjectTasks, for the backlog card badge.
+func (q *Queries) CountUnassignedProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnassignedProjectTasks, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCycle = `-- name: CreateCycle :one
 
 INSERT INTO cycles (project_id, title, description, start_date, end_date, created_by)

@@ -108,6 +108,21 @@ func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModul
 	return count, err
 }
 
+const countProjectTasksInNoModule = `-- name: CountProjectTasksInNoModule :one
+SELECT COUNT(*)
+FROM tasks t
+WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id)
+`
+
+// Count-only sibling of ListProjectTasksInNoModule, for the backlog card badge.
+func (q *Queries) CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjectTasksInNoModule, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createModule = `-- name: CreateModule :one
 
 INSERT INTO modules (project_id, title, description, status, start_date, end_date, lead_id, created_by, priority_rating)

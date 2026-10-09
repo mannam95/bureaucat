@@ -140,6 +140,13 @@ WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
 ORDER BY t.created_at DESC
 LIMIT $2;
 
+-- name: CountUnassignedProjectTasks :one
+-- Count-only sibling of ListUnassignedProjectTasks, for the backlog card badge.
+SELECT COUNT(*)
+FROM tasks t
+WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM cycle_tasks ct WHERE ct.task_id = t.id);
+
 -- name: GetCycleMetrics :one
 SELECT
     COUNT(*)::int                                                         AS total,

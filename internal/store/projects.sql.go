@@ -1671,6 +1671,80 @@ func (q *Queries) ListOriginatorsForTasks(ctx context.Context, taskIds []uuid.UU
 	return items, nil
 }
 
+const listParentCandidates = `-- name: ListParentCandidates :many
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+       p.project_key, ps.name AS state_name, ps.state_type, ps.color AS state_color
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+JOIN project_states ps ON t.state_id = ps.id
+WHERE t.project_id = $1 AND t.deleted_at IS NULL
+  AND t.parent_task_id IS NULL
+  AND t.id <> $3::uuid
+  AND ($4::text IS NULL
+       OR t.title ILIKE '%' || $4 || '%')
+ORDER BY t.created_at DESC
+LIMIT $2
+`
+
+type ListParentCandidatesParams struct {
+	ProjectID uuid.UUID   `json:"project_id"`
+	Limit     int32       `json:"limit"`
+	ExcludeID uuid.UUID   `json:"exclude_id"`
+	Search    pgtype.Text `json:"search"`
+}
+
+type ListParentCandidatesRow struct {
+	ID         uuid.UUID   `json:"id"`
+	ProjectID  uuid.UUID   `json:"project_id"`
+	TaskNumber int32       `json:"task_number"`
+	Title      string      `json:"title"`
+	StateID    uuid.UUID   `json:"state_id"`
+	Priority   int32       `json:"priority"`
+	ProjectKey string      `json:"project_key"`
+	StateName  string      `json:"state_name"`
+	StateType  string      `json:"state_type"`
+	StateColor pgtype.Text `json:"state_color"`
+}
+
+// Picker source for re-parenting a sub-task: top-level tasks that could be its
+// parent. One level only, so tasks that are themselves sub-tasks are out.
+// Server-searched and capped — never meant to list a whole project.
+func (q *Queries) ListParentCandidates(ctx context.Context, arg ListParentCandidatesParams) ([]ListParentCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listParentCandidates,
+		arg.ProjectID,
+		arg.Limit,
+		arg.ExcludeID,
+		arg.Search,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentCandidatesRow{}
+	for rows.Next() {
+		var i ListParentCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.TaskNumber,
+			&i.Title,
+			&i.StateID,
+			&i.Priority,
+			&i.ProjectKey,
+			&i.StateName,
+			&i.StateType,
+			&i.StateColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectLabels = `-- name: ListProjectLabels :many
 SELECT id, project_id, name, color, created_at
 FROM project_labels

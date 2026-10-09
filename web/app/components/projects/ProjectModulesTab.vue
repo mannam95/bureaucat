@@ -8,7 +8,7 @@ const props = defineProps<{
   isAdmin: boolean;
 }>();
 
-const { modules, loading, total, page, totalPages, listModules, listTasksInNoModule } =
+const { modules, loading, total, page, totalPages, listModules, countTasksInNoModule } =
   useModules();
 
 const showCreate = ref(false);
@@ -65,8 +65,8 @@ watch(statusGroup, () => {
 const backlogCount = ref(0);
 async function loadBacklogCount() {
   if (!props.isAdmin) return;
-  const r = await listTasksInNoModule(props.projectKey, "", 100);
-  if (r.success && r.data) backlogCount.value = r.data.length;
+  const r = await countTasksInNoModule(props.projectKey);
+  if (r.success) backlogCount.value = r.count ?? 0;
 }
 const showBacklogCard = computed(
   () => props.isAdmin && backlogCount.value > 0 && statusGroup.value === "active"

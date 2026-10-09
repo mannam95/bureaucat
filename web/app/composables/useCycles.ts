@@ -240,6 +240,26 @@ export function useCycles() {
     }
   }
 
+  // Count-only sibling of listUnassignedTasks, for the backlog card badge.
+  async function countUnassignedTasks(
+    projectKey: string
+  ): Promise<{ success: boolean; count?: number; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/cycles/unassigned-tasks/count`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to count tasks" };
+      }
+      const data = await response.json();
+      return { success: true, count: data.count ?? 0 };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function listUnassignedTasks(
     projectKey: string,
     search = "",
@@ -353,6 +373,7 @@ export function useCycles() {
     addTasksToCycle,
     removeTaskFromCycle,
     listUnassignedTasks,
+    countUnassignedTasks,
     listActiveCycles,
     listSiblings,
     listAllCycles,

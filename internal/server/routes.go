@@ -254,6 +254,7 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/cycles/all", s.cycleHandler.ListAllProjectCycles)
 				projectGroup.POST("/cycles", s.cycleHandler.CreateCycle, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/cycles/unassigned-tasks", s.cycleHandler.ListUnassignedTasks)
+				projectGroup.GET("/cycles/unassigned-tasks/count", s.cycleHandler.CountUnassignedTasks)
 				projectGroup.GET("/cycles/:cycleId", s.cycleHandler.GetCycle)
 				projectGroup.PATCH("/cycles/:cycleId", s.cycleHandler.UpdateCycle, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.DELETE("/cycles/:cycleId", s.cycleHandler.DeleteCycle, auth.ProjectRoleMiddleware("admin"))
@@ -271,6 +272,7 @@ func (s *Server) registerRoutes() {
 				projectGroup.POST("/modules", s.moduleHandler.CreateModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/modules/tasks-picker", s.moduleHandler.ListProjectTasksNotInModule)
 				projectGroup.GET("/modules/no-module-tasks", s.moduleHandler.ListTasksInNoModule)
+				projectGroup.GET("/modules/no-module-tasks/count", s.moduleHandler.CountTasksInNoModule)
 				projectGroup.GET("/modules/:moduleId", s.moduleHandler.GetModule)
 				projectGroup.PATCH("/modules/:moduleId", s.moduleHandler.UpdateModule, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.DELETE("/modules/:moduleId", s.moduleHandler.DeleteModule, auth.ProjectRoleMiddleware("admin"))
@@ -300,6 +302,8 @@ func (s *Server) registerRoutes() {
 				projectGroup.GET("/tasks/:taskNum/subtasks", s.taskHandler.ListSubtasks)
 				// Candidate tasks for attaching an existing task as a subtask.
 				projectGroup.GET("/tasks/:taskNum/subtasks/candidates", s.taskHandler.ListSubtaskCandidates)
+				// Candidate parents when re-parenting a sub-task (server-searched picker).
+				projectGroup.GET("/tasks/:taskNum/parent-candidates", s.taskHandler.ListParentCandidates)
 				// Attach existing tasks as subtasks (re-parenting allowed).
 				projectGroup.POST("/tasks/:taskNum/subtasks", s.taskHandler.AttachSubtasks, auth.ProjectRoleMiddleware("member"))
 				// Promote a sub-task to a stand-alone top-level task.

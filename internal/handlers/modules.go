@@ -1221,6 +1221,20 @@ func (h *ModuleHandler) ListProjectTasksNotInModule(c *echo.Context) error {
 
 // ListTasksInNoModule returns project top-level tasks that are in no module at
 // all, powering the "Tasks Without an Epic" backlog on the Modules tab.
+// CountTasksInNoModule returns only how many top-level tasks are in no module,
+// for the backlog card badge — the overview tabs don't need the rows.
+func (h *ModuleHandler) CountTasksInNoModule(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	count, err := h.store.CountProjectTasksInNoModule(c.Request().Context(), projectID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tasks")
+	}
+	return c.JSON(http.StatusOK, map[string]int64{"count": count})
+}
+
 func (h *ModuleHandler) ListTasksInNoModule(c *echo.Context) error {
 	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
 	projectID, err := uuid.Parse(projectIDStr)

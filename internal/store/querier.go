@@ -59,6 +59,8 @@ type Querier interface {
 	CountProjectMembers(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error)
 	CountProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)
+	// Count-only sibling of ListProjectTasksInNoModule, for the backlog card badge.
+	CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjects(ctx context.Context) (int64, error)
 	CountSearchUsers(ctx context.Context, dollar_1 pgtype.Text) (int64, error)
 	CountSubtasks(ctx context.Context) (int64, error)
@@ -67,6 +69,8 @@ type Querier interface {
 	CountTasksByAssignee(ctx context.Context, arg CountTasksByAssigneeParams) (int64, error)
 	CountTasksInState(ctx context.Context, stateID uuid.UUID) (int64, error)
 	CountTopLevelTasks(ctx context.Context) (int64, error)
+	// Count-only sibling of ListUnassignedProjectTasks, for the backlog card badge.
+	CountUnassignedProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountUnreadNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountUserActivity(ctx context.Context, actorID uuid.UUID) (int64, error)
 	CountUserProjects(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -243,6 +247,10 @@ type Querier interface {
 	// Requesters/originators, many-to-many, mirroring task assignees. "to" is a SQL
 	// keyword so the join table is aliased to2/o.
 	ListOriginatorsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListOriginatorsForTasksRow, error)
+	// Picker source for re-parenting a sub-task: top-level tasks that could be its
+	// parent. One level only, so tasks that are themselves sub-tasks are out.
+	// Server-searched and capped — never meant to list a whole project.
+	ListParentCandidates(ctx context.Context, arg ListParentCandidatesParams) ([]ListParentCandidatesRow, error)
 	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]ListPersonalAccessTokensByUserRow, error)
 	ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error)
 	ListProjectCyclesAll(ctx context.Context, projectID uuid.UUID) ([]ListProjectCyclesAllRow, error)

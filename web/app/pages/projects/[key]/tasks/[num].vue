@@ -14,6 +14,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Link,
+  ArrowUpRight,
   Paperclip,
   Circle,
   CircleDot,
@@ -53,7 +54,7 @@ const {
   listLabels,
 } = useProjects();
 
-const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, promoteSubtask, fetchAllTasks } =
+const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, promoteSubtask, listParentCandidates } =
   useTasks();
 const { comments, loading: commentsLoading, listComments } = useComments();
 const { activities, loading: activitiesLoading, listActivity } = useActivity();
@@ -147,7 +148,6 @@ async function loadData() {
     listActivity(projectKey.value, taskNum.value),
     loadTaskAttachments(),
     loadSubtasks(),
-    loadLinkOptions(),
   ]);
 
   loading.value = false;
@@ -486,15 +486,28 @@ async function saveField(key: CustomFieldKey) {
 // A top-level task's cycle and epic are managed by the TaskCycle / TaskModules
 // components (each loads its own options). A sub-task can instead be moved under
 // another parent, so here we only need the list of candidate parents.
-const parentOptions = ref<import("~/types").Task[]>([]);
+const parentOptions = ref<import("~/types").SubtaskCandidate[]>([]);
+const parentPickerOpen = ref(false);
+const parentLoading = ref(false);
+let parentSearchDebounce: ReturnType<typeof setTimeout> | null = null;
 
-async function loadLinkOptions() {
-  if (!isSubtask.value) return;
-  const res = await fetchAllTasks(projectKey.value);
-  if (res.success && res.data) {
-    parentOptions.value = res.data.filter((t) => t.id !== currentTask.value?.id);
-  }
+// Loaded only when the picker opens, server-searched and capped — a project
+// with hundreds of tasks must not be downloaded for a dropdown.
+async function loadParentOptions(search = "") {
+  parentLoading.value = true;
+  const res = await listParentCandidates(projectKey.value, taskNum.value, search, 50);
+  if (res.success && res.data) parentOptions.value = res.data;
+  parentLoading.value = false;
 }
+
+function onParentSearch(q: string) {
+  if (parentSearchDebounce) clearTimeout(parentSearchDebounce);
+  parentSearchDebounce = setTimeout(() => loadParentOptions(q), 300);
+}
+
+watch(parentPickerOpen, (isOpen) => {
+  if (isOpen) loadParentOptions();
+});
 
 // Move this sub-task under a different top-level parent.
 async function setParent(parentTaskNum: number) {
@@ -1056,40 +1069,51 @@ onMounted(() => {
                 <!-- Parent (sub-tasks only) -->
                 <div v-if="isSubtask" class="flex items-center justify-between gap-2 py-3">
                   <p class="shrink-0 text-xs text-muted-foreground">Parent</p>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        class="h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent"
-                        :disabled="!isMember || updating"
-                      >
-                        <span class="max-w-[9rem] truncate">{{
-                          currentTask.parent_task_title ?? `#${currentTask.parent_task_number}`
-                        }}</span>
-                        <ChevronDown class="size-3.5 shrink-0 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="max-h-72 w-64 overflow-y-auto">
-                      <DropdownMenuItem
-                        v-for="t in parentOptions"
-                        :key="t.id"
-                        @click="setParent(t.task_number)"
-                      >
+                  <div class="flex min-w-0 items-center gap-1">
+                    <NuxtLink
+                      v-if="currentTask.parent_task_number"
+                      :to="`/projects/${projectKey}/tasks/${currentTask.parent_task_number}`"
+                      aria-label="Open parent task"
+                      class="shrink-0 text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <ArrowUpRight class="size-3.5" />
+                    </NuxtLink>
+                    <SearchableSelect
+                      v-model:open="parentPickerOpen"
+                      :items="parentOptions"
+                      :get-search-text="(t) => t.title"
+                      :get-key="(t) => t.id"
+                      server-filtered
+                      :loading="parentLoading"
+                      placeholder="Search tasks…"
+                      empty-text="No other tasks to parent under"
+                      align="end"
+                      content-class="w-72"
+                      @search-change="onParentSearch"
+                      @select="(t) => setParent(t.task_number)"
+                    >
+                      <template #trigger>
+                        <Button
+                          variant="ghost"
+                          class="h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent"
+                          :disabled="!isMember || updating"
+                        >
+                          <span class="max-w-[9rem] truncate">{{
+                            currentTask.parent_task_title ?? `#${currentTask.parent_task_number}`
+                          }}</span>
+                          <ChevronDown class="size-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </template>
+                      <template #option="{ item: t }">
                         <Check
-                          class="mr-2 size-3.5 shrink-0"
+                          class="size-3.5 shrink-0"
                           :class="currentTask.parent_task_id === t.id ? 'opacity-100' : 'opacity-0'"
                         />
-                        <span class="mr-2 shrink-0 font-mono text-xs text-muted-foreground">{{ t.task_id }}</span>
+                        <span class="shrink-0 font-mono text-xs text-muted-foreground">{{ t.task_id }}</span>
                         <span class="truncate">{{ t.title }}</span>
-                      </DropdownMenuItem>
-                      <p
-                        v-if="parentOptions.length === 0"
-                        class="px-2 py-1.5 text-xs text-muted-foreground"
-                      >
-                        No other tasks to parent under
-                      </p>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      </template>
+                    </SearchableSelect>
+                  </div>
                 </div>
 
                 <!-- Start date -->

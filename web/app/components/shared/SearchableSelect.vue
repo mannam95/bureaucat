@@ -22,6 +22,11 @@ const props = withDefaults(
     // When true (default) the popover closes after a selection. Set false for
     // multi-select pickers that should stay open to add several items.
     closeOnSelect?: boolean;
+    // When true, the caller filters server-side: the query is emitted via
+    // @search-change and `items` is shown as-is instead of being filtered here.
+    serverFiltered?: boolean;
+    // Shows a "Searching..." row instead of the empty text (server mode).
+    loading?: boolean;
     align?: "start" | "center" | "end";
     contentClass?: string;
   }>(),
@@ -29,6 +34,8 @@ const props = withDefaults(
     placeholder: "Search...",
     emptyText: "No results found",
     closeOnSelect: true,
+    serverFiltered: false,
+    loading: false,
     align: "start",
     contentClass: "w-56",
   }
@@ -38,6 +45,8 @@ const open = defineModel<boolean>("open", { default: false });
 
 const emit = defineEmits<{
   select: [item: T];
+  // Server-filtered mode: the current query, for the caller to fetch with.
+  searchChange: [query: string];
   // Forwarded from the popover so callers can redirect focus after close
   // (e.g. onto a follow-up field) by calling event.preventDefault().
   closeAutoFocus: [event: Event];
@@ -48,11 +57,16 @@ const highlighted = ref(0);
 const listRef = ref<HTMLElement | null>(null);
 
 const filtered = computed(() => {
+  if (props.serverFiltered) return props.items;
   const q = search.value.toLowerCase().trim();
   if (!q) return props.items;
   return props.items.filter((it) =>
     props.getSearchText(it).toLowerCase().includes(q)
   );
+});
+
+watch(search, (q) => {
+  if (props.serverFiltered) emit("searchChange", q.trim());
 });
 
 function keyOf(item: T, index: number): string | number {
@@ -149,7 +163,7 @@ function onKeydown(event: KeyboardEvent) {
           v-if="filtered.length === 0"
           class="px-3 py-6 text-center text-sm text-muted-foreground"
         >
-          {{ emptyText }}
+          {{ loading ? "Searching…" : emptyText }}
         </p>
       </div>
     </PopoverContent>

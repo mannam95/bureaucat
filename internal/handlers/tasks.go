@@ -1590,6 +1590,77 @@ func (h *TaskHandler) ListSubtaskCandidates(c *echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+// ListParentCandidates returns top-level tasks a sub-task could be re-parented
+// under. Server-searched and capped, so the picker never downloads a whole
+// project's task list.
+//
+//	@Summary		List parent candidates for a sub-task
+//	@Tags			Tasks
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			taskNum		path		int		true	"Task number"
+//	@Param			search		query		string	false	"Title search"
+//	@Param			limit		query		int		false	"Max results (default 50)"
+//	@Success		200			{array}		SubtaskCandidateResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/parent-candidates [get]
+func (h *TaskHandler) ListParentCandidates(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+
+	ctx := c.Request().Context()
+
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	searchParam := pgtype.Text{}
+	if s := strings.TrimSpace(c.QueryParam("search")); s != "" {
+		searchParam = pgtype.Text{String: s, Valid: true}
+	}
+
+	rows, err := h.store.ListParentCandidates(ctx, store.ListParentCandidatesParams{
+		ProjectID: projectID,
+		Limit:     int32(limit),
+		ExcludeID: task.ID,
+		Search:    searchParam,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list parent candidates")
+	}
+
+	out := make([]SubtaskCandidateResponse, len(rows))
+	for i, t := range rows {
+		out[i] = SubtaskCandidateResponse{
+			ID:         t.ID,
+			ProjectKey: t.ProjectKey,
+			TaskNumber: int(t.TaskNumber),
+			TaskID:     t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:      t.Title,
+			StateID:    t.StateID,
+			StateName:  t.StateName,
+			StateType:  t.StateType,
+			StateColor: textToString(t.StateColor, "#6B7280"),
+			Priority:   int(t.Priority),
+		}
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
 // AttachSubtasksRequest carries the ids of existing tasks to attach as subtasks.
 type AttachSubtasksRequest struct {
 	TaskIDs []string `json:"task_ids"`

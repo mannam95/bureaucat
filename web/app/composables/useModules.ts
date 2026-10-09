@@ -403,6 +403,51 @@ export function useModules() {
 
   // Backlog source for the Modules tab: project top-level tasks that are in no
   // module at all. Kept out of the paginated `modules` state.
+  // Count-only sibling of listTasksInNoModule, for the backlog card badge.
+  async function countTasksInNoModule(
+    projectKey: string
+  ): Promise<{ success: boolean; count?: number; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/modules/no-module-tasks/count`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to count tasks" };
+      }
+      const data = await response.json();
+      return { success: true, count: data.count ?? 0 };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  // Lean module search for pickers: server-side title/description match, capped,
+  // and never touching the shared overview state.
+  async function searchModules(
+    projectKey: string,
+    search = "",
+    limit = 50
+  ): Promise<{ success: boolean; data?: Module[]; error?: string }> {
+    try {
+      const params = new URLSearchParams({ page: "1", per_page: String(limit) });
+      if (search) params.set("search", search);
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/modules?${params}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to search modules" };
+      }
+      const data: PaginatedModulesResponse = await response.json();
+      return { success: true, data: data.modules || [] };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function listTasksInNoModule(
     projectKey: string,
     search = "",
@@ -477,6 +522,8 @@ export function useModules() {
     removeTaskFromModule,
     listPickerTasks,
     listTasksInNoModule,
+    countTasksInNoModule,
+    searchModules,
     listAllModules,
     listModuleMembers,
     addModuleMember,

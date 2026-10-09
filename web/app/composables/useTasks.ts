@@ -596,6 +596,32 @@ export function useTasks() {
     }
   }
 
+  // Candidate parents for re-parenting a sub-task: top-level tasks only,
+  // server-searched and capped — the picker never downloads the whole project.
+  async function listParentCandidates(
+    projectKey: string,
+    taskNum: number,
+    search = "",
+    limit = 50
+  ): Promise<{ success: boolean; data?: SubtaskCandidate[]; error?: string }> {
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (search) params.set("search", search);
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/parent-candidates?${params}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch tasks" };
+      }
+      const data: SubtaskCandidate[] = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   // Attach existing tasks (by UUID) as subtasks of a parent, re-parenting any
   // that already belong to another parent.
   async function attachSubtasks(
@@ -691,6 +717,7 @@ export function useTasks() {
     listSubtasks,
     promoteSubtask,
     listSubtaskCandidates,
+    listParentCandidates,
     attachSubtasks,
 
     // Utils

@@ -18,7 +18,7 @@ const emit = defineEmits<{
   refresh: [];
 }>();
 
-const { listModules, addTasksToModule, removeTaskFromModule } = useModules();
+const { searchModules, addTasksToModule, removeTaskFromModule } = useModules();
 
 const open = ref(false);
 const available = ref<Module[]>([]);
@@ -34,19 +34,28 @@ const label = computed(() => {
   return `${props.modules.length} modules`;
 });
 
-async function loadModules() {
+// Server-searched and capped: the picker never downloads a whole project's
+// module list, and typing narrows the results on the server.
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function loadModules(search = "") {
   loadingModules.value = true;
-  const result = await listModules(props.projectKey, 1, 100);
+  const result = await searchModules(props.projectKey, search, 50);
   if (result.success && result.data) {
-    available.value = result.data.modules || [];
+    available.value = result.data;
   } else {
     toast.error(result.error || "Failed to load modules");
   }
   loadingModules.value = false;
 }
 
+function onSearchChange(q: string) {
+  if (searchDebounce) clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => loadModules(q), 300);
+}
+
 watch(open, (isOpen) => {
-  if (isOpen && !available.value.length) loadModules();
+  if (isOpen) loadModules();
 });
 
 async function toggleModule(module: Module) {
@@ -80,8 +89,22 @@ async function toggleModule(module: Module) {
         <ArrowUpRight class="size-3.5" />
       </NuxtLink>
 
-      <DropdownMenu v-if="canEdit" v-model:open="open">
-        <DropdownMenuTrigger as-child>
+      <SearchableSelect
+        v-if="canEdit"
+        v-model:open="open"
+        :items="available"
+        :get-search-text="(m) => m.title"
+        :get-key="(m) => m.id"
+        server-filtered
+        :loading="loadingModules"
+        :close-on-select="false"
+        placeholder="Search modules…"
+        empty-text="No modules found"
+        align="end"
+        @search-change="onSearchChange"
+        @select="toggleModule"
+      >
+        <template #trigger>
           <Button
             variant="ghost"
             class="h-auto min-w-0 shrink gap-1.5 px-0 py-0 font-medium hover:bg-transparent has-[>svg]:pl-0"
@@ -94,33 +117,15 @@ async function toggleModule(module: Module) {
             </span>
             <ChevronDown class="shrink-0 opacity-50" :class="dense ? 'size-3' : 'size-3.5'" />
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" class="w-56">
-          <div v-if="loadingModules" class="flex items-center justify-center py-3">
-            <Loader2 class="size-4 animate-spin text-muted-foreground" />
-          </div>
-          <template v-else>
-            <p
-              v-if="!available.length"
-              class="px-2 py-3 text-center text-xs text-muted-foreground"
-            >
-              No modules in this project
-            </p>
-            <DropdownMenuItem
-              v-for="module in available"
-              :key="module.id"
-              class="gap-2"
-              @select.prevent="toggleModule(module)"
-            >
-              <Check
-                class="size-3.5 shrink-0"
-                :class="selectedIds.has(module.id) ? 'opacity-100' : 'opacity-0'"
-              />
-              <span class="min-w-0 flex-1 truncate">{{ module.title }}</span>
-            </DropdownMenuItem>
-          </template>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </template>
+        <template #option="{ item: module }">
+          <Check
+            class="size-3.5 shrink-0"
+            :class="selectedIds.has(module.id) ? 'opacity-100' : 'opacity-0'"
+          />
+          <span class="min-w-0 flex-1 truncate">{{ module.title }}</span>
+        </template>
+      </SearchableSelect>
 
       <!-- Read-only: each module as its own pill link (a task can be in several,
            so collapsing to first + "+N" hid the rest). -->
