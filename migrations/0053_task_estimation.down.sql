@@ -1,0 +1,3 @@
+ALTER TABLE tasks
+    DROP COLUMN IF EXISTS difficulty,
+    DROP COLUMN IF EXISTS effort;

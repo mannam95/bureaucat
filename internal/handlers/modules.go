@@ -66,7 +66,7 @@ type ModuleResponse struct {
 	TotalTasks     int               `json:"total_tasks"`
 	CompletedTasks int               `json:"completed_tasks"`
 	// Archived tasks count as complete in progress, shown separately.
-	ArchivedTasks  int               `json:"archived_tasks"`
+	ArchivedTasks int `json:"archived_tasks"`
 	// 1-10 star priority rating (0 = unset), for reprioritising epics in the list.
 	PriorityRating int    `json:"priority_rating"`
 	ProjectKey     string `json:"project_key,omitempty"`

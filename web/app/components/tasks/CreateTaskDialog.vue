@@ -143,6 +143,9 @@ const form = ref({
   // loadCycles); clearable. Hidden in subtask mode — subtasks inherit the
   // parent's cycle.
   cycle_id: "",
+  // DEV estimation inputs (0 = not assessed).
+  difficulty: 0,
+  effort: 0,
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
@@ -194,6 +197,8 @@ function resetForm() {
     originators: user.value?.id ? [user.value.id] : [],
     watchers: [],
     cycle_id: "",
+    difficulty: 0,
+    effort: 0,
   };
   selectedTemplateId.value = "";
   error.value = null;
@@ -368,6 +373,8 @@ async function handleSubmit() {
     description: form.value.description || undefined,
     state_id: form.value.state_id || undefined,
     priority: form.value.priority,
+    difficulty: form.value.difficulty || undefined,
+    effort: form.value.effort || undefined,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
     labels: form.value.labels.length > 0 ? form.value.labels : undefined,
     figma_link: form.value.figma_link.trim() || undefined,
@@ -499,6 +506,15 @@ const priorityValue = computed({
     form.value.priority = Number(v);
   },
 });
+
+// Complexity estimation: Difficulty x Effort, shown live while picking.
+const estScore = computed(() =>
+  form.value.difficulty > 0 && form.value.effort > 0
+    ? form.value.difficulty * form.value.effort
+    : 0
+);
+const estBand = computed(() => complexityBand(estScore.value));
+
 const NO_CYCLE = "__none__";
 const cycleValue = computed({
   get: () => form.value.cycle_id || NO_CYCLE,
@@ -814,6 +830,36 @@ function removeLabel(labelId: string) {
             </div>
           </div>
 
+
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div class="space-y-2">
+              <Label for="difficulty">Difficulty (1–5)</Label>
+              <NativeSelect id="difficulty" v-model.number="form.difficulty" :disabled="loading">
+                <option :value="0">Not assessed</option>
+                <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+              </NativeSelect>
+            </div>
+            <div class="space-y-2">
+              <Label for="effort">Effort (1–5)</Label>
+              <NativeSelect id="effort" v-model.number="form.effort" :disabled="loading">
+                <option :value="0">Not assessed</option>
+                <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+              </NativeSelect>
+            </div>
+            <div class="space-y-2">
+              <Label>Complexity score</Label>
+              <p class="flex h-9 items-center text-sm">
+                <span
+                  v-if="estScore > 0"
+                  class="rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums"
+                  :style="{ color: estBand?.color, backgroundColor: estBand?.color + '1a' }"
+                >
+                  {{ estScore }} · {{ estBand?.label }}
+                </span>
+                <span v-else class="text-muted-foreground">—</span>
+              </p>
+            </div>
+          </div>
           <div class="space-y-2">
             <Label>
               Originators / Requesters <span class="text-destructive">*</span>

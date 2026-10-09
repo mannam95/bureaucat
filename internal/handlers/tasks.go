@@ -103,18 +103,23 @@ func NewTaskHandler(s store.Querier, pool *pgxpool.Pool, filterRunner *store.Fil
 
 // TaskResponse represents a task in API responses.
 type TaskResponse struct {
-	ID               uuid.UUID  `json:"id"`
-	ProjectKey       string     `json:"project_key"`
-	TaskNumber       int        `json:"task_number"`
-	TaskID           string     `json:"task_id"` // e.g., "DEVOP-123"
-	Title            string     `json:"title"`
-	Description      *string    `json:"description,omitempty"`
-	StateID          uuid.UUID  `json:"state_id"`
-	StateName        string     `json:"state_name"`
-	StateType        string     `json:"state_type"`
-	StateColor       string     `json:"state_color"`
-	Priority         int        `json:"priority"`
-	PriorityRating   int        `json:"priority_rating"`
+	ID             uuid.UUID `json:"id"`
+	ProjectKey     string    `json:"project_key"`
+	TaskNumber     int       `json:"task_number"`
+	TaskID         string    `json:"task_id"` // e.g., "DEVOP-123"
+	Title          string    `json:"title"`
+	Description    *string   `json:"description,omitempty"`
+	StateID        uuid.UUID `json:"state_id"`
+	StateName      string    `json:"state_name"`
+	StateType      string    `json:"state_type"`
+	StateColor     string    `json:"state_color"`
+	Priority       int       `json:"priority"`
+	PriorityRating int       `json:"priority_rating"`
+	// DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).
+	// All 0 while not assessed; the score is computed on read, never stored.
+	Difficulty       int        `json:"difficulty"`
+	Effort           int        `json:"effort"`
+	ComplexityScore  int        `json:"complexity_score"`
 	StartDate        *time.Time `json:"start_date,omitempty"`
 	DueDate          *time.Time `json:"due_date,omitempty"`
 	CreatedBy        uuid.UUID  `json:"created_by"`
@@ -236,20 +241,36 @@ type TaskLabelInfo struct {
 	Color string    `json:"color"`
 }
 
+// complexityScore is Difficulty x Effort when both are assessed, else 0.
+func complexityScore(difficulty, effort int32) int {
+	if difficulty > 0 && effort > 0 {
+		return int(difficulty * effort)
+	}
+	return 0
+}
+
+// estimationInRange validates a 0-5 estimation input (nil = leave unchanged).
+func estimationInRange(v *int) bool {
+	return v == nil || (*v >= 0 && *v <= 5)
+}
+
 // CreateTaskRequest represents the request to create a task.
 type CreateTaskRequest struct {
-	Title          string     `json:"title"`
-	Description    *string    `json:"description"`
-	StateID        *string    `json:"state_id"`
-	Priority       *int       `json:"priority"`
-	PriorityRating *int       `json:"priority_rating"`
-	StartDate      *time.Time `json:"start_date"`
-	DueDate        *time.Time `json:"due_date"`
-	Assignees      []string   `json:"assignees"`
-	Labels         []string   `json:"labels"`
-	FigmaLink      *string    `json:"figma_link"`
-	Branch         *string    `json:"branch"`
-	PullRequest    *string    `json:"pull_request"`
+	Title          string  `json:"title"`
+	Description    *string `json:"description"`
+	StateID        *string `json:"state_id"`
+	Priority       *int    `json:"priority"`
+	PriorityRating *int    `json:"priority_rating"`
+	// DEV estimation inputs, 1-5 each (0 = not assessed).
+	Difficulty  *int       `json:"difficulty"`
+	Effort      *int       `json:"effort"`
+	StartDate   *time.Time `json:"start_date"`
+	DueDate     *time.Time `json:"due_date"`
+	Assignees   []string   `json:"assignees"`
+	Labels      []string   `json:"labels"`
+	FigmaLink   *string    `json:"figma_link"`
+	Branch      *string    `json:"branch"`
+	PullRequest *string    `json:"pull_request"`
 	// Originators/Requesters (user ids). Optional over the wire — defaults to the
 	// creator when empty — so there is always at least one.
 	Originators []string `json:"originators"`
@@ -263,13 +284,16 @@ type CreateTaskRequest struct {
 
 // UpdateTaskRequest represents the request to update a task.
 type UpdateTaskRequest struct {
-	Title          *string      `json:"title"`
-	Description    *string      `json:"description"`
-	StateID        *string      `json:"state_id"`
-	Priority       *int         `json:"priority"`
-	PriorityRating *int         `json:"priority_rating"`
-	StartDate      NullableTime `json:"start_date"`
-	DueDate        NullableTime `json:"due_date"`
+	Title          *string `json:"title"`
+	Description    *string `json:"description"`
+	StateID        *string `json:"state_id"`
+	Priority       *int    `json:"priority"`
+	PriorityRating *int    `json:"priority_rating"`
+	// DEV estimation inputs, 1-5 each (0 = not assessed).
+	Difficulty *int         `json:"difficulty"`
+	Effort     *int         `json:"effort"`
+	StartDate  NullableTime `json:"start_date"`
+	DueDate    NullableTime `json:"due_date"`
 	// Custom fields. Omitted (nil) means "leave unchanged"; send an empty
 	// string to clear one.
 	FigmaLink   *string `json:"figma_link"`
@@ -379,6 +403,9 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 			StateColor:       textToString(t.StateColor, "#6B7280"),
 			Priority:         int(t.Priority),
 			PriorityRating:   int(t.PriorityRating),
+			Difficulty:       int(t.Difficulty),
+			Effort:           int(t.Effort),
+			ComplexityScore:  complexityScore(t.Difficulty, t.Effort),
 			StartDate:        timestamptzToTimePtr(t.StartDate),
 			DueDate:          timestamptzToTimePtr(t.DueDate),
 			CreatedBy:        t.CreatedBy,
@@ -591,6 +618,9 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
 		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
 	}
+	if !estimationInRange(req.Difficulty) || !estimationInRange(req.Effort) {
+		return echo.NewHTTPError(http.StatusBadRequest, "difficulty and effort must be between 0 and 5")
+	}
 
 	task, err := h.store.CreateTask(ctx, store.CreateTaskParams{
 		ProjectID:      projectID,
@@ -600,6 +630,8 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StateID:        stateID,
 		Priority:       priority,
 		PriorityRating: intToPgtypeInt4(req.PriorityRating),
+		Difficulty:     intToPgtypeInt4(req.Difficulty),
+		Effort:         intToPgtypeInt4(req.Effort),
 		CreatedBy:      userID,
 		StartDate:      timePtrToTimestamptz(req.StartDate),
 		DueDate:        timePtrToTimestamptz(req.DueDate),
@@ -876,6 +908,9 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
 		PriorityRating:   int(fullTask.PriorityRating),
+		Difficulty:       int(fullTask.Difficulty),
+		Effort:           int(fullTask.Effort),
+		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
@@ -962,6 +997,9 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		StateColor:       textToString(task.StateColor, "#6B7280"),
 		Priority:         int(task.Priority),
 		PriorityRating:   int(task.PriorityRating),
+		Difficulty:       int(task.Difficulty),
+		Effort:           int(task.Effort),
+		ComplexityScore:  complexityScore(task.Difficulty, task.Effort),
 		StartDate:        timestamptzToTimePtr(task.StartDate),
 		DueDate:          timestamptzToTimePtr(task.DueDate),
 		CreatedBy:        task.CreatedBy,
@@ -1104,6 +1142,9 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	if req.PriorityRating != nil && (*req.PriorityRating < 0 || *req.PriorityRating > 10) {
 		return echo.NewHTTPError(http.StatusBadRequest, "priority_rating must be between 0 and 10")
 	}
+	if !estimationInRange(req.Difficulty) || !estimationInRange(req.Effort) {
+		return echo.NewHTTPError(http.StatusBadRequest, "difficulty and effort must be between 0 and 5")
+	}
 
 	task, err := h.store.UpdateTask(ctx, store.UpdateTaskParams{
 		ID:              oldTask.ID,
@@ -1112,6 +1153,8 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StateID:         stateID,
 		Priority:        intToPgtypeInt4(req.Priority),
 		PriorityRating:  intToPgtypeInt4(req.PriorityRating),
+		Difficulty:      intToPgtypeInt4(req.Difficulty),
+		Effort:          intToPgtypeInt4(req.Effort),
 		UpdateStartDate: req.StartDate.Set,
 		StartDate:       startDateArg,
 		UpdateDueDate:   req.DueDate.Set,
@@ -1306,6 +1349,9 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
 		PriorityRating:   int(fullTask.PriorityRating),
+		Difficulty:       int(fullTask.Difficulty),
+		Effort:           int(fullTask.Effort),
+		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,
@@ -2887,6 +2933,9 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
 		Priority:         int(fullTask.Priority),
 		PriorityRating:   int(fullTask.PriorityRating),
+		Difficulty:       int(fullTask.Difficulty),
+		Effort:           int(fullTask.Effort),
+		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
 		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
 		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
 		CreatedBy:        fullTask.CreatedBy,

@@ -523,6 +523,8 @@ type Task struct {
 	Branch         pgtype.Text        `json:"branch"`
 	PullRequest    pgtype.Text        `json:"pull_request"`
 	PriorityRating int32              `json:"priority_rating"`
+	Difficulty     int32              `json:"difficulty"`
+	Effort         int32              `json:"effort"`
 }
 
 type TaskAssignee struct {

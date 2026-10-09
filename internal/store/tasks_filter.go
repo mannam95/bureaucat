@@ -67,9 +67,11 @@ var validSortKeys = map[string]string{
 	"updated_at":      "t.updated_at",
 	"priority":        "t.priority",
 	"priority_rating": "t.priority_rating",
-	"due_date":        "t.due_date",
-	"start_date":      "t.start_date",
-	"title":           "t.title",
+	// Difficulty x Effort complexity score; unassessed tasks score 0.
+	"complexity": "(t.difficulty * t.effort)",
+	"due_date":   "t.due_date",
+	"start_date": "t.start_date",
+	"title":      "t.title",
 	// Board order of the task's state (the states join is always present).
 	"state": "ps.position",
 }
@@ -232,6 +234,10 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"updated_at", "before"}:  dateOp("t.updated_at", "before"),
 	{"updated_at", "after"}:   dateOp("t.updated_at", "after"),
 	{"updated_at", "between"}: dateBetween("t.updated_at"),
+
+	// ---- complexity score (difficulty x effort, 0 = not assessed) ----
+	{"complexity", "gte"}: complexityCompare(">="),
+	{"complexity", "lte"}: complexityCompare("<="),
 
 	// ---- comment_count ----
 	{"comment_count", "eq"}:  commentCount("="),
@@ -747,6 +753,21 @@ func nullCheck(col string, isNull bool) predicateHandler {
 	}
 }
 
+// -------- complexity handler --------
+
+// complexityCompare filters on the computed score. Unassessed tasks (either
+// factor 0) score 0 and so never match a "gte 1" style filter — intended.
+func complexityCompare(op string) predicateHandler {
+	return func(a *argBuffer, _ uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		n, err := decodeInt(v)
+		if err != nil {
+			return "", err
+		}
+		p := a.push(int32(n))
+		return "(t.difficulty * t.effort) " + op + " " + p, nil
+	}
+}
+
 // -------- comment_count handler --------
 
 func commentCount(op string) predicateHandler {
@@ -775,6 +796,8 @@ type FilteredTaskRow struct {
 	StateID          uuid.UUID
 	Priority         int32
 	PriorityRating   int32
+	Difficulty       int32
+	Effort           int32
 	CreatedBy        uuid.UUID
 	StartDate        pgtype.Timestamptz
 	DueDate          pgtype.Timestamptz
@@ -815,7 +838,7 @@ func NewFilterRunner(pool *pgxpool.Pool) *FilterRunner {
 	return &FilterRunner{pool: pool}
 }
 
-const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
+const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating, t.difficulty, t.effort, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
@@ -888,7 +911,7 @@ func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]Fil
 		var i FilteredTaskRow
 		if err := rows.Scan(
 			&i.ID, &i.ProjectID, &i.TaskNumber, &i.Title, &i.Description,
-			&i.StateID, &i.Priority, &i.PriorityRating, &i.CreatedBy, &i.StartDate, &i.DueDate,
+			&i.StateID, &i.Priority, &i.PriorityRating, &i.Difficulty, &i.Effort, &i.CreatedBy, &i.StartDate, &i.DueDate,
 			&i.CreatedAt, &i.UpdatedAt, &i.DeletedAt, &i.ProjectKey,
 			&i.StateName, &i.StateType, &i.StateColor,
 			&i.CreatorUsername, &i.CreatorFirstName, &i.CreatorLastName, &i.CreatorAvatarUrl,

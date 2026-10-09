@@ -18,6 +18,7 @@ const emit = defineEmits<{
 const WORK_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "state", label: "State" },
   { key: "priority_rating", label: "Priority rating" },
+  { key: "complexity", label: "Complexity score" },
   { key: "title", label: "Title" },
 ];
 const DATE_OPTIONS: { key: SortKey; label: string }[] = [

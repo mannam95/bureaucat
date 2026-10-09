@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
+import { complexityBand } from "~/utils/complexity";
 import type { Task, ProjectState } from "~/types";
 
 const props = withDefaults(
@@ -188,6 +189,17 @@ const assignedTo = computed<Person[]>(() =>
       <!-- Col 4: Priority rating (the coarse priority label is deferred for now) -->
       <div class="flex items-center justify-end">
         <PriorityRating :model-value="task.priority_rating ?? 0" />
+        <span
+          v-if="(task.complexity_score ?? 0) > 0"
+          class="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold tabular-nums"
+          :style="{
+            color: complexityBand(task.complexity_score!)?.color,
+            backgroundColor: complexityBand(task.complexity_score!)?.color + '1a',
+          }"
+          :title="`Complexity ${task.complexity_score} (${complexityBand(task.complexity_score!)?.label}) — difficulty ${task.difficulty} x effort ${task.effort}`"
+        >
+          C{{ task.complexity_score }}
+        </span>
       </div>
 
       <!-- Col 5: date column (follows the active date sort) -->

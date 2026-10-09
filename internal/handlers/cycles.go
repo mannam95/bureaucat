@@ -44,9 +44,9 @@ type CycleResponse struct {
 	TotalTasks     int       `json:"total_tasks"`
 	CompletedTasks int       `json:"completed_tasks"`
 	// Archived tasks count as complete in progress, shown separately.
-	ArchivedTasks  int       `json:"archived_tasks"`
-	ProjectKey     string    `json:"project_key,omitempty"`
-	ProjectName    string    `json:"project_name,omitempty"`
+	ArchivedTasks int    `json:"archived_tasks"`
+	ProjectKey    string `json:"project_key,omitempty"`
+	ProjectName   string `json:"project_name,omitempty"`
 }
 
 // CreateCycleRequest is the request body for creating a cycle.

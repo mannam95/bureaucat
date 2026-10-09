@@ -19,6 +19,7 @@ import {
   Calendar as CalendarIcon,
   MessageSquare,
   Clock,
+  Gauge,
 } from "lucide-vue-next";
 import type { FilterField, FilterOp } from "~/types";
 
@@ -214,6 +215,15 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "before", label: "is before", valueKind: "date" },
       { op: "after", label: "is after", valueKind: "date" },
       { op: "between", label: "is between", valueKind: "date-range" },
+    ],
+  },
+  {
+    field: "complexity",
+    label: "Complexity score",
+    icon: Gauge,
+    ops: [
+      { op: "gte", label: "is at least", valueKind: "number" },
+      { op: "lte", label: "is at most", valueKind: "number" },
     ],
   },
   {

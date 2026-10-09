@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
+import { complexityBand } from "~/utils/complexity";
 import { marked } from "marked";
 import { CalendarDate, type DateValue } from "@internationalized/date";
 import { PRIORITY_LABELS } from "~/types";
@@ -245,6 +246,19 @@ async function handlePriorityChange(priority: number) {
     await listActivity(projectKey.value, taskNum.value);
   } else {
     toast.error(result.error || "Failed to update priority");
+  }
+}
+
+async function handleEstimationChange(field: "difficulty" | "effort", raw: string | number) {
+  const value = Number(raw);
+  if ((currentTask.value?.[field] ?? 0) === value) return;
+  updating.value = true;
+  const result = await updateTask(projectKey.value, taskNum.value, { [field]: value });
+  updating.value = false;
+  if (result.success) {
+    await listActivity(projectKey.value, taskNum.value);
+  } else {
+    toast.error(result.error || "Failed to update estimation");
   }
 }
 
@@ -1041,6 +1055,52 @@ onMounted(() => {
                     :disabled="!isMember || updating"
                     @update:model-value="handleRatingChange"
                   />
+                </div>
+
+                <!-- Complexity estimation: Difficulty (1-5) x Effort (1-5) -->
+                <div class="space-y-2 py-3">
+                  <div class="flex items-center justify-between">
+                    <p class="text-xs text-muted-foreground">Complexity</p>
+                    <span
+                      v-if="(currentTask.complexity_score ?? 0) > 0"
+                      class="rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums"
+                      :style="{
+                        color: complexityBand(currentTask.complexity_score!)?.color,
+                        backgroundColor: complexityBand(currentTask.complexity_score!)?.color + '1a',
+                      }"
+                      :title="`Difficulty ${currentTask.difficulty} × Effort ${currentTask.effort}`"
+                    >
+                      {{ currentTask.complexity_score }} · {{ complexityBand(currentTask.complexity_score!)?.label }}
+                    </span>
+                    <span v-else class="text-xs text-muted-foreground">Not assessed</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div class="flex-1 space-y-1">
+                      <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Difficulty</p>
+                      <NativeSelect
+                        :model-value="currentTask.difficulty ?? 0"
+                        :disabled="!isMember || updating"
+                        class="h-8 text-xs"
+                        @update:model-value="(v) => handleEstimationChange('difficulty', v as string)"
+                      >
+                        <option :value="0">–</option>
+                        <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+                      </NativeSelect>
+                    </div>
+                    <span class="pt-4 text-xs text-muted-foreground">×</span>
+                    <div class="flex-1 space-y-1">
+                      <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Effort</p>
+                      <NativeSelect
+                        :model-value="currentTask.effort ?? 0"
+                        :disabled="!isMember || updating"
+                        class="h-8 text-xs"
+                        @update:model-value="(v) => handleEstimationChange('effort', v as string)"
+                      >
+                        <option :value="0">–</option>
+                        <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+                      </NativeSelect>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Cycle -->

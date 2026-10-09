@@ -12,6 +12,10 @@ export interface Task {
   priority: number;
   /** Fine-grained 1-10 star rating; 0 = unset. Separate from `priority`. */
   priority_rating?: number;
+  /** DEV estimation: 1-5 each, 0 = not assessed. Score = difficulty x effort. */
+  difficulty?: number;
+  effort?: number;
+  complexity_score?: number;
   start_date?: string;
   due_date?: string;
   created_by: string;
@@ -159,6 +163,9 @@ export interface CreateTaskRequest {
   description?: string;
   state_id?: string;
   priority?: number;
+  /** DEV estimation inputs, 1-5 each (0 = not assessed). */
+  difficulty?: number;
+  effort?: number;
   start_date?: string;
   due_date?: string;
   assignees?: string[];
@@ -182,6 +189,9 @@ export interface UpdateTaskRequest {
   state_id?: string;
   priority?: number;
   priority_rating?: number;
+  /** DEV estimation inputs, 1-5 each (0 = not assessed). */
+  difficulty?: number;
+  effort?: number;
   // Use `null` to clear; omit to leave unchanged.
   start_date?: string | null;
   due_date?: string | null;
@@ -220,6 +230,7 @@ export type FilterField =
   | "created_by"
   | "labels"
   | "cycle"
+  | "complexity"
   | "start_date"
   | "due_date"
   | "created_at"
@@ -301,6 +312,7 @@ export type SortKey =
   | "updated_at"
   | "priority"
   | "priority_rating"
+  | "complexity"
   | "due_date"
   | "start_date"
   | "title"
