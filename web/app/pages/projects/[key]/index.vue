@@ -43,7 +43,31 @@ const activeTab = computed({
   },
   set: (value: string) => {
     router.replace({
-      query: { ...route.query, tab: value === "tasks" ? undefined : value },
+      query: {
+        ...route.query,
+        tab: value === "tasks" ? undefined : value,
+        // The settings section param only makes sense on the settings tab.
+        section: value === "settings" ? route.query.section : undefined,
+      },
+    });
+  },
+});
+
+// Which settings section is open (mock "Side navigation"): one section at a
+// time, deep-linkable via ?section=, defaulting to General.
+const settingsSections = [
+  "general", "workspace", "availability",
+  "states", "labels", "areas", "priorities", "templates", "danger",
+] as const;
+type SettingsSection = (typeof settingsSections)[number];
+const settingsSection = computed({
+  get: () => {
+    const s = route.query.section as string;
+    return settingsSections.includes(s as SettingsSection) ? (s as SettingsSection) : "general";
+  },
+  set: (value: string) => {
+    router.replace({
+      query: { ...route.query, section: value === "general" ? undefined : value },
     });
   },
 });
@@ -1161,61 +1185,68 @@ onMounted(async () => {
             </TabsContent>
 
             <!-- Settings Tab -->
-            <TabsContent v-if="isAdmin" value="settings" class="mt-6 space-y-8">
-              <ProjectSettings
-                :project="currentProject"
-                :is-admin="isAdmin"
-                @refresh="handleSettingsRefresh"
-              />
-
-              <Separator />
-
-              <StatesManager
-                :states="states"
-                :project-key="projectKey"
-                :is-admin="isAdmin"
-                @refresh="listStates(projectKey)"
-              />
-
-              <Separator />
-
-              <LabelsManager
-                :labels="labels"
-                :project-key="projectKey"
-                :is-admin="isAdmin"
-                @refresh="listLabels(projectKey)"
-              />
-
-              <Separator />
-
-              <AreasManager
-                :areas="projectAreas"
-                :project-key="projectKey"
-                :is-admin="isAdmin"
-                @refresh="listAreas(projectKey)"
-              />
-
-              <Separator />
-
-              <PrioritiesManager
-                :priorities="projectPriorities"
-                :project-key="projectKey"
-                :is-admin="isAdmin"
-                @refresh="listPriorities(projectKey)"
-              />
-
-              <Separator />
-
-              <TemplatesManager
-                :templates="templates"
-                :project-key="projectKey"
-                :is-admin="isAdmin"
-                @refresh="listTemplates(projectKey)"
-              />
-
-              <Separator />
-
-              <ProjectDangerZone :project="currentProject" />
+            <TabsContent v-if="isAdmin" value="settings" class="mt-6">
+              <div class="flex flex-col gap-6 md:flex-row md:gap-10">
+                <SettingsNav
+                  v-model="settingsSection"
+                  class="md:w-52 md:shrink-0"
+                  :counts="{
+                    states: states.length,
+                    labels: labels.length,
+                    areas: projectAreas.length,
+                    priorities: projectPriorities.length,
+                    templates: templates.length,
+                  }"
+                />
+                <div class="min-w-0 flex-1">
+                  <ProjectSettings
+                    v-if="settingsSection === 'general' || settingsSection === 'workspace' || settingsSection === 'availability'"
+                    :project="currentProject"
+                    :is-admin="isAdmin"
+                    :section="settingsSection"
+                    @refresh="handleSettingsRefresh"
+                  />
+                  <StatesManager
+                    v-else-if="settingsSection === 'states'"
+                    :states="states"
+                    :project-key="projectKey"
+                    :is-admin="isAdmin"
+                    @refresh="listStates(projectKey)"
+                  />
+                  <LabelsManager
+                    v-else-if="settingsSection === 'labels'"
+                    :labels="labels"
+                    :project-key="projectKey"
+                    :is-admin="isAdmin"
+                    @refresh="listLabels(projectKey)"
+                  />
+                  <AreasManager
+                    v-else-if="settingsSection === 'areas'"
+                    :areas="projectAreas"
+                    :project-key="projectKey"
+                    :is-admin="isAdmin"
+                    @refresh="listAreas(projectKey)"
+                  />
+                  <PrioritiesManager
+                    v-else-if="settingsSection === 'priorities'"
+                    :priorities="projectPriorities"
+                    :project-key="projectKey"
+                    :is-admin="isAdmin"
+                    @refresh="listPriorities(projectKey)"
+                  />
+                  <TemplatesManager
+                    v-else-if="settingsSection === 'templates'"
+                    :templates="templates"
+                    :project-key="projectKey"
+                    :is-admin="isAdmin"
+                    @refresh="listTemplates(projectKey)"
+                  />
+                  <ProjectDangerZone
+                    v-else-if="settingsSection === 'danger'"
+                    :project="currentProject"
+                  />
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         </template>

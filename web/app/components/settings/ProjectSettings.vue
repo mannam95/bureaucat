@@ -6,6 +6,8 @@ import type { Project, MoveImpactMember } from "~/types";
 const props = defineProps<{
   project: Project;
   isAdmin: boolean;
+  /** Render just one of the three sections; omit for all (legacy stacked view). */
+  section?: "general" | "workspace" | "availability";
 }>();
 
 const emit = defineEmits<{
@@ -166,7 +168,7 @@ const hasChanges = computed(() => {
 <template>
   <div class="space-y-8">
     <!-- General settings -->
-    <div class="space-y-4">
+    <div v-if="!section || section === 'general'" class="space-y-4">
       <div>
         <h3 class="font-semibold">General</h3>
         <p class="text-sm text-muted-foreground">
@@ -221,7 +223,7 @@ const hasChanges = computed(() => {
     </div>
 
     <!-- Workspace -->
-    <div class="space-y-4">
+    <div v-if="!section || section === 'workspace'" class="space-y-4">
       <div>
         <h3 class="font-semibold">Workspace</h3>
         <p class="text-sm text-muted-foreground">
@@ -342,7 +344,7 @@ const hasChanges = computed(() => {
     </div>
 
     <!-- Availability -->
-    <div v-if="isAdmin" class="space-y-4">
+    <div v-if="isAdmin && (!section || section === 'availability')" class="space-y-4">
       <div>
         <h3 class="font-semibold">Availability</h3>
         <p class="text-sm text-muted-foreground">
