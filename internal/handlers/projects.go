@@ -1087,9 +1087,12 @@ type StateResponse struct {
 	StateType string    `json:"state_type"`
 	Name      string    `json:"name"`
 	Color     string    `json:"color"`
-	Position  int       `json:"position"`
-	IsDefault bool      `json:"is_default"`
-	CreatedAt time.Time `json:"created_at"`
+	// Description explains when the state applies (e.g. why work sits in an
+	// "On hold" state); shown as a tooltip wherever the state appears.
+	Description *string   `json:"description,omitempty"`
+	Position    int       `json:"position"`
+	IsDefault   bool      `json:"is_default"`
+	CreatedAt   time.Time `json:"created_at"`
 	// TaskCount is how many (non-deleted) tasks sit in this state. Only filled
 	// on the list endpoint, where the settings UI uses it to warn what a state
 	// edit touches.
@@ -1098,17 +1101,19 @@ type StateResponse struct {
 
 // CreateStateRequest represents the request to create a state.
 type CreateStateRequest struct {
-	StateType string `json:"state_type"`
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	Position  *int   `json:"position"`
+	StateType   string  `json:"state_type"`
+	Name        string  `json:"name"`
+	Color       string  `json:"color"`
+	Description *string `json:"description"`
+	Position    *int    `json:"position"`
 }
 
 // UpdateStateRequest represents the request to update a state.
 type UpdateStateRequest struct {
-	Name     *string `json:"name"`
-	Color    *string `json:"color"`
-	Position *int    `json:"position"`
+	Name        *string `json:"name"`
+	Color       *string `json:"color"`
+	Description *string `json:"description"`
+	Position    *int    `json:"position"`
 	// StateType re-categorises the state (and so every task in it) across
 	// progress metrics, grouping and filters. Tasks reference states by id, so
 	// no task data changes — the category of the state row does.
@@ -1143,14 +1148,15 @@ func (h *ProjectHandler) ListStates(c *echo.Context) error {
 	stateResponses := make([]StateResponse, len(states))
 	for i, s := range states {
 		stateResponses[i] = StateResponse{
-			ID:        s.ID,
-			StateType: s.StateType,
-			Name:      s.Name,
-			Color:     textToString(s.Color, "#6B7280"),
-			Position:  int(s.Position),
-			IsDefault: s.IsDefault,
-			CreatedAt: s.CreatedAt.Time,
-			TaskCount: int(s.TaskCount),
+			ID:          s.ID,
+			StateType:   s.StateType,
+			Name:        s.Name,
+			Color:       textToString(s.Color, "#6B7280"),
+			Description: textToStringPtr(s.Description),
+			Position:    int(s.Position),
+			IsDefault:   s.IsDefault,
+			CreatedAt:   s.CreatedAt.Time,
+			TaskCount:   int(s.TaskCount),
 		}
 	}
 
@@ -1205,25 +1211,27 @@ func (h *ProjectHandler) CreateState(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	state, err := h.store.CreateProjectState(ctx, store.CreateProjectStateParams{
-		ProjectID: projectID,
-		StateType: req.StateType,
-		Name:      req.Name,
-		Color:     pgtype.Text{String: req.Color, Valid: true},
-		Position:  position,
-		IsDefault: false,
+		ProjectID:   projectID,
+		StateType:   req.StateType,
+		Name:        req.Name,
+		Color:       pgtype.Text{String: req.Color, Valid: true},
+		Position:    position,
+		IsDefault:   false,
+		Description: stringToPgtypeText(req.Description),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create state")
 	}
 
 	return c.JSON(http.StatusCreated, StateResponse{
-		ID:        state.ID,
-		StateType: state.StateType,
-		Name:      state.Name,
-		Color:     textToString(state.Color, "#6B7280"),
-		Position:  int(state.Position),
-		IsDefault: state.IsDefault,
-		CreatedAt: state.CreatedAt.Time,
+		ID:          state.ID,
+		StateType:   state.StateType,
+		Name:        state.Name,
+		Color:       textToString(state.Color, "#6B7280"),
+		Description: textToStringPtr(state.Description),
+		Position:    int(state.Position),
+		IsDefault:   state.IsDefault,
+		CreatedAt:   state.CreatedAt.Time,
 	})
 }
 
@@ -1266,11 +1274,12 @@ func (h *ProjectHandler) UpdateState(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	state, err := h.store.UpdateProjectState(ctx, store.UpdateProjectStateParams{
-		ID:        stateID,
-		Name:      stringToPgtypeText(req.Name),
-		Color:     stringToPgtypeText(req.Color),
-		Position:  intToPgtypeInt4(req.Position),
-		StateType: stateType,
+		ID:          stateID,
+		Name:        stringToPgtypeText(req.Name),
+		Color:       stringToPgtypeText(req.Color),
+		Position:    intToPgtypeInt4(req.Position),
+		Description: stringToPgtypeText(req.Description),
+		StateType:   stateType,
 	})
 	if err != nil {
 		// State names are unique per project; surface a rename collision clearly.
@@ -1281,13 +1290,14 @@ func (h *ProjectHandler) UpdateState(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, StateResponse{
-		ID:        state.ID,
-		StateType: state.StateType,
-		Name:      state.Name,
-		Color:     textToString(state.Color, "#6B7280"),
-		Position:  int(state.Position),
-		IsDefault: state.IsDefault,
-		CreatedAt: state.CreatedAt.Time,
+		ID:          state.ID,
+		StateType:   state.StateType,
+		Name:        state.Name,
+		Color:       textToString(state.Color, "#6B7280"),
+		Description: textToStringPtr(state.Description),
+		Position:    int(state.Position),
+		IsDefault:   state.IsDefault,
+		CreatedAt:   state.CreatedAt.Time,
 	})
 }
 
@@ -1336,13 +1346,14 @@ func (h *ProjectHandler) SetDefaultState(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, StateResponse{
-		ID:        state.ID,
-		StateType: state.StateType,
-		Name:      state.Name,
-		Color:     textToString(state.Color, "#6B7280"),
-		Position:  int(state.Position),
-		IsDefault: true,
-		CreatedAt: state.CreatedAt.Time,
+		ID:          state.ID,
+		StateType:   state.StateType,
+		Name:        state.Name,
+		Color:       textToString(state.Color, "#6B7280"),
+		Description: textToStringPtr(state.Description),
+		Position:    int(state.Position),
+		IsDefault:   true,
+		CreatedAt:   state.CreatedAt.Time,
 	})
 }
 

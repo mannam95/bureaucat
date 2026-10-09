@@ -61,6 +61,7 @@ const groupedStates = computed(() => {
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
       <Button
+        :title="currentState?.description || undefined"
         :variant="compact ? 'ghost' : 'outline'"
         :class="[
           compact ? 'h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent' : 'justify-between',
@@ -88,6 +89,7 @@ const groupedStates = computed(() => {
           <DropdownMenuItem
             v-for="state in states"
             :key="state.id"
+            :title="state.description || undefined"
             @click="emit('update:modelValue', state.id)"
           >
             <component

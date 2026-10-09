@@ -5,6 +5,8 @@ const props = withDefaults(
   defineProps<{
     columnId: string;
     label: string;
+    /** State description, shown as a tooltip on the column header. */
+    description?: string;
     color: string;
     tasks: Task[];
     projectKey: string;
@@ -74,7 +76,7 @@ function handleDragLeave() {
   >
     <div class="flex items-center gap-2 border-b px-3 py-2.5">
       <div class="size-2.5 rounded-full" :style="{ backgroundColor: color }" />
-      <h3 class="truncate text-sm font-medium">{{ label }}</h3>
+      <h3 class="truncate text-sm font-medium" :title="description || undefined">{{ label }}</h3>
       <span class="ml-auto text-xs text-muted-foreground">{{ tasks.length }}</span>
     </div>
     <div class="flex flex-1 flex-col gap-2 p-2">

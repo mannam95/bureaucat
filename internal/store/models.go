@@ -458,14 +458,15 @@ type ProjectOrdering struct {
 }
 
 type ProjectState struct {
-	ID        uuid.UUID          `json:"id"`
-	ProjectID uuid.UUID          `json:"project_id"`
-	StateType string             `json:"state_type"`
-	Name      string             `json:"name"`
-	Color     pgtype.Text        `json:"color"`
-	Position  int32              `json:"position"`
-	IsDefault bool               `json:"is_default"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	StateType   string             `json:"state_type"`
+	Name        string             `json:"name"`
+	Color       pgtype.Text        `json:"color"`
+	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Description pgtype.Text        `json:"description"`
 }
 
 type ProjectView struct {

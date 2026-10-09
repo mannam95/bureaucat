@@ -496,18 +496,19 @@ func (q *Queries) CreateProjectLabel(ctx context.Context, arg CreateProjectLabel
 
 const createProjectState = `-- name: CreateProjectState :one
 
-INSERT INTO project_states (project_id, state_type, name, color, position, is_default)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_id, state_type, name, color, position, is_default, created_at
+INSERT INTO project_states (project_id, state_type, name, color, position, is_default, description)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description
 `
 
 type CreateProjectStateParams struct {
-	ProjectID uuid.UUID   `json:"project_id"`
-	StateType string      `json:"state_type"`
-	Name      string      `json:"name"`
-	Color     pgtype.Text `json:"color"`
-	Position  int32       `json:"position"`
-	IsDefault bool        `json:"is_default"`
+	ProjectID   uuid.UUID   `json:"project_id"`
+	StateType   string      `json:"state_type"`
+	Name        string      `json:"name"`
+	Color       pgtype.Text `json:"color"`
+	Position    int32       `json:"position"`
+	IsDefault   bool        `json:"is_default"`
+	Description pgtype.Text `json:"description"`
 }
 
 // ==================== PROJECT STATES ====================
@@ -519,6 +520,7 @@ func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectState
 		arg.Color,
 		arg.Position,
 		arg.IsDefault,
+		arg.Description,
 	)
 	var i ProjectState
 	err := row.Scan(
@@ -530,6 +532,7 @@ func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectState
 		&i.Position,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -750,7 +753,7 @@ func (q *Queries) GetCommentByID(ctx context.Context, id uuid.UUID) (GetCommentB
 }
 
 const getDefaultProjectState = `-- name: GetDefaultProjectState :one
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE project_id = $1 AND is_default = true
 LIMIT 1
@@ -768,6 +771,7 @@ func (q *Queries) GetDefaultProjectState(ctx context.Context, projectID uuid.UUI
 		&i.Position,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -958,7 +962,7 @@ func (q *Queries) GetProjectMemberRole(ctx context.Context, arg GetProjectMember
 }
 
 const getProjectStateByID = `-- name: GetProjectStateByID :one
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE id = $1
 `
@@ -975,13 +979,14 @@ func (q *Queries) GetProjectStateByID(ctx context.Context, id uuid.UUID) (Projec
 		&i.Position,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getProjectStateByProjectAndName = `-- name: GetProjectStateByProjectAndName :one
 
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE project_id = $1 AND name = $2
 LIMIT 1
@@ -1005,6 +1010,7 @@ func (q *Queries) GetProjectStateByProjectAndName(ctx context.Context, arg GetPr
 		&i.Position,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -1887,7 +1893,7 @@ func (q *Queries) ListProjectMembersMissingFromWorkspace(ctx context.Context, ar
 }
 
 const listProjectStates = `-- name: ListProjectStates :many
-SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at,
+SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at, ps.description,
        (SELECT COUNT(*) FROM tasks t WHERE t.state_id = ps.id AND t.deleted_at IS NULL)::int AS task_count
 FROM project_states ps
 WHERE ps.project_id = $1
@@ -1895,15 +1901,16 @@ ORDER BY ps.position ASC, ps.created_at ASC
 `
 
 type ListProjectStatesRow struct {
-	ID        uuid.UUID          `json:"id"`
-	ProjectID uuid.UUID          `json:"project_id"`
-	StateType string             `json:"state_type"`
-	Name      string             `json:"name"`
-	Color     pgtype.Text        `json:"color"`
-	Position  int32              `json:"position"`
-	IsDefault bool               `json:"is_default"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	TaskCount int32              `json:"task_count"`
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	StateType   string             `json:"state_type"`
+	Name        string             `json:"name"`
+	Color       pgtype.Text        `json:"color"`
+	Position    int32              `json:"position"`
+	IsDefault   bool               `json:"is_default"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Description pgtype.Text        `json:"description"`
+	TaskCount   int32              `json:"task_count"`
 }
 
 // task_count lets the settings UI warn how many tasks a state edit touches.
@@ -1925,6 +1932,7 @@ func (q *Queries) ListProjectStates(ctx context.Context, projectID uuid.UUID) ([
 			&i.Position,
 			&i.IsDefault,
 			&i.CreatedAt,
+			&i.Description,
 			&i.TaskCount,
 		); err != nil {
 			return nil, err
@@ -3695,20 +3703,22 @@ UPDATE project_states
 SET name = COALESCE($2, name),
     color = COALESCE($3, color),
     position = COALESCE($4, position),
+    description = COALESCE($5, description),
     state_type = CASE
-                   WHEN $5::text = '' THEN state_type
-                   ELSE $5::state_type
+                   WHEN $6::text = '' THEN state_type
+                   ELSE $6::state_type
                  END
 WHERE id = $1
-RETURNING id, project_id, state_type, name, color, position, is_default, created_at
+RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description
 `
 
 type UpdateProjectStateParams struct {
-	ID        uuid.UUID   `json:"id"`
-	Name      pgtype.Text `json:"name"`
-	Color     pgtype.Text `json:"color"`
-	Position  pgtype.Int4 `json:"position"`
-	StateType string      `json:"state_type"`
+	ID          uuid.UUID   `json:"id"`
+	Name        pgtype.Text `json:"name"`
+	Color       pgtype.Text `json:"color"`
+	Position    pgtype.Int4 `json:"position"`
+	Description pgtype.Text `json:"description"`
+	StateType   string      `json:"state_type"`
 }
 
 // `state_type` is passed as plain text; when empty string, no change. Avoids
@@ -3719,6 +3729,7 @@ func (q *Queries) UpdateProjectState(ctx context.Context, arg UpdateProjectState
 		arg.Name,
 		arg.Color,
 		arg.Position,
+		arg.Description,
 		arg.StateType,
 	)
 	var i ProjectState
@@ -3731,6 +3742,7 @@ func (q *Queries) UpdateProjectState(ctx context.Context, arg UpdateProjectState
 		&i.Position,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }

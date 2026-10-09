@@ -374,7 +374,7 @@ onMounted(() => {
                     <SelectValue placeholder="Select a state" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem v-for="state in states" :key="state.id" :value="state.id">
+                    <SelectItem v-for="state in states" :key="state.id" :value="state.id" :title="state.description || undefined">
                       {{ state.name }}
                     </SelectItem>
                   </SelectContent>

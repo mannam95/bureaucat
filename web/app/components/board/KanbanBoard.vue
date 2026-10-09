@@ -6,6 +6,8 @@ import { PRIORITY_LABELS, STATE_TYPE_COLORS } from "~/types";
 interface BoardColumn {
   id: string;
   label: string;
+  // State description, shown as a tooltip on the column header.
+  description?: string;
   color: string;
   tasks: Task[];
   /** Whether cards can be dropped into this column under the current grouping. */
@@ -57,6 +59,7 @@ const columns = computed<BoardColumn[]>(() => {
         id: `state:${s.id}`,
         label: s.name,
         color: s.color || STATE_TYPE_COLORS[s.state_type] || "#6B7280",
+        description: s.description,
         tasks: props.tasks.filter((task) => task.state_id === s.id),
       }));
 
@@ -340,6 +343,7 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
         :column-id="column.id"
         :label="column.label"
         :color="column.color"
+        :description="column.description"
         :tasks="column.tasks"
         :project-key="projectKey"
         :is-member="isMember"

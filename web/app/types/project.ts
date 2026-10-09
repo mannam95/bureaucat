@@ -49,6 +49,8 @@ export interface ProjectState {
   state_type: StateType;
   name: string;
   color: string;
+  /** Explains when the state applies; shown as a tooltip wherever it appears. */
+  description?: string;
   position: number;
   is_default: boolean;
   created_at: string;
@@ -94,12 +96,14 @@ export interface CreateStateRequest {
   state_type: StateType;
   name: string;
   color: string;
+  description?: string;
   position?: number;
 }
 
 export interface UpdateStateRequest {
   name?: string;
   color?: string;
+  description?: string;
   position?: number;
   /** Re-categorises the state (and every task in it) across metrics and filters. */
   state_type?: StateType;

@@ -25,6 +25,7 @@ const newState = ref({
   name: "",
   state_type: "unstarted" as StateType,
   color: "#3B82F6",
+  description: "",
 });
 
 const stateTypes: { value: StateType; label: string }[] = [
@@ -60,12 +61,13 @@ async function handleCreate() {
     name: newState.value.name,
     state_type: newState.value.state_type,
     color: newState.value.color,
+    description: newState.value.description.trim() || undefined,
   });
   loading.value = false;
 
   if (result.success) {
     toast.success("State created");
-    newState.value = { name: "", state_type: "unstarted", color: "#3B82F6" };
+    newState.value = { name: "", state_type: "unstarted", color: "#3B82F6", description: "" };
     showCreateForm.value = false;
     emit("refresh");
   } else {
@@ -80,6 +82,7 @@ const editForm = ref({
   name: "",
   state_type: "unstarted" as StateType,
   color: "#3B82F6",
+  description: "",
 });
 
 const editingState = computed(
@@ -99,6 +102,7 @@ function openEdit(state: ProjectState) {
     name: state.name,
     state_type: state.state_type,
     color: state.color || "#6B7280",
+    description: state.description ?? "",
   };
 }
 
@@ -111,9 +115,10 @@ async function handleSaveEdit() {
   if (!s || !editForm.value.name.trim()) return;
 
   // Send only what changed.
-  const updates: { name?: string; color?: string; state_type?: StateType } = {};
+  const updates: { name?: string; color?: string; description?: string; state_type?: StateType } = {};
   if (editForm.value.name.trim() !== s.name) updates.name = editForm.value.name.trim();
   if (editForm.value.color !== (s.color || "#6B7280")) updates.color = editForm.value.color;
+  if (editForm.value.description.trim() !== (s.description ?? "")) updates.description = editForm.value.description.trim();
   if (editForm.value.state_type !== s.state_type) updates.state_type = editForm.value.state_type;
   if (Object.keys(updates).length === 0) {
     editingId.value = null;
@@ -226,6 +231,15 @@ async function handleDelete(state: ProjectState) {
               </div>
             </div>
           </div>
+          <div class="space-y-2">
+            <Label>Description <span class="text-xs text-muted-foreground">(optional — shown on hover wherever the state appears)</span></Label>
+            <Textarea
+              v-model="newState.description"
+              rows="2"
+              placeholder="When does this state apply? E.g. only picked up again on serious purchase interest."
+              :disabled="loading"
+            />
+          </div>
           <div class="flex justify-end gap-2">
             <Button
               type="button"
@@ -295,6 +309,10 @@ async function handleDelete(state: ProjectState) {
                 </div>
               </div>
             </div>
+            <div class="space-y-1.5">
+              <Label>Description <span class="text-xs text-muted-foreground">(shown on hover wherever the state appears)</span></Label>
+              <Textarea v-model="editForm.description" rows="2" :disabled="loading" />
+            </div>
             <p
               v-if="editTypeChanged && state.task_count > 0"
               class="flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300"
@@ -323,8 +341,13 @@ async function handleDelete(state: ProjectState) {
               class="size-3 rounded-full"
               :style="{ backgroundColor: state.color }"
             />
-            <span class="text-sm font-medium">{{ state.name }}</span>
-            <span v-if="state.task_count > 0" class="text-xs text-muted-foreground">
+            <div class="min-w-0">
+              <span class="text-sm font-medium" :title="state.description || undefined">{{ state.name }}</span>
+              <p v-if="state.description" class="max-w-md truncate text-xs text-muted-foreground" :title="state.description">
+                {{ state.description }}
+              </p>
+            </div>
+            <span v-if="state.task_count > 0" class="shrink-0 text-xs text-muted-foreground">
               {{ state.task_count }} task{{ state.task_count === 1 ? "" : "s" }}
             </span>
             <span class="flex-1" />

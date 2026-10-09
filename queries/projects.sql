@@ -200,12 +200,12 @@ SELECT EXISTS (
 -- ==================== PROJECT STATES ====================
 
 -- name: CreateProjectState :one
-INSERT INTO project_states (project_id, state_type, name, color, position, is_default)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_id, state_type, name, color, position, is_default, created_at;
+INSERT INTO project_states (project_id, state_type, name, color, position, is_default, description)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description;
 
 -- name: GetProjectStateByID :one
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE id = $1;
 
@@ -216,12 +216,13 @@ UPDATE project_states
 SET name = COALESCE(sqlc.narg('name'), name),
     color = COALESCE(sqlc.narg('color'), color),
     position = COALESCE(sqlc.narg('position'), position),
+    description = COALESCE(sqlc.narg('description'), description),
     state_type = CASE
                    WHEN sqlc.arg('state_type')::text = '' THEN state_type
                    ELSE sqlc.arg('state_type')::state_type
                  END
 WHERE id = $1
-RETURNING id, project_id, state_type, name, color, position, is_default, created_at;
+RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description;
 
 -- name: DeleteProjectState :exec
 DELETE FROM project_states WHERE id = $1;
@@ -235,14 +236,14 @@ WHERE project_id = sqlc.arg('project_id');
 
 -- name: ListProjectStates :many
 -- task_count lets the settings UI warn how many tasks a state edit touches.
-SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at,
+SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at, ps.description,
        (SELECT COUNT(*) FROM tasks t WHERE t.state_id = ps.id AND t.deleted_at IS NULL)::int AS task_count
 FROM project_states ps
 WHERE ps.project_id = $1
 ORDER BY ps.position ASC, ps.created_at ASC;
 
 -- name: GetDefaultProjectState :one
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE project_id = $1 AND is_default = true
 LIMIT 1;
@@ -902,7 +903,7 @@ SELECT DISTINCT user_id FROM (
 -- ==================== IMPORT HELPERS ====================
 
 -- name: GetProjectStateByProjectAndName :one
-SELECT id, project_id, state_type, name, color, position, is_default, created_at
+SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
 WHERE project_id = $1 AND name = $2
 LIMIT 1;
