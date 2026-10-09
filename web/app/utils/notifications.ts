@@ -15,7 +15,7 @@ import {
   MessageSquarePlus,
   MessageSquareDiff,
   MessageSquareX,
-  AtSign,,
+  AtSign,
   Link2,
   Link2Off,
 } from "lucide-vue-next";
