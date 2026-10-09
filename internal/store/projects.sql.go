@@ -4122,8 +4122,8 @@ const updateProject = `-- name: UpdateProject :one
 UPDATE projects
 SET name = COALESCE($2, name),
     description = COALESCE($3, description),
-    icon_id = COALESCE($4, icon_id),
-    cover_id = COALESCE($5, cover_id),
+    icon_id = CASE WHEN $4::boolean THEN NULL ELSE COALESCE($5, icon_id) END,
+    cover_id = COALESCE($6, cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id
@@ -4133,15 +4133,19 @@ type UpdateProjectParams struct {
 	ID          uuid.UUID   `json:"id"`
 	Name        pgtype.Text `json:"name"`
 	Description pgtype.Text `json:"description"`
+	ClearIcon   bool        `json:"clear_icon"`
 	IconID      pgtype.UUID `json:"icon_id"`
 	CoverID     pgtype.UUID `json:"cover_id"`
 }
 
+// clear_icon removes the icon (icon_id NULL); otherwise icon_id follows the
+// usual COALESCE keep-or-replace pattern.
 func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
 	row := q.db.QueryRow(ctx, updateProject,
 		arg.ID,
 		arg.Name,
 		arg.Description,
+		arg.ClearIcon,
 		arg.IconID,
 		arg.CoverID,
 	)

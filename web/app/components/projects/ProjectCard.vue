@@ -48,9 +48,11 @@ const roleBadgeVariant = computed(() => {
       class="group flex h-full cursor-pointer items-center gap-3 rounded-xl border border-border/50 bg-background/50 p-3 shadow-sm transition-all hover:border-amber-500/30 hover:shadow-md hover:shadow-amber-500/5"
     >
       <div
-        class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-amber-500/10"
+        class="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted transition-colors group-hover:bg-amber-500/10"
       >
+        <img v-if="project.icon_url" :src="project.icon_url" alt="" class="size-full object-cover" />
         <FolderKanban
+          v-else
           class="size-4.5 text-muted-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-500"
         />
       </div>
@@ -98,9 +100,11 @@ const roleBadgeVariant = computed(() => {
       <CardHeader class="pb-3">
         <div class="flex items-start justify-between">
           <div
-            class="flex size-10 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-amber-500/10"
+            class="flex size-10 items-center justify-center overflow-hidden rounded-lg bg-muted transition-colors group-hover:bg-amber-500/10"
           >
+            <img v-if="project.icon_url" :src="project.icon_url" alt="" class="size-full object-cover" />
             <FolderKanban
+              v-else
               class="size-5 text-muted-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-500"
             />
           </div>

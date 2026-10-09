@@ -22,10 +22,12 @@ WHERE id = sqlc.arg('id') AND deleted_at IS NULL
 RETURNING id, project_key, name, description, icon_id, cover_id, created_by, created_at, updated_at, deleted_at, disabled, workspace_id;
 
 -- name: UpdateProject :one
+-- clear_icon removes the icon (icon_id NULL); otherwise icon_id follows the
+-- usual COALESCE keep-or-replace pattern.
 UPDATE projects
 SET name = COALESCE(sqlc.narg('name'), name),
     description = COALESCE(sqlc.narg('description'), description),
-    icon_id = COALESCE(sqlc.narg('icon_id'), icon_id),
+    icon_id = CASE WHEN sqlc.arg('clear_icon')::boolean THEN NULL ELSE COALESCE(sqlc.narg('icon_id'), icon_id) END,
     cover_id = COALESCE(sqlc.narg('cover_id'), cover_id),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL

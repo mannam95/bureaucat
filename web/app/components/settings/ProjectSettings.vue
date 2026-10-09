@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2 } from "lucide-vue-next";
+import { Loader2, FolderKanban, Upload, X } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { Project, MoveImpactMember } from "~/types";
 
@@ -16,6 +16,7 @@ const emit = defineEmits<{
 
 const { updateProject, getMoveProjectImpact, moveProjectToWorkspace, setProjectDisabled } =
   useProjects();
+const { uploadFile } = useUploads();
 const { user } = useAuth();
 const { workspaces, listWorkspaces } = useWorkspaces();
 
@@ -125,6 +126,56 @@ async function handleToggleDisabled(disabled: boolean) {
   }
 }
 
+// ---- Project icon: shown on tiles and the project header. The server
+// enforces the same limits; these checks just fail fast with a friendly toast.
+const ICON_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_ICON_BYTES = 1024 * 1024;
+
+const iconInput = ref<HTMLInputElement | null>(null);
+const iconBusy = ref(false);
+
+async function handleIconPicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (!ICON_MIME_TYPES.includes(file.type)) {
+    toast.error("Icon must be a PNG, JPEG, GIF or WebP image");
+    return;
+  }
+  if (file.size > MAX_ICON_BYTES) {
+    toast.error("Icon must be 1MB or smaller");
+    return;
+  }
+  iconBusy.value = true;
+  const uploaded = await uploadFile(file);
+  if (!uploaded.success || !uploaded.data) {
+    iconBusy.value = false;
+    toast.error(uploaded.error || "Failed to upload icon");
+    return;
+  }
+  const result = await updateProject(props.project.project_key, { icon_id: uploaded.data.id });
+  iconBusy.value = false;
+  if (result.success) {
+    toast.success("Project icon updated");
+    emit("refresh");
+  } else {
+    toast.error(result.error || "Failed to set project icon");
+  }
+}
+
+async function handleIconRemove() {
+  iconBusy.value = true;
+  const result = await updateProject(props.project.project_key, { icon_id: "" });
+  iconBusy.value = false;
+  if (result.success) {
+    toast.success("Project icon removed");
+    emit("refresh");
+  } else {
+    toast.error(result.error || "Failed to remove project icon");
+  }
+}
+
 const form = ref({
   name: props.project.name,
   description: props.project.description || "",
@@ -179,6 +230,57 @@ const hasChanges = computed(() => {
       <Card>
         <CardContent class="pt-6">
           <form class="space-y-4" @submit.prevent="handleSave">
+            <div class="space-y-2">
+              <Label>Icon</Label>
+              <div class="flex items-center gap-4">
+                <div class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted">
+                  <img
+                    v-if="project.icon_url"
+                    :src="project.icon_url"
+                    alt=""
+                    class="size-full object-cover"
+                  />
+                  <FolderKanban v-else class="size-7 text-muted-foreground" />
+                </div>
+                <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
+                  <input
+                    ref="iconInput"
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    class="hidden"
+                    @change="handleIconPicked"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    :disabled="iconBusy || project.disabled"
+                    @click="iconInput?.click()"
+                  >
+                    <Loader2 v-if="iconBusy" class="mr-1.5 size-4 animate-spin" />
+                    <Upload v-else class="mr-1.5 size-4" />
+                    {{ project.icon_url ? "Replace icon" : "Upload icon" }}
+                  </Button>
+                  <Button
+                    v-if="project.icon_url"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="text-muted-foreground"
+                    :disabled="iconBusy || project.disabled"
+                    @click="handleIconRemove"
+                  >
+                    <X class="mr-1.5 size-4" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                Shown on project tiles and the project header. PNG, JPEG, GIF or
+                WebP, up to 1MB.
+              </p>
+            </div>
+
             <div class="space-y-2">
               <Label for="project-key">Project Key</Label>
               <input

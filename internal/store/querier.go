@@ -435,6 +435,8 @@ type Querier interface {
 	UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, error)
 	UpdatePersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdatePersonalAccessTokenScope(ctx context.Context, arg UpdatePersonalAccessTokenScopeParams) (UpdatePersonalAccessTokenScopeRow, error)
+	// clear_icon removes the icon (icon_id NULL); otherwise icon_id follows the
+	// usual COALESCE keep-or-replace pattern.
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateProjectArea(ctx context.Context, arg UpdateProjectAreaParams) (ProjectArea, error)
 	UpdateProjectLabel(ctx context.Context, arg UpdateProjectLabelParams) (ProjectLabel, error)

@@ -56,8 +56,9 @@ const showReadMore = computed(() => (props.project.description?.length ?? 0) > 1
 
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-4">
-          <div class="flex size-14 shrink-0 items-center justify-center rounded-xl border bg-background/60">
-            <FolderKanban class="size-7 text-muted-foreground" />
+          <div class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-background/60">
+            <img v-if="project.icon_url" :src="project.icon_url" alt="" class="size-full object-cover" />
+            <FolderKanban v-else class="size-7 text-muted-foreground" />
           </div>
           <h1 class="text-2xl font-bold tracking-tight">{{ project.name }}</h1>
         </div>

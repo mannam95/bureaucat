@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -366,7 +367,10 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 	}
 
 	// Parse optional UUIDs
-	iconID := stringToPgtypeUUID(req.IconID)
+	iconID, httpErr := h.resolveProjectIcon(ctx, req.IconID)
+	if httpErr != nil {
+		return httpErr
+	}
 	coverID := stringToPgtypeUUID(req.CoverID)
 
 	// Create project
@@ -509,11 +513,23 @@ func (h *ProjectHandler) UpdateProject(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
+	// An explicit empty icon_id clears the icon; a value must pass validation.
+	clearIcon := req.IconID != nil && strings.TrimSpace(*req.IconID) == ""
+	iconID := pgtype.UUID{}
+	if !clearIcon {
+		var httpErr error
+		iconID, httpErr = h.resolveProjectIcon(ctx, req.IconID)
+		if httpErr != nil {
+			return httpErr
+		}
+	}
+
 	project, err := h.store.UpdateProject(ctx, store.UpdateProjectParams{
 		ID:          projectID,
 		Name:        stringToPgtypeText(req.Name),
 		Description: stringToPgtypeText(req.Description),
-		IconID:      stringToPgtypeUUID(req.IconID),
+		ClearIcon:   clearIcon,
+		IconID:      iconID,
 		CoverID:     stringToPgtypeUUID(req.CoverID),
 	})
 	if err != nil {
@@ -527,6 +543,7 @@ func (h *ProjectHandler) UpdateProject(c *echo.Context) error {
 		Description: textToStringPtr(project.Description),
 		IconURL:     pgtypeUUIDToURL(project.IconID),
 		CoverURL:    pgtypeUUIDToURL(project.CoverID),
+		Role:        c.Request().Header.Get(auth.HeaderProjectRole),
 		Disabled:    project.Disabled,
 		WorkspaceID: project.WorkspaceID,
 		CreatedBy:   project.CreatedBy,
@@ -2223,6 +2240,36 @@ func stringToPgtypeText(s *string) pgtype.Text {
 		return pgtype.Text{Valid: false}
 	}
 	return pgtype.Text{String: *s, Valid: true}
+}
+
+// Project icons appear on every tile and header, so they are held to tighter
+// limits than general uploads: a raster image (no SVG — uploads are served
+// same-origin, and inline SVG can run script) of at most 1MB.
+const maxProjectIconBytes = 1 << 20
+
+// resolveProjectIcon parses an optional icon_id and verifies the referenced
+// upload qualifies as a project icon. A nil or empty input yields no icon.
+func (h *ProjectHandler) resolveProjectIcon(ctx context.Context, raw *string) (pgtype.UUID, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return pgtype.UUID{}, nil
+	}
+	id, err := uuid.Parse(*raw)
+	if err != nil {
+		return pgtype.UUID{}, echo.NewHTTPError(http.StatusBadRequest, "invalid icon_id")
+	}
+	upload, err := h.store.GetUploadByID(ctx, id)
+	if err != nil {
+		return pgtype.UUID{}, echo.NewHTTPError(http.StatusBadRequest, "icon upload not found")
+	}
+	switch upload.MimeType {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+	default:
+		return pgtype.UUID{}, echo.NewHTTPError(http.StatusBadRequest, "project icon must be a PNG, JPEG, GIF or WebP image")
+	}
+	if upload.SizeBytes > maxProjectIconBytes {
+		return pgtype.UUID{}, echo.NewHTTPError(http.StatusBadRequest, "project icon must be 1MB or smaller")
+	}
+	return pgtype.UUID{Bytes: id, Valid: true}, nil
 }
 
 func stringToPgtypeUUID(s *string) pgtype.UUID {
