@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Loader2 } from "lucide-vue-next";
-import type { Task, ProjectState, ProjectMember, ProjectLabel, ViewGroupBy } from "~/types";
-import { PRIORITY_LABELS, STATE_TYPE_COLORS } from "~/types";
+import type { Task, ProjectState, ProjectPriority, ProjectMember, ProjectLabel, ViewGroupBy } from "~/types";
+import { STATE_TYPE_COLORS } from "~/types";
 
 interface BoardColumn {
   id: string;
@@ -17,6 +17,7 @@ interface BoardColumn {
 const props = defineProps<{
   tasks: Task[];
   states: ProjectState[];
+  priorities: ProjectPriority[];
   members: ProjectMember[];
   labels: ProjectLabel[];
   projectKey: string;
@@ -64,13 +65,16 @@ const columns = computed<BoardColumn[]>(() => {
       }));
 
     case "priority": {
-      const PRIORITY_ORDER = [4, 3, 2, 1, 0];
-      return PRIORITY_ORDER.map((p) => ({
-        id: `priority:${p}`,
-        label: PRIORITY_LABELS[p]?.label ?? String(p),
-        color: PRIORITY_LABELS[p]?.color ?? "#6B7280",
-        tasks: props.tasks.filter((task) => task.priority === p),
-      }));
+      // Columns are the project's priority levels, most urgent first.
+      return [...props.priorities]
+        .sort((a, b) => b.rank - a.rank)
+        .map((p) => ({
+          id: `priority:${p.id}`,
+          label: p.name,
+          color: p.color || "#6B7280",
+          description: p.description,
+          tasks: props.tasks.filter((task) => task.priority_id === p.id),
+        }));
     }
 
     case "assignee": {
@@ -276,9 +280,8 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
         break;
       }
       case "priority": {
-        const p = parseInt(toValue, 10);
-        if (!isNaN(p)) {
-          await updateTask(props.projectKey, task.task_number, { priority: p });
+        if (toValue) {
+          await updateTask(props.projectKey, task.task_number, { priority_id: toValue });
         }
         break;
       }

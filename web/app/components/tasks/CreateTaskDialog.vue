@@ -7,6 +7,7 @@ import type {
   ProjectLabel,
   ProjectArea,
   ProjectMember,
+  ProjectPriority,
   TaskTemplate,
   SubtaskCandidate,
   CycleSibling,
@@ -22,6 +23,7 @@ const props = withDefaults(
     labels?: ProjectLabel[];
     areas?: ProjectArea[];
     members?: ProjectMember[];
+    priorities?: ProjectPriority[];
     templates?: TaskTemplate[];
     // Selector mode (e.g. opened from /dashboard or Shift+C): the dialog fetches
     // the workspace-scoped project list itself and shows a project picker. It
@@ -44,6 +46,7 @@ const props = withDefaults(
     labels: () => [],
     areas: () => [],
     members: () => [],
+    priorities: () => [],
     templates: () => [],
   }
 );
@@ -68,7 +71,8 @@ const {
   clear: clearPendingFiles,
   attachAll: attachPendingFiles,
 } = usePendingAttachments();
-const { listStates, listLabels, listAreas, listMembers, listTemplates } = useProjects();
+const { listStates, listLabels, listAreas, listMembers, listPriorities, listTemplates } =
+  useProjects();
 
 // --- Project selection ---
 // Selector mode is active when the caller opts into the project picker; the
@@ -105,6 +109,7 @@ const fetchedStates = ref<ProjectState[]>([]);
 const fetchedLabels = ref<ProjectLabel[]>([]);
 const fetchedAreas = ref<ProjectArea[]>([]);
 const fetchedMembers = ref<ProjectMember[]>([]);
+const fetchedPriorities = ref<ProjectPriority[]>([]);
 const fetchedTemplates = ref<TaskTemplate[]>([]);
 
 const effectiveProjectKey = computed(() =>
@@ -114,6 +119,9 @@ const effStates = computed(() => (selectable.value ? fetchedStates.value : props
 const effLabels = computed(() => (selectable.value ? fetchedLabels.value : props.labels));
 const effAreas = computed(() => (selectable.value ? fetchedAreas.value : props.areas));
 const effMembers = computed(() => (selectable.value ? fetchedMembers.value : props.members));
+const effPriorities = computed(() =>
+  selectable.value ? fetchedPriorities.value : props.priorities
+);
 const effTemplates = computed(() =>
   selectable.value ? fetchedTemplates.value : props.templates
 );
@@ -133,7 +141,7 @@ const form = ref({
   title: "",
   description: "",
   state_id: "",
-  priority: 0,
+  priority_id: "",
   assignees: [] as string[],
   labels: [] as string[],
   areas: [] as string[],
@@ -155,6 +163,15 @@ const form = ref({
 });
 
 const defaultState = computed(() => effStates.value.find((s) => s.is_default));
+
+// Most urgent first, like every other priority picker; new tasks start on the
+// project's least urgent level.
+const activePriorities = computed(() =>
+  effPriorities.value.filter((p) => p.active).sort((a, b) => b.rank - a.rank)
+);
+const defaultPriorityId = computed(
+  () => activePriorities.value[activePriorities.value.length - 1]?.id ?? ""
+);
 
 // Shares its key with the /tasks/new page so one unfinished task draft follows
 // the user between the two. Empty until a project is chosen (persistence off),
@@ -193,7 +210,7 @@ function resetForm() {
     title: "",
     description: "",
     state_id: defaultState.value?.id || "",
-    priority: 0,
+    priority_id: defaultPriorityId.value,
     assignees: [],
     labels: [],
     areas: [],
@@ -239,22 +256,25 @@ async function loadCycles(key: string) {
 
 async function loadProjectMeta(key: string) {
   metaLoading.value = true;
-  const [s, l, ar, m, t] = await Promise.all([
+  const [s, l, ar, m, pr, t] = await Promise.all([
     listStates(key),
     listLabels(key),
     listAreas(key),
     listMembers(key),
+    listPriorities(key),
     listTemplates(key),
   ]);
   fetchedStates.value = s.data ?? [];
   fetchedLabels.value = l.data ?? [];
   fetchedAreas.value = ar.data ?? [];
   fetchedMembers.value = m.data ?? [];
+  fetchedPriorities.value = pr.data ?? [];
   fetchedTemplates.value = t.data ?? [];
   await loadCycles(key);
   metaLoading.value = false;
   // Reset project-dependent fields now that metadata is available.
   form.value.state_id = defaultState.value?.id || "";
+  form.value.priority_id = defaultPriorityId.value;
   form.value.assignees = [];
   form.value.labels = [];
   form.value.areas = [];
@@ -383,7 +403,7 @@ async function handleSubmit() {
     title: form.value.title,
     description: form.value.description || undefined,
     state_id: form.value.state_id || undefined,
-    priority: form.value.priority,
+    priority_id: form.value.priority_id || undefined,
     difficulty: form.value.difficulty || undefined,
     effort: form.value.effort || undefined,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
@@ -495,14 +515,6 @@ async function handleAttach() {
   }
 }
 
-const priorities = [
-  { value: 0, label: "No priority" },
-  { value: 1, label: "Low" },
-  { value: 2, label: "Medium" },
-  { value: 3, label: "High" },
-  { value: 4, label: "Urgent" },
-];
-
 // shadcn/reka-ui Select works with string values only, and reserves the empty
 // string for "no selection" — so these adapters bridge to the form's types.
 const NO_TEMPLATE = "__none__";
@@ -512,13 +524,6 @@ const templateValue = computed({
     selectedTemplateId.value = v === NO_TEMPLATE ? "" : v;
   },
 });
-const priorityValue = computed({
-  get: () => String(form.value.priority),
-  set: (v: string) => {
-    form.value.priority = Number(v);
-  },
-});
-
 // Complexity estimation: Difficulty x Effort, shown live while picking.
 const estScore = computed(() =>
   form.value.difficulty > 0 && form.value.effort > 0
@@ -834,13 +839,13 @@ function removeLabel(labelId: string) {
 
             <div class="space-y-2">
               <Label for="priority">Priority</Label>
-              <Select v-model="priorityValue" :disabled="loading">
+              <Select v-model="form.priority_id" :disabled="loading">
                 <SelectTrigger id="priority" class="w-full">
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="p in priorities" :key="p.value" :value="String(p.value)">
-                    {{ p.label }}
+                  <SelectItem v-for="p in activePriorities" :key="p.id" :value="p.id" :title="p.description || undefined">
+                    {{ p.name }}
                   </SelectItem>
                 </SelectContent>
               </Select>

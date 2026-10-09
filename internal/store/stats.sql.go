@@ -443,18 +443,21 @@ func (q *Queries) SubtasksCreatedPerDay(ctx context.Context, arg SubtasksCreated
 }
 
 const tasksByPriority = `-- name: TasksByPriority :many
-SELECT t.priority AS priority, COUNT(*)::int AS count
+SELECT pp.name AS priority, COUNT(*)::int AS count
 FROM tasks t
+JOIN project_priorities pp ON t.priority_id = pp.id
 WHERE t.deleted_at IS NULL AND t.parent_task_id IS NULL
-GROUP BY t.priority
-ORDER BY t.priority ASC
+GROUP BY pp.name
+ORDER BY MAX(pp.rank) DESC
 `
 
 type TasksByPriorityRow struct {
-	Priority int32 `json:"priority"`
-	Count    int32 `json:"count"`
+	Priority string `json:"priority"`
+	Count    int32  `json:"count"`
 }
 
+// Instance-wide aggregate: priorities are per-project entities, so tasks are
+// grouped by level name (most urgent first by each name's highest rank).
 func (q *Queries) TasksByPriority(ctx context.Context) ([]TasksByPriorityRow, error) {
 	rows, err := q.db.Query(ctx, tasksByPriority)
 	if err != nil {

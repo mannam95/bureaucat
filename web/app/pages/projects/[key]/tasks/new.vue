@@ -21,11 +21,13 @@ const {
   members,
   states,
   labels,
+  priorities: projectPriorities,
   templates,
   getProject,
   listMembers,
   listStates,
   listLabels,
+  listPriorities,
   listTemplates,
 } = useProjects();
 
@@ -50,7 +52,7 @@ const form = ref({
   title: "",
   description: "",
   state_id: "",
-  priority: 0,
+  priority_id: "",
   assignees: [] as string[],
   labels: [] as string[],
   // Cycle the new task is planned into; defaults to the running sprint.
@@ -101,6 +103,7 @@ async function loadProjectData() {
     listMembers(projectKey.value),
     listStates(projectKey.value),
     listLabels(projectKey.value),
+    listPriorities(projectKey.value),
     listTemplates(projectKey.value),
   ]);
 
@@ -108,6 +111,7 @@ async function loadProjectData() {
   if (defaultState.value) {
     form.value.state_id = defaultState.value.id;
   }
+  form.value.priority_id = defaultPriorityId.value;
 
   // New tickets default to the running sprint (latest start if several
   // overlap), or the most recently finished one when nothing is active.
@@ -151,7 +155,7 @@ async function handleSubmit() {
     title: form.value.title,
     description: form.value.description || undefined,
     state_id: form.value.state_id || undefined,
-    priority: form.value.priority,
+    priority_id: form.value.priority_id || undefined,
     difficulty: form.value.difficulty || undefined,
     effort: form.value.effort || undefined,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
@@ -177,13 +181,14 @@ async function handleSubmit() {
   }
 }
 
-const priorities = [
-  { value: 0, label: "No priority" },
-  { value: 1, label: "Low" },
-  { value: 2, label: "Medium" },
-  { value: 3, label: "High" },
-  { value: 4, label: "Urgent" },
-];
+// Most urgent first, like every other priority picker; new tasks start on the
+// project's least urgent level.
+const activePriorities = computed(() =>
+  projectPriorities.value.filter((p) => p.active).sort((a, b) => b.rank - a.rank)
+);
+const defaultPriorityId = computed(
+  () => activePriorities.value[activePriorities.value.length - 1]?.id ?? ""
+);
 
 // shadcn/reka-ui Select works with string values only, and reserves the empty
 // string for "no selection" — so these adapters bridge to the form's types.
@@ -194,13 +199,6 @@ const templateValue = computed({
     selectedTemplateId.value = v === NO_TEMPLATE ? "" : v;
   },
 });
-const priorityValue = computed({
-  get: () => String(form.value.priority),
-  set: (v: string) => {
-    form.value.priority = Number(v);
-  },
-});
-
 // Complexity estimation: Difficulty x Effort, shown live while picking.
 const estScore = computed(() =>
   form.value.difficulty > 0 && form.value.effort > 0
@@ -397,13 +395,13 @@ onMounted(() => {
 
               <div class="space-y-2">
                 <Label for="priority">Priority</Label>
-                <Select v-model="priorityValue" :disabled="loading">
+                <Select v-model="form.priority_id" :disabled="loading">
                   <SelectTrigger id="priority" class="w-full">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem v-for="p in priorities" :key="p.value" :value="String(p.value)">
-                      {{ p.label }}
+                    <SelectItem v-for="p in activePriorities" :key="p.id" :value="p.id" :title="p.description || undefined">
+                      {{ p.name }}
                     </SelectItem>
                   </SelectContent>
                 </Select>

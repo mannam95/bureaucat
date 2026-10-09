@@ -443,6 +443,7 @@ type ProjectArea struct {
 	Color     pgtype.Text        `json:"color"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
+
 type ProjectLabel struct {
 	ID        uuid.UUID          `json:"id"`
 	ProjectID uuid.UUID          `json:"project_id"`
@@ -462,6 +463,17 @@ type ProjectMember struct {
 type ProjectOrdering struct {
 	ProjectID uuid.UUID `json:"project_id"`
 	Position  int32     `json:"position"`
+}
+
+type ProjectPriority struct {
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	Color       pgtype.Text        `json:"color"`
+	Rank        int32              `json:"rank"`
+	Active      bool               `json:"active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type ProjectState struct {
@@ -512,12 +524,13 @@ type Setting struct {
 }
 
 type Task struct {
-	ID             uuid.UUID          `json:"id"`
-	ProjectID      uuid.UUID          `json:"project_id"`
-	TaskNumber     int32              `json:"task_number"`
-	Title          string             `json:"title"`
-	Description    pgtype.Text        `json:"description"`
-	StateID        uuid.UUID          `json:"state_id"`
+	ID          uuid.UUID   `json:"id"`
+	ProjectID   uuid.UUID   `json:"project_id"`
+	TaskNumber  int32       `json:"task_number"`
+	Title       string      `json:"title"`
+	Description pgtype.Text `json:"description"`
+	StateID     uuid.UUID   `json:"state_id"`
+	// DEPRECATED: frozen copy of the pre-entity 0-4 priority. Use priority_id.
 	Priority       int32              `json:"priority"`
 	CreatedBy      uuid.UUID          `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -532,6 +545,7 @@ type Task struct {
 	PriorityRating int32              `json:"priority_rating"`
 	Difficulty     int32              `json:"difficulty"`
 	Effort         int32              `json:"effort"`
+	PriorityID     uuid.UUID          `json:"priority_id"`
 }
 
 type TaskArea struct {
@@ -540,6 +554,7 @@ type TaskArea struct {
 	AddedAt pgtype.Timestamptz `json:"added_at"`
 	AddedBy uuid.UUID          `json:"added_by"`
 }
+
 type TaskAssignee struct {
 	ID         uuid.UUID          `json:"id"`
 	TaskID     uuid.UUID          `json:"task_id"`

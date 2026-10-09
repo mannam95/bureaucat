@@ -95,7 +95,10 @@ interface MyTask {
   state_name: string;
   state_type: string;
   state_color: string;
-  priority: number;
+  priority_id: string;
+  priority_name: string;
+  priority_color: string;
+  priority_rank: number;
   assignees: MyTaskAssignee[];
   comment_count: number;
 }
@@ -127,7 +130,10 @@ const myTasksAsTask = computed<Task[]>(() =>
     state_name: t.state_name,
     state_type: t.state_type,
     state_color: t.state_color,
-    priority: t.priority,
+    priority_id: t.priority_id,
+    priority_name: t.priority_name,
+    priority_color: t.priority_color,
+    priority_rank: t.priority_rank,
     created_by: "",
     creator_username: "",
     creator_first_name: "",

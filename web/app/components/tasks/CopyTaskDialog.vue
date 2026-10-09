@@ -6,6 +6,7 @@ import type {
   ProjectState,
   ProjectLabel,
   ProjectMember,
+  ProjectPriority,
   CycleSibling,
   Task,
 } from "~/types";
@@ -63,11 +64,12 @@ const metaLoading = ref(false);
 const targetStates = ref<ProjectState[]>([]);
 const targetLabels = ref<ProjectLabel[]>([]);
 const targetMembers = ref<ProjectMember[]>([]);
+const targetPriorities = ref<ProjectPriority[]>([]);
 const targetCycles = ref<CycleSibling[]>([]);
 
 const form = ref({
   state_id: "",
-  priority: 0,
+  priority_id: "",
   assignees: [] as string[],
   labels: [] as string[],
   cycle_id: "",
@@ -88,24 +90,31 @@ async function fetchJSON<T>(path: string): Promise<T | null> {
 async function selectProject(key: string) {
   selectedKey.value = key;
   metaLoading.value = true;
-  const [states, labels, members, cycles] = await Promise.all([
+  const [states, labels, members, priorities, cycles] = await Promise.all([
     fetchJSON<ProjectState[]>("/states"),
     fetchJSON<ProjectLabel[]>("/labels"),
     fetchJSON<ProjectMember[]>("/members"),
+    fetchJSON<ProjectPriority[]>("/priorities"),
     fetchJSON<CycleSibling[]>("/cycles/all"),
   ]);
   targetStates.value = states ?? [];
   targetLabels.value = labels ?? [];
   targetMembers.value = members ?? [];
+  targetPriorities.value = (priorities ?? []).filter((p) => p.active);
   targetCycles.value = cycles ?? [];
 
-  // Sensible prefills: the target's default state, the original's priority,
-  // assignees who are members of both projects, and labels matching by name.
+  // Sensible prefills: the target's default state, the target priority whose
+  // name matches the original's (else the target's lowest level), assignees
+  // who are members of both projects, and labels matching by name.
   const memberIds = new Set(targetMembers.value.map((m) => m.user_id));
   const sourceLabelNames = new Set((props.task.labels ?? []).map((l) => l.name));
+  const prioritiesByUrgency = [...targetPriorities.value].sort((a, b) => b.rank - a.rank);
+  const matchedPriority =
+    prioritiesByUrgency.find((p) => p.name === props.task.priority_name) ??
+    prioritiesByUrgency[prioritiesByUrgency.length - 1];
   form.value = {
     state_id: targetStates.value.find((s) => s.is_default)?.id ?? targetStates.value[0]?.id ?? "",
-    priority: props.task.priority,
+    priority_id: matchedPriority?.id ?? "",
     assignees: (props.task.assignees ?? [])
       .map((a) => a.user_id)
       .filter((id) => memberIds.has(id)),
@@ -123,20 +132,10 @@ watch(open, (isOpen) => {
   loadProjects();
 });
 
-const priorities = [
-  { value: 0, label: "No priority" },
-  { value: 1, label: "Low" },
-  { value: 2, label: "Medium" },
-  { value: 3, label: "High" },
-  { value: 4, label: "Urgent" },
-];
-
-const priorityValue = computed({
-  get: () => String(form.value.priority),
-  set: (v: string) => {
-    form.value.priority = Number(v);
-  },
-});
+// Most urgent first, matching every other priority picker.
+const priorityOptions = computed(() =>
+  [...targetPriorities.value].sort((a, b) => b.rank - a.rank)
+);
 const NO_CYCLE = "__none__";
 const cycleValue = computed({
   get: () => form.value.cycle_id || NO_CYCLE,
@@ -168,7 +167,7 @@ async function handleCopy() {
   const res = await copyTask(props.projectKey, props.taskNum, {
     target_project_key: selectedKey.value,
     state_id: form.value.state_id,
-    priority: form.value.priority,
+    priority_id: form.value.priority_id,
     assignees: form.value.assignees,
     labels: form.value.labels,
     cycle_id: form.value.cycle_id || undefined,
@@ -260,13 +259,13 @@ async function handleCopy() {
             </div>
             <div class="space-y-2">
               <Label>Priority</Label>
-              <Select v-model="priorityValue" :disabled="submitting">
+              <Select v-model="form.priority_id" :disabled="submitting">
                 <SelectTrigger class="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="p in priorities" :key="p.value" :value="String(p.value)">
-                    {{ p.label }}
+                  <SelectItem v-for="p in priorityOptions" :key="p.id" :value="p.id" :title="p.description || undefined">
+                    {{ p.name }}
                   </SelectItem>
                 </SelectContent>
               </Select>

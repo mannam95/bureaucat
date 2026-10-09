@@ -947,15 +947,6 @@ type AdminStatsResponse struct {
 	} `json:"series"`
 }
 
-// priorityLabels maps task priority integers to human-readable labels.
-var priorityLabels = map[int]string{
-	0: "No priority",
-	1: "Low",
-	2: "Medium",
-	3: "High",
-	4: "Urgent",
-}
-
 // GetStats returns aggregate metrics for the admin stats dashboard.
 //
 //	@Summary		Get admin stats
@@ -1041,11 +1032,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.TasksByPriority = make([]StatCount, len(priorities))
 	for i, p := range priorities {
-		label, ok := priorityLabels[int(p.Priority)]
-		if !ok {
-			label = "Unknown"
-		}
-		resp.TasksByPriority[i] = StatCount{Label: label, Count: int(p.Count)}
+		resp.TasksByPriority[i] = StatCount{Label: p.Priority, Count: int(p.Count)}
 	}
 
 	topProjects, err := h.store.TopProjectsByTaskCount(ctx)

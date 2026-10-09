@@ -103,18 +103,23 @@ func NewTaskHandler(s store.Querier, pool *pgxpool.Pool, filterRunner *store.Fil
 
 // TaskResponse represents a task in API responses.
 type TaskResponse struct {
-	ID             uuid.UUID `json:"id"`
-	ProjectKey     string    `json:"project_key"`
-	TaskNumber     int       `json:"task_number"`
-	TaskID         string    `json:"task_id"` // e.g., "DEVOP-123"
-	Title          string    `json:"title"`
-	Description    *string   `json:"description,omitempty"`
-	StateID        uuid.UUID `json:"state_id"`
-	StateName      string    `json:"state_name"`
-	StateType      string    `json:"state_type"`
-	StateColor     string    `json:"state_color"`
-	Priority       int       `json:"priority"`
-	PriorityRating int       `json:"priority_rating"`
+	ID          uuid.UUID `json:"id"`
+	ProjectKey  string    `json:"project_key"`
+	TaskNumber  int       `json:"task_number"`
+	TaskID      string    `json:"task_id"` // e.g., "DEVOP-123"
+	Title       string    `json:"title"`
+	Description *string   `json:"description,omitempty"`
+	StateID     uuid.UUID `json:"state_id"`
+	StateName   string    `json:"state_name"`
+	StateType   string    `json:"state_type"`
+	StateColor  string    `json:"state_color"`
+	// Priority is a per-project entity; the id plus resolved display fields.
+	PriorityID          uuid.UUID `json:"priority_id"`
+	PriorityName        string    `json:"priority_name"`
+	PriorityColor       string    `json:"priority_color"`
+	PriorityRank        int       `json:"priority_rank"`
+	PriorityDescription *string   `json:"priority_description,omitempty"`
+	PriorityRating      int       `json:"priority_rating"`
 	// DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).
 	// All 0 while not assessed; the score is computed on read, never stored.
 	Difficulty       int        `json:"difficulty"`
@@ -264,10 +269,13 @@ func estimationInRange(v *int) bool {
 
 // CreateTaskRequest represents the request to create a task.
 type CreateTaskRequest struct {
-	Title          string  `json:"title"`
-	Description    *string `json:"description"`
-	StateID        *string `json:"state_id"`
+	Title       string  `json:"title"`
+	Description *string `json:"description"`
+	StateID     *string `json:"state_id"`
+	// Priority is rejected: priorities are per-project entities now. Clients
+	// send priority_id instead; a non-nil value here fails the whole request.
 	Priority       *int    `json:"priority"`
+	PriorityID     *string `json:"priority_id"`
 	PriorityRating *int    `json:"priority_rating"`
 	// DEV estimation inputs, 1-5 each (0 = not assessed).
 	Difficulty  *int       `json:"difficulty"`
@@ -293,10 +301,13 @@ type CreateTaskRequest struct {
 
 // UpdateTaskRequest represents the request to update a task.
 type UpdateTaskRequest struct {
-	Title          *string `json:"title"`
-	Description    *string `json:"description"`
-	StateID        *string `json:"state_id"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	StateID     *string `json:"state_id"`
+	// Priority is rejected: priorities are per-project entities now. Clients
+	// send priority_id instead; a non-nil value here fails the whole request.
 	Priority       *int    `json:"priority"`
+	PriorityID     *string `json:"priority_id"`
 	PriorityRating *int    `json:"priority_rating"`
 	// DEV estimation inputs, 1-5 each (0 = not assessed).
 	Difficulty *int         `json:"difficulty"`
@@ -410,7 +421,10 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 			StateName:        t.StateName,
 			StateType:        t.StateType,
 			StateColor:       textToString(t.StateColor, "#6B7280"),
-			Priority:         int(t.Priority),
+			PriorityID:       t.PriorityID,
+			PriorityName:     t.PriorityName,
+			PriorityColor:    textToString(t.PriorityColor, "#6B7280"),
+			PriorityRank:     int(t.PriorityRank),
 			PriorityRating:   int(t.PriorityRating),
 			Difficulty:       int(t.Difficulty),
 			Effort:           int(t.Effort),
@@ -609,9 +623,30 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		stateID = defaultState.ID
 	}
 
-	priority := int32(0)
 	if req.Priority != nil {
-		priority = int32(*req.Priority)
+		return echo.NewHTTPError(http.StatusBadRequest, "the integer priority field is no longer accepted; send priority_id")
+	}
+	// Resolve the priority entity: the given id (must belong to this project
+	// and be active) or the project's default — its lowest-ranked active one.
+	var prio store.ProjectPriority
+	if req.PriorityID != nil && *req.PriorityID != "" {
+		pid, perr := uuid.Parse(*req.PriorityID)
+		if perr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid priority_id")
+		}
+		prio, perr = h.store.GetProjectPriorityByID(ctx, pid)
+		if perr != nil || prio.ProjectID != projectID {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority does not belong to this project")
+		}
+		if !prio.Active {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority is deactivated")
+		}
+	} else {
+		var derr error
+		prio, derr = h.store.GetDefaultProjectPriority(ctx, projectID)
+		if derr != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "project has no active priorities")
+		}
 	}
 
 	if req.StartDate != nil && req.DueDate != nil && req.DueDate.Before(*req.StartDate) {
@@ -655,7 +690,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		Title:          req.Title,
 		Description:    stringToPgtypeText(req.Description),
 		StateID:        stateID,
-		Priority:       priority,
+		PriorityID:     prio.ID,
 		PriorityRating: intToPgtypeInt4(req.PriorityRating),
 		Difficulty:     intToPgtypeInt4(req.Difficulty),
 		Effort:         intToPgtypeInt4(req.Effort),
@@ -680,7 +715,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 			"title":       task.Title,
 			"description": textToStringPtr(task.Description),
 			"state_id":    task.StateID.String(),
-			"priority":    task.Priority,
+			"priority":    prio.Name,
 		},
 	})
 
@@ -941,42 +976,46 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	areas := h.getTaskAreas(ctx, task.ID)
 
 	return c.JSON(http.StatusCreated, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(fullTask.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		Difficulty:       int(fullTask.Difficulty),
-		Effort:           int(fullTask.Effort),
-		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Originators:      h.originatorsForTask(ctx, fullTask.ID),
-		Assignees:        assignees,
-		Watchers:         h.watchersForTask(ctx, fullTask.ID),
-		Labels:           labels,
-		Areas:            areas,
-		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
-		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
-		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
-		SubtaskCount:     int(fullTask.SubtaskCount),
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(fullTask.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		PriorityID:          fullTask.PriorityID,
+		PriorityName:        fullTask.PriorityName,
+		PriorityColor:       textToString(fullTask.PriorityColor, "#6B7280"),
+		PriorityRank:        int(fullTask.PriorityRank),
+		PriorityDescription: textToStringPtr(fullTask.PriorityDescription),
+		PriorityRating:      int(fullTask.PriorityRating),
+		Difficulty:          int(fullTask.Difficulty),
+		Effort:              int(fullTask.Effort),
+		ComplexityScore:     complexityScore(fullTask.Difficulty, fullTask.Effort),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		Originators:         h.originatorsForTask(ctx, fullTask.ID),
+		Assignees:           assignees,
+		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Labels:              labels,
+		Areas:               areas,
+		ParentTaskID:        pgUUIDToUUIDPtr(fullTask.ParentTaskID),
+		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
+		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
+		SubtaskCount:        int(fullTask.SubtaskCount),
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 
@@ -1032,45 +1071,49 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               task.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(task.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
-		Title:            task.Title,
-		Description:      textToStringPtr(task.Description),
-		StateID:          task.StateID,
-		StateName:        task.StateName,
-		StateType:        task.StateType,
-		StateColor:       textToString(task.StateColor, "#6B7280"),
-		Priority:         int(task.Priority),
-		PriorityRating:   int(task.PriorityRating),
-		Difficulty:       int(task.Difficulty),
-		Effort:           int(task.Effort),
-		ComplexityScore:  complexityScore(task.Difficulty, task.Effort),
-		StartDate:        timestamptzToTimePtr(task.StartDate),
-		DueDate:          timestamptzToTimePtr(task.DueDate),
-		CreatedBy:        task.CreatedBy,
-		CreatorUsername:  task.CreatorUsername,
-		CreatorFirstName: task.CreatorFirstName,
-		CreatorLastName:  task.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(task.CreatorAvatarUrl),
-		Originators:      h.originatorsForTask(ctx, task.ID),
-		Assignees:        assignees,
-		Watchers:         h.watchersForTask(ctx, task.ID),
-		Labels:           labels,
-		Areas:            areas,
-		ParentTaskID:     pgUUIDToUUIDPtr(task.ParentTaskID),
-		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
-		ParentTaskTitle:  textToStringPtr(task.ParentTaskTitle),
-		SubtaskCount:     int(task.SubtaskCount),
-		CycleID:          cycleID,
-		CycleTitle:       cycleTitle,
-		Modules:          h.getTaskModules(ctx, linkTaskID),
-		FigmaLink:        textToStringPtr(task.FigmaLink),
-		Branch:           textToStringPtr(task.Branch),
-		PullRequest:      textToStringPtr(task.PullRequest),
-		CreatedAt:        task.CreatedAt.Time,
-		UpdatedAt:        task.UpdatedAt.Time,
+		ID:                  task.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(task.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(task.TaskNumber)),
+		Title:               task.Title,
+		Description:         textToStringPtr(task.Description),
+		StateID:             task.StateID,
+		StateName:           task.StateName,
+		StateType:           task.StateType,
+		StateColor:          textToString(task.StateColor, "#6B7280"),
+		PriorityID:          task.PriorityID,
+		PriorityName:        task.PriorityName,
+		PriorityColor:       textToString(task.PriorityColor, "#6B7280"),
+		PriorityRank:        int(task.PriorityRank),
+		PriorityDescription: textToStringPtr(task.PriorityDescription),
+		PriorityRating:      int(task.PriorityRating),
+		Difficulty:          int(task.Difficulty),
+		Effort:              int(task.Effort),
+		ComplexityScore:     complexityScore(task.Difficulty, task.Effort),
+		StartDate:           timestamptzToTimePtr(task.StartDate),
+		DueDate:             timestamptzToTimePtr(task.DueDate),
+		CreatedBy:           task.CreatedBy,
+		CreatorUsername:     task.CreatorUsername,
+		CreatorFirstName:    task.CreatorFirstName,
+		CreatorLastName:     task.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(task.CreatorAvatarUrl),
+		Originators:         h.originatorsForTask(ctx, task.ID),
+		Assignees:           assignees,
+		Watchers:            h.watchersForTask(ctx, task.ID),
+		Labels:              labels,
+		Areas:               areas,
+		ParentTaskID:        pgUUIDToUUIDPtr(task.ParentTaskID),
+		ParentTaskNumber:    pgInt4ToIntPtr(task.ParentTaskNumber),
+		ParentTaskTitle:     textToStringPtr(task.ParentTaskTitle),
+		SubtaskCount:        int(task.SubtaskCount),
+		CycleID:             cycleID,
+		CycleTitle:          cycleTitle,
+		Modules:             h.getTaskModules(ctx, linkTaskID),
+		FigmaLink:           textToStringPtr(task.FigmaLink),
+		Branch:              textToStringPtr(task.Branch),
+		PullRequest:         textToStringPtr(task.PullRequest),
+		CreatedAt:           task.CreatedAt.Time,
+		UpdatedAt:           task.UpdatedAt.Time,
 	})
 }
 
@@ -1194,12 +1237,32 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "difficulty and effort must be between 0 and 5")
 	}
 
+	if req.Priority != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "the integer priority field is no longer accepted; send priority_id")
+	}
+	newPriorityID := pgtype.UUID{}
+	var newPriority store.ProjectPriority
+	if req.PriorityID != nil && *req.PriorityID != "" {
+		pid, perr := uuid.Parse(*req.PriorityID)
+		if perr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid priority_id")
+		}
+		newPriority, perr = h.store.GetProjectPriorityByID(ctx, pid)
+		if perr != nil || newPriority.ProjectID != projectID {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority does not belong to this project")
+		}
+		if !newPriority.Active {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority is deactivated")
+		}
+		newPriorityID = pgtype.UUID{Bytes: pid, Valid: true}
+	}
+
 	task, err := h.store.UpdateTask(ctx, store.UpdateTaskParams{
 		ID:              oldTask.ID,
 		Title:           stringToPgtypeText(req.Title),
 		Description:     stringToPgtypeText(req.Description),
 		StateID:         stateID,
-		Priority:        intToPgtypeInt4(req.Priority),
+		PriorityID:      newPriorityID,
 		PriorityRating:  intToPgtypeInt4(req.PriorityRating),
 		Difficulty:      intToPgtypeInt4(req.Difficulty),
 		Effort:          intToPgtypeInt4(req.Effort),
@@ -1255,14 +1318,14 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 			},
 		})
 	}
-	if req.Priority != nil && int32(*req.Priority) != oldTask.Priority {
+	if newPriorityID.Valid && uuid.UUID(newPriorityID.Bytes) != oldTask.PriorityID {
 		h.activityService.LogActivity(ctx, activity.LogActivityParams{
 			TaskID:       task.ID,
 			ActivityType: activity.TaskUpdated,
 			ActorID:      userID,
 			FieldName:    activity.StringPtr("priority"),
-			OldValue:     oldTask.Priority,
-			NewValue:     *req.Priority,
+			OldValue:     oldTask.PriorityName,
+			NewValue:     newPriority.Name,
 		})
 	}
 	if req.StartDate.Set {
@@ -1386,45 +1449,49 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	cycleID, cycleTitle := h.getTaskCycle(ctx, linkTaskID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       projectKey,
-		TaskNumber:       int(fullTask.TaskNumber),
-		TaskID:           projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		Difficulty:       int(fullTask.Difficulty),
-		Effort:           int(fullTask.Effort),
-		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Originators:      h.originatorsForTask(ctx, fullTask.ID),
-		Assignees:        assignees,
-		Watchers:         h.watchersForTask(ctx, fullTask.ID),
-		Labels:           labels,
-		Areas:            areas,
-		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
-		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
-		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
-		SubtaskCount:     int(fullTask.SubtaskCount),
-		CycleID:          cycleID,
-		CycleTitle:       cycleTitle,
-		Modules:          h.getTaskModules(ctx, linkTaskID),
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          projectKey,
+		TaskNumber:          int(fullTask.TaskNumber),
+		TaskID:              projectKey + "-" + strconv.Itoa(int(fullTask.TaskNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		PriorityID:          fullTask.PriorityID,
+		PriorityName:        fullTask.PriorityName,
+		PriorityColor:       textToString(fullTask.PriorityColor, "#6B7280"),
+		PriorityRank:        int(fullTask.PriorityRank),
+		PriorityDescription: textToStringPtr(fullTask.PriorityDescription),
+		PriorityRating:      int(fullTask.PriorityRating),
+		Difficulty:          int(fullTask.Difficulty),
+		Effort:              int(fullTask.Effort),
+		ComplexityScore:     complexityScore(fullTask.Difficulty, fullTask.Effort),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		Originators:         h.originatorsForTask(ctx, fullTask.ID),
+		Assignees:           assignees,
+		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Labels:              labels,
+		Areas:               areas,
+		ParentTaskID:        pgUUIDToUUIDPtr(fullTask.ParentTaskID),
+		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
+		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
+		SubtaskCount:        int(fullTask.SubtaskCount),
+		CycleID:             cycleID,
+		CycleTitle:          cycleTitle,
+		Modules:             h.getTaskModules(ctx, linkTaskID),
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 
@@ -1763,7 +1830,7 @@ func (h *TaskHandler) ListParentCandidates(c *echo.Context) error {
 type CopyTaskRequest struct {
 	TargetProjectKey string   `json:"target_project_key"`
 	StateID          string   `json:"state_id"`
-	Priority         *int     `json:"priority"`
+	PriorityID       *string  `json:"priority_id"`
 	Assignees        []string `json:"assignees"`
 	Labels           []string `json:"labels"`
 	CycleID          *string  `json:"cycle_id"`
@@ -1828,12 +1895,26 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 	if err != nil || destState.ProjectID != dest.ID {
 		return echo.NewHTTPError(http.StatusBadRequest, "state does not belong to the target project")
 	}
-	priority := src.Priority
-	if req.Priority != nil {
-		if *req.Priority < 0 || *req.Priority > 4 {
-			return echo.NewHTTPError(http.StatusBadRequest, "priority must be between 0 and 4")
+	// Priority is project-specific: the given target priority id, or the
+	// target's level matching the original by name, then rank, then default.
+	var destPrio store.ProjectPriority
+	if req.PriorityID != nil && *req.PriorityID != "" {
+		pid, perr := uuid.Parse(*req.PriorityID)
+		if perr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid priority_id")
 		}
-		priority = int32(*req.Priority)
+		destPrio, perr = h.store.GetProjectPriorityByID(ctx, pid)
+		if perr != nil || destPrio.ProjectID != dest.ID {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority does not belong to the target project")
+		}
+		if !destPrio.Active {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority is deactivated")
+		}
+	} else {
+		destPrio = h.resolveDestPriority(ctx, dest.ID, src.PriorityName, src.PriorityRank)
+		if destPrio.ID == uuid.Nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "target project has no active priorities")
+		}
 	}
 	labelIDs := make([]uuid.UUID, 0, len(req.Labels))
 	for _, l := range req.Labels {
@@ -1895,7 +1976,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		Title:          src.Title,
 		Description:    pgtype.Text{String: description, Valid: true},
 		StateID:        stateID,
-		Priority:       priority,
+		PriorityID:     destPrio.ID,
 		CreatedBy:      userID,
 		StartDate:      src.StartDate,
 		DueDate:        src.DueDate,
@@ -1986,7 +2067,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 				Title:          full.Title,
 				Description:    full.Description,
 				StateID:        stateID,
-				Priority:       full.Priority,
+				PriorityID:     destPrio.ID,
 				CreatedBy:      userID,
 				StartDate:      full.StartDate,
 				DueDate:        full.DueDate,
@@ -2023,6 +2104,29 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		"task_number": int(nextNumber),
 		"task_id":     destRef,
 	})
+}
+
+// resolveDestPriority maps a source task's priority onto a target project's
+// set: same name first, same rank second, the target's default (lowest active
+// rank) last. Returns a zero-ID priority when the target has none at all.
+func (h *TaskHandler) resolveDestPriority(ctx context.Context, destProjectID uuid.UUID, name string, rank int32) store.ProjectPriority {
+	if p, err := h.store.GetProjectPriorityByProjectAndName(ctx, store.GetProjectPriorityByProjectAndNameParams{
+		ProjectID: destProjectID,
+		Name:      name,
+	}); err == nil && p.Active {
+		return p
+	}
+	if p, err := h.store.GetProjectPriorityByProjectAndRank(ctx, store.GetProjectPriorityByProjectAndRankParams{
+		ProjectID: destProjectID,
+		Rank:      rank,
+	}); err == nil && p.Active {
+		return p
+	}
+	p, err := h.store.GetDefaultProjectPriority(ctx, destProjectID)
+	if err != nil {
+		return store.ProjectPriority{}
+	}
+	return p
 }
 
 // AttachSubtasksRequest carries the ids of existing tasks to attach as subtasks.
@@ -3201,6 +3305,29 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		newStateID = def.ID
 	}
 
+	// Remap priority onto the destination's set: same name first, same rank
+	// second, the destination's default (lowest active rank) last.
+	full, err := q.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return 0, err
+	}
+	var newPriorityID uuid.UUID
+	if p, perr := q.GetProjectPriorityByProjectAndName(ctx, store.GetProjectPriorityByProjectAndNameParams{
+		ProjectID: dest.ID,
+		Name:      full.PriorityName,
+	}); perr == nil && p.Active {
+		newPriorityID = p.ID
+	} else if p, perr := q.GetProjectPriorityByProjectAndRank(ctx, store.GetProjectPriorityByProjectAndRankParams{
+		ProjectID: dest.ID,
+		Rank:      full.PriorityRank,
+	}); perr == nil && p.Active {
+		newPriorityID = p.ID
+	} else if p, perr := q.GetDefaultProjectPriority(ctx, dest.ID); perr == nil {
+		newPriorityID = p.ID
+	} else {
+		return 0, perr
+	}
+
 	nextNumber, err := q.GetNextTaskNumber(ctx, dest.ID)
 	if err != nil {
 		return 0, err
@@ -3211,6 +3338,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		ProjectID:  dest.ID,
 		TaskNumber: nextNumber,
 		StateID:    newStateID,
+		PriorityID: newPriorityID,
 	})
 	if err != nil {
 		return 0, err
@@ -3353,38 +3481,42 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 	areas := h.getTaskAreas(ctx, task.ID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
-		ID:               fullTask.ID,
-		ProjectKey:       dest.ProjectKey,
-		TaskNumber:       int(newNumber),
-		TaskID:           dest.ProjectKey + "-" + strconv.Itoa(int(newNumber)),
-		Title:            fullTask.Title,
-		Description:      textToStringPtr(fullTask.Description),
-		StateID:          fullTask.StateID,
-		StateName:        fullTask.StateName,
-		StateType:        fullTask.StateType,
-		StateColor:       textToString(fullTask.StateColor, "#6B7280"),
-		Priority:         int(fullTask.Priority),
-		PriorityRating:   int(fullTask.PriorityRating),
-		Difficulty:       int(fullTask.Difficulty),
-		Effort:           int(fullTask.Effort),
-		ComplexityScore:  complexityScore(fullTask.Difficulty, fullTask.Effort),
-		StartDate:        timestamptzToTimePtr(fullTask.StartDate),
-		DueDate:          timestamptzToTimePtr(fullTask.DueDate),
-		CreatedBy:        fullTask.CreatedBy,
-		CreatorUsername:  fullTask.CreatorUsername,
-		CreatorFirstName: fullTask.CreatorFirstName,
-		CreatorLastName:  fullTask.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(fullTask.CreatorAvatarUrl),
-		Originators:      h.originatorsForTask(ctx, fullTask.ID),
-		Assignees:        assignees,
-		Watchers:         h.watchersForTask(ctx, fullTask.ID),
-		Labels:           labels,
-		Areas:            areas,
-		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
-		Branch:           textToStringPtr(fullTask.Branch),
-		PullRequest:      textToStringPtr(fullTask.PullRequest),
-		CreatedAt:        fullTask.CreatedAt.Time,
-		UpdatedAt:        fullTask.UpdatedAt.Time,
+		ID:                  fullTask.ID,
+		ProjectKey:          dest.ProjectKey,
+		TaskNumber:          int(newNumber),
+		TaskID:              dest.ProjectKey + "-" + strconv.Itoa(int(newNumber)),
+		Title:               fullTask.Title,
+		Description:         textToStringPtr(fullTask.Description),
+		StateID:             fullTask.StateID,
+		StateName:           fullTask.StateName,
+		StateType:           fullTask.StateType,
+		StateColor:          textToString(fullTask.StateColor, "#6B7280"),
+		PriorityID:          fullTask.PriorityID,
+		PriorityName:        fullTask.PriorityName,
+		PriorityColor:       textToString(fullTask.PriorityColor, "#6B7280"),
+		PriorityRank:        int(fullTask.PriorityRank),
+		PriorityDescription: textToStringPtr(fullTask.PriorityDescription),
+		PriorityRating:      int(fullTask.PriorityRating),
+		Difficulty:          int(fullTask.Difficulty),
+		Effort:              int(fullTask.Effort),
+		ComplexityScore:     complexityScore(fullTask.Difficulty, fullTask.Effort),
+		StartDate:           timestamptzToTimePtr(fullTask.StartDate),
+		DueDate:             timestamptzToTimePtr(fullTask.DueDate),
+		CreatedBy:           fullTask.CreatedBy,
+		CreatorUsername:     fullTask.CreatorUsername,
+		CreatorFirstName:    fullTask.CreatorFirstName,
+		CreatorLastName:     fullTask.CreatorLastName,
+		CreatorAvatarURL:    textToStringPtr(fullTask.CreatorAvatarUrl),
+		Originators:         h.originatorsForTask(ctx, fullTask.ID),
+		Assignees:           assignees,
+		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Labels:              labels,
+		Areas:               areas,
+		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		Branch:              textToStringPtr(fullTask.Branch),
+		PullRequest:         textToStringPtr(fullTask.PullRequest),
+		CreatedAt:           fullTask.CreatedAt.Time,
+		UpdatedAt:           fullTask.UpdatedAt.Time,
 	})
 }
 

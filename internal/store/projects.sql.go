@@ -60,7 +60,6 @@ func (q *Queries) AddProjectMembersToWorkspace(ctx context.Context, arg AddProje
 }
 
 const addTaskArea = `-- name: AddTaskArea :exec
-
 INSERT INTO task_areas (task_id, area_id, added_by)
 VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING
@@ -72,7 +71,6 @@ type AddTaskAreaParams struct {
 	AddedBy uuid.UUID `json:"added_by"`
 }
 
-// ==================== TASK LABELS ====================
 func (q *Queries) AddTaskArea(ctx context.Context, arg AddTaskAreaParams) error {
 	_, err := q.db.Exec(ctx, addTaskArea, arg.TaskID, arg.AreaID, arg.AddedBy)
 	return err
@@ -185,6 +183,17 @@ func (q *Queries) CascadeSoftDeleteSubtasks(ctx context.Context, parentID uuid.U
 	return err
 }
 
+const countActiveProjectPriorities = `-- name: CountActiveProjectPriorities :one
+SELECT COUNT(*) FROM project_priorities WHERE project_id = $1 AND active
+`
+
+func (q *Queries) CountActiveProjectPriorities(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveProjectPriorities, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countAllProjects = `-- name: CountAllProjects :one
 SELECT COUNT(*)
 FROM projects p
@@ -293,6 +302,17 @@ type CountTasksByAssigneeParams struct {
 
 func (q *Queries) CountTasksByAssignee(ctx context.Context, arg CountTasksByAssigneeParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countTasksByAssignee, arg.UserID, arg.WorkspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTasksInPriority = `-- name: CountTasksInPriority :one
+SELECT COUNT(*) FROM tasks WHERE priority_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountTasksInPriority(ctx context.Context, priorityID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTasksInPriority, priorityID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -499,7 +519,9 @@ type CreateProjectAreaParams struct {
 	Color     pgtype.Text `json:"color"`
 }
 
-// ==================== PROJECT LABELS ====================
+// ==================== PROJECT AREAS ====================
+// Areas are admin-defined classification values (multi-select per task),
+// mirroring labels structurally but managed as a controlled list.
 func (q *Queries) CreateProjectArea(ctx context.Context, arg CreateProjectAreaParams) (ProjectArea, error) {
 	row := q.db.QueryRow(ctx, createProjectArea, arg.ProjectID, arg.Name, arg.Color)
 	var i ProjectArea
@@ -535,6 +557,47 @@ func (q *Queries) CreateProjectLabel(ctx context.Context, arg CreateProjectLabel
 		&i.ProjectID,
 		&i.Name,
 		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createProjectPriority = `-- name: CreateProjectPriority :one
+
+INSERT INTO project_priorities (project_id, name, description, color, rank)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, project_id, name, description, color, rank, active, created_at
+`
+
+type CreateProjectPriorityParams struct {
+	ProjectID   uuid.UUID   `json:"project_id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Color       pgtype.Text `json:"color"`
+	Rank        int32       `json:"rank"`
+}
+
+// ==================== PROJECT PRIORITIES ====================
+// Per-project priority sets; tasks reference a row by id, so renames and
+// recolors apply everywhere instantly. Rank drives ordering (higher = more
+// urgent); deactivated values stay on tasks but leave the pickers.
+func (q *Queries) CreateProjectPriority(ctx context.Context, arg CreateProjectPriorityParams) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, createProjectPriority,
+		arg.ProjectID,
+		arg.Name,
+		arg.Description,
+		arg.Color,
+		arg.Rank,
+	)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -585,7 +648,7 @@ func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectState
 
 const createTask = `-- name: CreateTask :one
 
-INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, difficulty, effort)
+INSERT INTO tasks (project_id, task_number, title, description, state_id, priority_id, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, difficulty, effort)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 0), COALESCE($15, 0), COALESCE($16, 0))
 RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
@@ -596,7 +659,7 @@ type CreateTaskParams struct {
 	Title          string             `json:"title"`
 	Description    pgtype.Text        `json:"description"`
 	StateID        uuid.UUID          `json:"state_id"`
-	Priority       int32              `json:"priority"`
+	PriorityID     uuid.UUID          `json:"priority_id"`
 	CreatedBy      uuid.UUID          `json:"created_by"`
 	StartDate      pgtype.Timestamptz `json:"start_date"`
 	DueDate        pgtype.Timestamptz `json:"due_date"`
@@ -640,7 +703,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		arg.Title,
 		arg.Description,
 		arg.StateID,
-		arg.Priority,
+		arg.PriorityID,
 		arg.CreatedBy,
 		arg.StartDate,
 		arg.DueDate,
@@ -732,6 +795,15 @@ func (q *Queries) DeleteProjectLabel(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteProjectPriority = `-- name: DeleteProjectPriority :exec
+DELETE FROM project_priorities WHERE id = $1
+`
+
+func (q *Queries) DeleteProjectPriority(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProjectPriority, id)
+	return err
+}
+
 const deleteProjectState = `-- name: DeleteProjectState :exec
 DELETE FROM project_states WHERE id = $1
 `
@@ -807,6 +879,31 @@ func (q *Queries) GetCommentByID(ctx context.Context, id uuid.UUID) (GetCommentB
 		&i.FirstName,
 		&i.LastName,
 		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const getDefaultProjectPriority = `-- name: GetDefaultProjectPriority :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND active
+ORDER BY rank ASC, created_at ASC
+LIMIT 1
+`
+
+// The level new tasks fall back to: the lowest-ranked active one.
+func (q *Queries) GetDefaultProjectPriority(ctx context.Context, projectID uuid.UUID) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, getDefaultProjectPriority, projectID)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1064,6 +1161,85 @@ func (q *Queries) GetProjectMemberRole(ctx context.Context, arg GetProjectMember
 	return role, err
 }
 
+const getProjectPriorityByID = `-- name: GetProjectPriorityByID :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE id = $1
+`
+
+func (q *Queries) GetProjectPriorityByID(ctx context.Context, id uuid.UUID) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, getProjectPriorityByID, id)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getProjectPriorityByProjectAndName = `-- name: GetProjectPriorityByProjectAndName :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND name = $2
+LIMIT 1
+`
+
+type GetProjectPriorityByProjectAndNameParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Name      string    `json:"name"`
+}
+
+func (q *Queries) GetProjectPriorityByProjectAndName(ctx context.Context, arg GetProjectPriorityByProjectAndNameParams) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, getProjectPriorityByProjectAndName, arg.ProjectID, arg.Name)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getProjectPriorityByProjectAndRank = `-- name: GetProjectPriorityByProjectAndRank :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND rank = $2
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+type GetProjectPriorityByProjectAndRankParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Rank      int32     `json:"rank"`
+}
+
+func (q *Queries) GetProjectPriorityByProjectAndRank(ctx context.Context, arg GetProjectPriorityByProjectAndRankParams) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, getProjectPriorityByProjectAndRank, arg.ProjectID, arg.Rank)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getProjectStateByID = `-- name: GetProjectStateByID :one
 SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
@@ -1146,47 +1322,54 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
-       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
+       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.id = $1 AND t.deleted_at IS NULL
 `
 
 type GetTaskByIDRow struct {
-	ID               uuid.UUID          `json:"id"`
-	ProjectID        uuid.UUID          `json:"project_id"`
-	TaskNumber       int32              `json:"task_number"`
-	Title            string             `json:"title"`
-	Description      pgtype.Text        `json:"description"`
-	StateID          uuid.UUID          `json:"state_id"`
-	Priority         int32              `json:"priority"`
-	CreatedBy        uuid.UUID          `json:"created_by"`
-	StartDate        pgtype.Timestamptz `json:"start_date"`
-	DueDate          pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID     pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink        pgtype.Text        `json:"figma_link"`
-	Branch           pgtype.Text        `json:"branch"`
-	PullRequest      pgtype.Text        `json:"pull_request"`
-	PriorityRating   int32              `json:"priority_rating"`
-	Difficulty       int32              `json:"difficulty"`
-	Effort           int32              `json:"effort"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	ProjectKey       string             `json:"project_key"`
-	StateName        string             `json:"state_name"`
-	StateType        string             `json:"state_type"`
-	StateColor       pgtype.Text        `json:"state_color"`
-	CreatorUsername  string             `json:"creator_username"`
-	CreatorFirstName string             `json:"creator_first_name"`
-	CreatorLastName  string             `json:"creator_last_name"`
-	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
-	ParentTaskNumber pgtype.Int4        `json:"parent_task_number"`
-	ParentTaskTitle  pgtype.Text        `json:"parent_task_title"`
-	SubtaskCount     int64              `json:"subtask_count"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	TaskNumber          int32              `json:"task_number"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	StateID             uuid.UUID          `json:"state_id"`
+	Priority            int32              `json:"priority"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	StartDate           pgtype.Timestamptz `json:"start_date"`
+	DueDate             pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID        pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink           pgtype.Text        `json:"figma_link"`
+	Branch              pgtype.Text        `json:"branch"`
+	PullRequest         pgtype.Text        `json:"pull_request"`
+	PriorityRating      int32              `json:"priority_rating"`
+	Difficulty          int32              `json:"difficulty"`
+	Effort              int32              `json:"effort"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	ProjectKey          string             `json:"project_key"`
+	StateName           string             `json:"state_name"`
+	StateType           string             `json:"state_type"`
+	StateColor          pgtype.Text        `json:"state_color"`
+	CreatorUsername     string             `json:"creator_username"`
+	CreatorFirstName    string             `json:"creator_first_name"`
+	CreatorLastName     string             `json:"creator_last_name"`
+	CreatorAvatarUrl    pgtype.Text        `json:"creator_avatar_url"`
+	ParentTaskNumber    pgtype.Int4        `json:"parent_task_number"`
+	ParentTaskTitle     pgtype.Text        `json:"parent_task_title"`
+	SubtaskCount        int64              `json:"subtask_count"`
+	PriorityID          uuid.UUID          `json:"priority_id"`
+	PriorityName        string             `json:"priority_name"`
+	PriorityColor       pgtype.Text        `json:"priority_color"`
+	PriorityRank        int32              `json:"priority_rank"`
+	PriorityDescription pgtype.Text        `json:"priority_description"`
 }
 
 func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow, error) {
@@ -1224,6 +1407,11 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (GetTaskByIDRow
 		&i.ParentTaskNumber,
 		&i.ParentTaskTitle,
 		&i.SubtaskCount,
+		&i.PriorityID,
+		&i.PriorityName,
+		&i.PriorityColor,
+		&i.PriorityRank,
+		&i.PriorityDescription,
 	)
 	return i, err
 }
@@ -1234,10 +1422,12 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
-       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
+       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.project_id = $1 AND t.task_number = $2 AND t.deleted_at IS NULL
@@ -1249,37 +1439,42 @@ type GetTaskByProjectAndNumberParams struct {
 }
 
 type GetTaskByProjectAndNumberRow struct {
-	ID               uuid.UUID          `json:"id"`
-	ProjectID        uuid.UUID          `json:"project_id"`
-	TaskNumber       int32              `json:"task_number"`
-	Title            string             `json:"title"`
-	Description      pgtype.Text        `json:"description"`
-	StateID          uuid.UUID          `json:"state_id"`
-	Priority         int32              `json:"priority"`
-	CreatedBy        uuid.UUID          `json:"created_by"`
-	StartDate        pgtype.Timestamptz `json:"start_date"`
-	DueDate          pgtype.Timestamptz `json:"due_date"`
-	ParentTaskID     pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink        pgtype.Text        `json:"figma_link"`
-	Branch           pgtype.Text        `json:"branch"`
-	PullRequest      pgtype.Text        `json:"pull_request"`
-	PriorityRating   int32              `json:"priority_rating"`
-	Difficulty       int32              `json:"difficulty"`
-	Effort           int32              `json:"effort"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	ProjectKey       string             `json:"project_key"`
-	StateName        string             `json:"state_name"`
-	StateType        string             `json:"state_type"`
-	StateColor       pgtype.Text        `json:"state_color"`
-	CreatorUsername  string             `json:"creator_username"`
-	CreatorFirstName string             `json:"creator_first_name"`
-	CreatorLastName  string             `json:"creator_last_name"`
-	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
-	ParentTaskNumber pgtype.Int4        `json:"parent_task_number"`
-	ParentTaskTitle  pgtype.Text        `json:"parent_task_title"`
-	SubtaskCount     int64              `json:"subtask_count"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	TaskNumber          int32              `json:"task_number"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	StateID             uuid.UUID          `json:"state_id"`
+	Priority            int32              `json:"priority"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	StartDate           pgtype.Timestamptz `json:"start_date"`
+	DueDate             pgtype.Timestamptz `json:"due_date"`
+	ParentTaskID        pgtype.UUID        `json:"parent_task_id"`
+	FigmaLink           pgtype.Text        `json:"figma_link"`
+	Branch              pgtype.Text        `json:"branch"`
+	PullRequest         pgtype.Text        `json:"pull_request"`
+	PriorityRating      int32              `json:"priority_rating"`
+	Difficulty          int32              `json:"difficulty"`
+	Effort              int32              `json:"effort"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	ProjectKey          string             `json:"project_key"`
+	StateName           string             `json:"state_name"`
+	StateType           string             `json:"state_type"`
+	StateColor          pgtype.Text        `json:"state_color"`
+	CreatorUsername     string             `json:"creator_username"`
+	CreatorFirstName    string             `json:"creator_first_name"`
+	CreatorLastName     string             `json:"creator_last_name"`
+	CreatorAvatarUrl    pgtype.Text        `json:"creator_avatar_url"`
+	ParentTaskNumber    pgtype.Int4        `json:"parent_task_number"`
+	ParentTaskTitle     pgtype.Text        `json:"parent_task_title"`
+	SubtaskCount        int64              `json:"subtask_count"`
+	PriorityID          uuid.UUID          `json:"priority_id"`
+	PriorityName        string             `json:"priority_name"`
+	PriorityColor       pgtype.Text        `json:"priority_color"`
+	PriorityRank        int32              `json:"priority_rank"`
+	PriorityDescription pgtype.Text        `json:"priority_description"`
 }
 
 func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByProjectAndNumberParams) (GetTaskByProjectAndNumberRow, error) {
@@ -1317,6 +1512,11 @@ func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByPr
 		&i.ParentTaskNumber,
 		&i.ParentTaskTitle,
 		&i.SubtaskCount,
+		&i.PriorityID,
+		&i.PriorityName,
+		&i.PriorityColor,
+		&i.PriorityRank,
+		&i.PriorityDescription,
 	)
 	return i, err
 }
@@ -2068,6 +2268,57 @@ func (q *Queries) ListProjectMembersMissingFromWorkspace(ctx context.Context, ar
 			&i.FirstName,
 			&i.LastName,
 			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectPriorities = `-- name: ListProjectPriorities :many
+SELECT pp.id, pp.project_id, pp.name, pp.description, pp.color, pp.rank, pp.active, pp.created_at,
+       (SELECT COUNT(*) FROM tasks t WHERE t.priority_id = pp.id AND t.deleted_at IS NULL)::int AS task_count
+FROM project_priorities pp
+WHERE pp.project_id = $1
+ORDER BY pp.rank DESC, pp.created_at ASC
+`
+
+type ListProjectPrioritiesRow struct {
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	Color       pgtype.Text        `json:"color"`
+	Rank        int32              `json:"rank"`
+	Active      bool               `json:"active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	TaskCount   int32              `json:"task_count"`
+}
+
+// task_count lets the settings UI warn what an edit or delete touches.
+func (q *Queries) ListProjectPriorities(ctx context.Context, projectID uuid.UUID) ([]ListProjectPrioritiesRow, error) {
+	rows, err := q.db.Query(ctx, listProjectPriorities, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProjectPrioritiesRow{}
+	for rows.Next() {
+		var i ListProjectPrioritiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.Description,
+			&i.Color,
+			&i.Rank,
+			&i.Active,
+			&i.CreatedAt,
+			&i.TaskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -2844,11 +3095,13 @@ func (q *Queries) ListTaskWatchers(ctx context.Context, taskID uuid.UUID) ([]Lis
 }
 
 const listTasksByAssignee = `-- name: ListTasksByAssignee :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank,
        p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN task_assignees ta ON t.id = ta.task_id
 WHERE ta.user_id = $1 AND t.deleted_at IS NULL AND p.deleted_at IS NULL
   AND ps.state_type NOT IN ('completed', 'cancelled')
@@ -2865,16 +3118,19 @@ type ListTasksByAssigneeParams struct {
 }
 
 type ListTasksByAssigneeRow struct {
-	ID         uuid.UUID   `json:"id"`
-	ProjectID  uuid.UUID   `json:"project_id"`
-	TaskNumber int32       `json:"task_number"`
-	Title      string      `json:"title"`
-	StateID    uuid.UUID   `json:"state_id"`
-	Priority   int32       `json:"priority"`
-	ProjectKey string      `json:"project_key"`
-	StateName  string      `json:"state_name"`
-	StateType  string      `json:"state_type"`
-	StateColor pgtype.Text `json:"state_color"`
+	ID            uuid.UUID   `json:"id"`
+	ProjectID     uuid.UUID   `json:"project_id"`
+	TaskNumber    int32       `json:"task_number"`
+	Title         string      `json:"title"`
+	StateID       uuid.UUID   `json:"state_id"`
+	PriorityID    uuid.UUID   `json:"priority_id"`
+	PriorityName  string      `json:"priority_name"`
+	PriorityColor pgtype.Text `json:"priority_color"`
+	PriorityRank  int32       `json:"priority_rank"`
+	ProjectKey    string      `json:"project_key"`
+	StateName     string      `json:"state_name"`
+	StateType     string      `json:"state_type"`
+	StateColor    pgtype.Text `json:"state_color"`
 }
 
 func (q *Queries) ListTasksByAssignee(ctx context.Context, arg ListTasksByAssigneeParams) ([]ListTasksByAssigneeRow, error) {
@@ -2897,7 +3153,10 @@ func (q *Queries) ListTasksByAssignee(ctx context.Context, arg ListTasksByAssign
 			&i.TaskNumber,
 			&i.Title,
 			&i.StateID,
-			&i.Priority,
+			&i.PriorityID,
+			&i.PriorityName,
+			&i.PriorityColor,
+			&i.PriorityRank,
 			&i.ProjectKey,
 			&i.StateName,
 			&i.StateType,
@@ -3260,8 +3519,9 @@ UPDATE tasks
 SET project_id = $1,
     task_number = $2,
     state_id = $3,
+    priority_id = $4,
     updated_at = NOW()
-WHERE id = $4 AND deleted_at IS NULL
+WHERE id = $5 AND deleted_at IS NULL
 RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at
 `
 
@@ -3269,6 +3529,7 @@ type MoveTaskParams struct {
 	ProjectID  uuid.UUID `json:"project_id"`
 	TaskNumber int32     `json:"task_number"`
 	StateID    uuid.UUID `json:"state_id"`
+	PriorityID uuid.UUID `json:"priority_id"`
 	ID         uuid.UUID `json:"id"`
 }
 
@@ -3300,6 +3561,7 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow
 		arg.ProjectID,
 		arg.TaskNumber,
 		arg.StateID,
+		arg.PriorityID,
 		arg.ID,
 	)
 	var i MoveTaskRow
@@ -3972,6 +4234,49 @@ func (q *Queries) UpdateProjectMemberRole(ctx context.Context, arg UpdateProject
 	return err
 }
 
+const updateProjectPriority = `-- name: UpdateProjectPriority :one
+UPDATE project_priorities
+SET name = COALESCE($2, name),
+    description = COALESCE($3, description),
+    color = COALESCE($4, color),
+    rank = COALESCE($5, rank),
+    active = COALESCE($6, active)
+WHERE id = $1
+RETURNING id, project_id, name, description, color, rank, active, created_at
+`
+
+type UpdateProjectPriorityParams struct {
+	ID          uuid.UUID   `json:"id"`
+	Name        pgtype.Text `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Color       pgtype.Text `json:"color"`
+	Rank        pgtype.Int4 `json:"rank"`
+	Active      pgtype.Bool `json:"active"`
+}
+
+func (q *Queries) UpdateProjectPriority(ctx context.Context, arg UpdateProjectPriorityParams) (ProjectPriority, error) {
+	row := q.db.QueryRow(ctx, updateProjectPriority,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+		arg.Color,
+		arg.Rank,
+		arg.Active,
+	)
+	var i ProjectPriority
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Color,
+		&i.Rank,
+		&i.Active,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateProjectState = `-- name: UpdateProjectState :one
 UPDATE project_states
 SET name = COALESCE($2, name),
@@ -4058,7 +4363,7 @@ UPDATE tasks
 SET title = COALESCE($2, title),
     description = COALESCE($3, description),
     state_id = COALESCE($4, state_id),
-    priority = COALESCE($5, priority),
+    priority_id = COALESCE($5, priority_id),
     start_date = CASE WHEN $6::bool THEN $7 ELSE start_date END,
     due_date = CASE WHEN $8::bool THEN $9 ELSE due_date END,
     figma_link = COALESCE($10, figma_link),
@@ -4077,7 +4382,7 @@ type UpdateTaskParams struct {
 	Title           pgtype.Text        `json:"title"`
 	Description     pgtype.Text        `json:"description"`
 	StateID         pgtype.UUID        `json:"state_id"`
-	Priority        pgtype.Int4        `json:"priority"`
+	PriorityID      pgtype.UUID        `json:"priority_id"`
 	UpdateStartDate bool               `json:"update_start_date"`
 	StartDate       pgtype.Timestamptz `json:"start_date"`
 	UpdateDueDate   bool               `json:"update_due_date"`
@@ -4117,7 +4422,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		arg.Title,
 		arg.Description,
 		arg.StateID,
-		arg.Priority,
+		arg.PriorityID,
 		arg.UpdateStartDate,
 		arg.StartDate,
 		arg.UpdateDueDate,

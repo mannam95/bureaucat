@@ -284,7 +284,7 @@ ORDER BY name ASC;
 -- name: CreateTask :one
 -- Requesters/originators live in task_originators; the caller inserts them after
 -- creating the task (defaulting to the creator when none are given).
-INSERT INTO tasks (project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, difficulty, effort)
+INSERT INTO tasks (project_id, task_number, title, description, state_id, priority_id, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, difficulty, effort)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg('parent_task_id'), sqlc.narg('figma_link'), sqlc.narg('branch'), sqlc.narg('pull_request'), COALESCE(sqlc.narg('priority_rating'), 0), COALESCE(sqlc.narg('difficulty'), 0), COALESCE(sqlc.narg('effort'), 0))
 RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at;
 
@@ -299,10 +299,12 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
-       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
+       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.id = $1 AND t.deleted_at IS NULL;
@@ -313,10 +315,12 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
-       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
+       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.project_id = $1 AND t.task_number = $2 AND t.deleted_at IS NULL;
@@ -326,7 +330,7 @@ UPDATE tasks
 SET title = COALESCE(sqlc.narg('title'), title),
     description = COALESCE(sqlc.narg('description'), description),
     state_id = COALESCE(sqlc.narg('state_id'), state_id),
-    priority = COALESCE(sqlc.narg('priority'), priority),
+    priority_id = COALESCE(sqlc.narg('priority_id'), priority_id),
     start_date = CASE WHEN sqlc.arg('update_start_date')::bool THEN sqlc.narg('start_date') ELSE start_date END,
     due_date = CASE WHEN sqlc.arg('update_due_date')::bool THEN sqlc.narg('due_date') ELSE due_date END,
     figma_link = COALESCE(sqlc.narg('figma_link'), figma_link),
@@ -346,6 +350,7 @@ UPDATE tasks
 SET project_id = sqlc.arg('project_id'),
     task_number = sqlc.arg('task_number'),
     state_id = sqlc.arg('state_id'),
+    priority_id = sqlc.arg('priority_id'),
     updated_at = NOW()
 WHERE id = sqlc.arg('id') AND deleted_at IS NULL
 RETURNING id, project_id, task_number, title, description, state_id, priority, created_by, start_date, due_date, parent_task_id, figma_link, branch, pull_request, priority_rating, created_at, updated_at, deleted_at;
@@ -474,6 +479,69 @@ JOIN users u ON ta.user_id = u.id
 WHERE ta.task_id = ANY(@task_ids::uuid[])
 ORDER BY ta.assigned_at ASC;
 
+-- ==================== PROJECT PRIORITIES ====================
+-- Per-project priority sets; tasks reference a row by id, so renames and
+-- recolors apply everywhere instantly. Rank drives ordering (higher = more
+-- urgent); deactivated values stay on tasks but leave the pickers.
+
+-- name: CreateProjectPriority :one
+INSERT INTO project_priorities (project_id, name, description, color, rank)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, project_id, name, description, color, rank, active, created_at;
+
+-- name: ListProjectPriorities :many
+-- task_count lets the settings UI warn what an edit or delete touches.
+SELECT pp.id, pp.project_id, pp.name, pp.description, pp.color, pp.rank, pp.active, pp.created_at,
+       (SELECT COUNT(*) FROM tasks t WHERE t.priority_id = pp.id AND t.deleted_at IS NULL)::int AS task_count
+FROM project_priorities pp
+WHERE pp.project_id = $1
+ORDER BY pp.rank DESC, pp.created_at ASC;
+
+-- name: GetProjectPriorityByID :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE id = $1;
+
+-- name: GetDefaultProjectPriority :one
+-- The level new tasks fall back to: the lowest-ranked active one.
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND active
+ORDER BY rank ASC, created_at ASC
+LIMIT 1;
+
+-- name: GetProjectPriorityByProjectAndName :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND name = $2
+LIMIT 1;
+
+-- name: GetProjectPriorityByProjectAndRank :one
+SELECT id, project_id, name, description, color, rank, active, created_at
+FROM project_priorities
+WHERE project_id = $1 AND rank = $2
+ORDER BY created_at ASC
+LIMIT 1;
+
+-- name: UpdateProjectPriority :one
+UPDATE project_priorities
+SET name = COALESCE(sqlc.narg('name'), name),
+    description = COALESCE(sqlc.narg('description'), description),
+    color = COALESCE(sqlc.narg('color'), color),
+    rank = COALESCE(sqlc.narg('rank'), rank),
+    active = COALESCE(sqlc.narg('active'), active)
+WHERE id = $1
+RETURNING id, project_id, name, description, color, rank, active, created_at;
+
+-- name: DeleteProjectPriority :exec
+DELETE FROM project_priorities WHERE id = $1;
+
+-- name: CountTasksInPriority :one
+SELECT COUNT(*) FROM tasks WHERE priority_id = $1 AND deleted_at IS NULL;
+
+-- name: CountActiveProjectPriorities :one
+SELECT COUNT(*) FROM project_priorities WHERE project_id = $1 AND active;
+
 -- ==================== PROJECT AREAS ====================
 -- Areas are admin-defined classification values (multi-select per task),
 -- mirroring labels structurally but managed as a controlled list.
@@ -538,11 +606,13 @@ WHERE tl.task_id = ANY(@task_ids::uuid[])
 ORDER BY pl.name ASC;
 
 -- name: ListTasksByAssignee :many
-SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority,
+SELECT t.id, t.project_id, t.task_number, t.title, t.state_id,
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank,
        p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN task_assignees ta ON t.id = ta.task_id
 WHERE ta.user_id = $1 AND t.deleted_at IS NULL AND p.deleted_at IS NULL
   AND ps.state_type NOT IN ('completed', 'cancelled')

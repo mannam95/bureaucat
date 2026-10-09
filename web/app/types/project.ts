@@ -44,6 +44,34 @@ export interface MoveImpactMember {
   avatar_url?: string;
 }
 
+/** A per-project priority level. Rank drives ordering: higher = more urgent. */
+export interface ProjectPriority {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  rank: number;
+  active: boolean;
+  created_at: string;
+  /** Non-deleted tasks on this level (filled on the list endpoint). */
+  task_count: number;
+}
+
+export interface CreatePriorityRequest {
+  name: string;
+  description?: string;
+  color?: string;
+  rank?: number;
+}
+
+export interface UpdatePriorityRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+  rank?: number;
+  active?: boolean;
+}
+
 export interface ProjectState {
   id: string;
   state_type: StateType;

@@ -199,6 +199,12 @@ func (s *Server) registerRoutes() {
 			projectGroup.PATCH("/members/:userId", s.projectHandler.UpdateMemberRole, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("/members/:userId", s.projectHandler.RemoveMember, auth.ProjectRoleMiddleware("admin"))
 
+			// Project priorities (per-project priority levels)
+			projectGroup.GET("/priorities", s.projectHandler.ListPriorities)
+			projectGroup.POST("/priorities", s.projectHandler.CreatePriority, auth.ProjectRoleMiddleware("admin"))
+			projectGroup.PATCH("/priorities/:priorityId", s.projectHandler.UpdatePriority, auth.ProjectRoleMiddleware("admin"))
+			projectGroup.DELETE("/priorities/:priorityId", s.projectHandler.DeletePriority, auth.ProjectRoleMiddleware("admin"))
+
 			// Project states
 			projectGroup.GET("/states", s.projectHandler.ListStates)
 			projectGroup.POST("/states", s.projectHandler.CreateState, auth.ProjectRoleMiddleware("admin"))

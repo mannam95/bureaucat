@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ChevronLeft, Check } from "lucide-vue-next";
 import type { FilterField, FilterOp, Predicate, ProjectState, ProjectMember, ProjectLabel,
-  ProjectArea, CycleSibling, FilterValue } from "~/types";
+  ProjectArea,
+  ProjectPriority, CycleSibling, FilterValue } from "~/types";
 import { FILTER_CATALOG, findFieldDef, findOpDef } from "./filterCatalog";
 import FilterValuePicker from "./FilterValuePicker.vue";
 
@@ -12,6 +13,7 @@ const props = withDefaults(
     states: ProjectState[];
     labels: ProjectLabel[];
     areas: ProjectArea[];
+    priorities: ProjectPriority[];
     members: ProjectMember[];
     cycles: CycleSibling[];
     /** Lock the field so only op/value can change. */
@@ -173,6 +175,7 @@ const canConfirm = computed(() => {
         :states="states"
         :labels="labels"
         :areas="areas"
+        :priorities="priorities"
         :members="members"
         :cycles="cycles"
         @update:value="(v) => (value = v)"

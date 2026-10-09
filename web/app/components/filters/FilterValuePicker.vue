@@ -2,12 +2,11 @@
 import type { DateValue } from "reka-ui";
 import { CalendarDate } from "@internationalized/date";
 import type { FilterField, FilterOp, FilterValue, ProjectState, ProjectMember, ProjectLabel,
-  ProjectArea, CycleSibling } from "~/types";
+  ProjectArea, ProjectPriority, CycleSibling } from "~/types";
 import type { ValueKind } from "./filterCatalog";
 import {
   findOpDef,
   STATE_TYPE_OPTIONS,
-  PRIORITY_OPTIONS,
   RELATIVE_DATE_OPTIONS,
 } from "./filterCatalog";
 import EntityMultiSelect from "~/components/shared/EntityMultiSelect.vue";
@@ -19,6 +18,7 @@ const props = defineProps<{
   states: ProjectState[];
   labels: ProjectLabel[];
   areas: ProjectArea[];
+  priorities: ProjectPriority[];
   members: ProjectMember[];
   cycles: CycleSibling[];
 }>();
@@ -128,9 +128,6 @@ const rangeDateMode = ref<{ from: "calendar" | "relative"; to: "calendar" | "rel
 function updateStringArray(next: string[]) {
   emit("update:value", next);
 }
-function updateIntArray(next: string[]) {
-  emit("update:value", next.map((s) => parseInt(s, 10)).filter((n) => !isNaN(n)));
-}
 </script>
 
 <template>
@@ -186,23 +183,39 @@ function updateIntArray(next: string[]) {
       <template #option="{ item }">{{ (item as { label: string }).label }}</template>
     </EntityMultiSelect>
 
-    <!-- priority (int-array) -->
+    <!-- priority (uuid-array of this project's priority levels) -->
     <EntityMultiSelect
-      v-else-if="valueKind === 'int-array'"
-      :items="PRIORITY_OPTIONS"
+      v-else-if="valueKind === 'uuid-array' && field === 'priority'"
+      :items="priorities"
       :model-value="asStringArray"
-      item-key="id"
       placeholder="Find priority…"
-      @update:model-value="updateIntArray"
+      empty-message="No priorities"
+      @update:model-value="updateStringArray"
     >
       <template #option="{ item }">
         <span
           class="size-2 rounded-full"
-          :style="{ backgroundColor: (item as { color: string }).color }"
+          :style="{ backgroundColor: (item as ProjectPriority).color || '#6B7280' }"
         />
-        <span>{{ (item as { label: string }).label }}</span>
+        <span class="truncate" :title="(item as ProjectPriority).description || undefined">{{ (item as ProjectPriority).name }}</span>
       </template>
     </EntityMultiSelect>
+
+    <!-- single priority (gte / lte compare by rank) -->
+    <div v-else-if="valueKind === 'uuid' && field === 'priority'" class="max-h-60 overflow-y-auto p-1">
+      <button
+        v-for="pr in priorities"
+        :key="pr.id"
+        type="button"
+        class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+        :class="value === pr.id ? 'bg-accent font-medium' : ''"
+        :title="pr.description || undefined"
+        @click="emit('update:value', pr.id)"
+      >
+        <span class="size-2 rounded-full" :style="{ backgroundColor: pr.color || '#6B7280' }" />
+        <span class="truncate">{{ pr.name }}</span>
+      </button>
+    </div>
 
     <!-- assignees / watchers / created_by (uuid-array of members) -->
     <EntityMultiSelect

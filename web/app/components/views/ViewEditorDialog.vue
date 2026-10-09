@@ -11,6 +11,7 @@ import type {
   ProjectLabel,
   ProjectArea,
   ProjectMember,
+  ProjectPriority,
   CycleSibling,
 } from "~/types";
 
@@ -36,6 +37,7 @@ const props = defineProps<{
   labels: ProjectLabel[];
   areas: ProjectArea[];
   members: ProjectMember[];
+  priorities: ProjectPriority[];
   cycles: CycleSibling[];
 }>();
 
@@ -170,6 +172,7 @@ async function save() {
               :labels="labels"
               :areas="areas"
               :members="members"
+              :priorities="priorities"
               :cycles="cycles"
               :show-group-by="defaultTab === 'board'"
               hide-search

@@ -216,9 +216,10 @@ def pred(field, op, value=None):
         p["value"] = value
     return {"predicate": p}
 
-def seed_views(key, make_default):
+def seed_views(key, prio_by_rank, make_default):
     """A spread of saved views per project: shared and private, list and board,
     including one built on the watcher filter. Returns (created, default_slug)."""
+    hot = [prio_by_rank[r] for r in (3, 4) if r in prio_by_rank]
     views = [
         # (payload, set_as_default)
         ({"name": "Active work",
@@ -231,7 +232,7 @@ def seed_views(key, make_default):
           "description": "Only urgent/high tasks, hottest first.",
           "visibility": "shared", "group_by": "priority", "sort_by": "priority",
           "sort_dir": "desc", "default_tab": "tasks",
-          "filter_tree": {"children": [pred("priority", "in", [3, 4])]}},
+          "filter_tree": {"children": [pred("priority", "in", hot)]}},
          False),
         ({"name": "Due soon",
           "description": "Tasks due between today and the end of next week.",
@@ -339,6 +340,12 @@ def main():
         states = {s["name"]: s["id"] for s in api("GET", f"/projects/{key}/states")}
         state_pool = [states[n] for n, w in STATE_WEIGHTS for _ in range(w) if n in states]
 
+        # priorities are per-project entities seeded with the five standard
+        # levels; tasks and filters reference them by id (rank 0 = least urgent)
+        prio_by_rank = {p["rank"]: p["id"] for p in api("GET", f"/projects/{key}/priorities")}
+        prio_pool = [prio_by_rank[r] for r in (0, 1, 2, 2, 3, 4) if r in prio_by_rank]
+        prio_pool_low = [prio_by_rank[r] for r in (0, 1, 2) if r in prio_by_rank]
+
         # labels
         label_ids = []
         for lname, color in LABELS:
@@ -392,7 +399,7 @@ def main():
             watchers = random.sample(user_ids, k=random.choice([0, 0, 1, 2, 3]))
             total["watchers"] += len(watchers)
             body = {"title": title, "description": f"{title}.",
-                    "state_id": random.choice(state_pool), "priority": random.choice([0, 1, 2, 2, 3, 4]),
+                    "state_id": random.choice(state_pool), "priority_id": random.choice(prio_pool),
                     "assignees": assignees, "watchers": watchers,
                     "labels": random.sample(label_ids, k=random.choice([0, 0, 1, 1, 2])),
                     **task_dates(), **custom_fields(title)}
@@ -407,7 +414,7 @@ def main():
                 mod = random.choice(modules); module_task_ids[mod].append(t["id"])
             for st in random.sample(SUBTASKS, k=random.choice([0, 1, 2, 2, 3])):
                 api("POST", f"/projects/{key}/tasks", {"title": st,
-                    "state_id": random.choice(state_pool), "priority": random.choice([0, 1, 2]),
+                    "state_id": random.choice(state_pool), "priority_id": random.choice(prio_pool_low),
                     "assignees": random.sample(user_ids, k=random.choice([0, 1])),
                     "watchers": random.sample(user_ids, k=random.choice([0, 0, 1])),
                     "parent_task_number": t["task_number"], **custom_fields(st)})
@@ -431,7 +438,7 @@ def main():
 
         # saved views — the first project also pins one as the project default,
         # the second stays without one so both behaviours can be compared.
-        created, default_slug = seed_views(key, make_default=(pi == 0))
+        created, default_slug = seed_views(key, prio_by_rank, make_default=(pi == 0))
         total["views"] += created
         if default_slug:
             default_view_note = f"{key} default view: '{default_slug}' (auto-applies for untouched members)"

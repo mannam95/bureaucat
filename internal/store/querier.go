@@ -25,8 +25,8 @@ type Querier interface {
 	// Adds every member of the project as a member of the workspace, skipping any
 	// who are already members. Used when moving a project to keep members' access.
 	AddProjectMembersToWorkspace(ctx context.Context, arg AddProjectMembersToWorkspaceParams) error
-	// ==================== TASK ASSIGNEES ====================
 	AddTaskArea(ctx context.Context, arg AddTaskAreaParams) error
+	// ==================== TASK ASSIGNEES ====================
 	AddTaskAssignee(ctx context.Context, arg AddTaskAssigneeParams) (TaskAssignee, error)
 	// ==================== TASK LABELS ====================
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
@@ -46,6 +46,7 @@ type Querier interface {
 	// update the latest actor/type/comment, and re-surface as unread.
 	CoalesceNotification(ctx context.Context, arg CoalesceNotificationParams) error
 	CommentsCreatedPerDay(ctx context.Context, arg CommentsCreatedPerDayParams) ([]CommentsCreatedPerDayRow, error)
+	CountActiveProjectPriorities(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountActiveRefreshTokens(ctx context.Context) (int64, error)
 	CountAllProjects(ctx context.Context) (int64, error)
 	CountAllProjectsFiltered(ctx context.Context, arg CountAllProjectsFilteredParams) (int64, error)
@@ -68,6 +69,7 @@ type Querier interface {
 	CountTaskComments(ctx context.Context, taskID uuid.UUID) (int64, error)
 	CountTaskOriginators(ctx context.Context, taskID uuid.UUID) (int64, error)
 	CountTasksByAssignee(ctx context.Context, arg CountTasksByAssigneeParams) (int64, error)
+	CountTasksInPriority(ctx context.Context, priorityID uuid.UUID) (int64, error)
 	CountTasksInState(ctx context.Context, stateID uuid.UUID) (int64, error)
 	CountTopLevelTasks(ctx context.Context) (int64, error)
 	// Count-only sibling of ListUnassignedProjectTasks, for the backlog card badge.
@@ -102,9 +104,17 @@ type Querier interface {
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
 	// ==================== PROJECTS ====================
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
-	// ==================== PROJECT LABELS ====================
+	// ==================== PROJECT AREAS ====================
+	// Areas are admin-defined classification values (multi-select per task),
+	// mirroring labels structurally but managed as a controlled list.
 	CreateProjectArea(ctx context.Context, arg CreateProjectAreaParams) (ProjectArea, error)
+	// ==================== PROJECT LABELS ====================
 	CreateProjectLabel(ctx context.Context, arg CreateProjectLabelParams) (ProjectLabel, error)
+	// ==================== PROJECT PRIORITIES ====================
+	// Per-project priority sets; tasks reference a row by id, so renames and
+	// recolors apply everywhere instantly. Rank drives ordering (higher = more
+	// urgent); deactivated values stay on tasks but leave the pickers.
+	CreateProjectPriority(ctx context.Context, arg CreateProjectPriorityParams) (ProjectPriority, error)
 	// ==================== PROJECT STATES ====================
 	CreateProjectState(ctx context.Context, arg CreateProjectStateParams) (ProjectState, error)
 	// ==================== PROJECT VIEWS ====================
@@ -134,6 +144,7 @@ type Querier interface {
 	DeleteProjectArea(ctx context.Context, id uuid.UUID) error
 	DeleteProjectLabel(ctx context.Context, id uuid.UUID) error
 	DeleteProjectPreference(ctx context.Context, arg DeleteProjectPreferenceParams) error
+	DeleteProjectPriority(ctx context.Context, id uuid.UUID) error
 	DeleteProjectState(ctx context.Context, id uuid.UUID) error
 	DeleteTaskCycleLinks(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskModuleLinks(ctx context.Context, taskID uuid.UUID) error
@@ -144,6 +155,8 @@ type Querier interface {
 	GetCycleByID(ctx context.Context, id uuid.UUID) (GetCycleByIDRow, error)
 	GetCycleMetrics(ctx context.Context, cycleID uuid.UUID) (GetCycleMetricsRow, error)
 	GetCycleStateBreakdown(ctx context.Context, cycleID uuid.UUID) ([]GetCycleStateBreakdownRow, error)
+	// The level new tasks fall back to: the lowest-ranked active one.
+	GetDefaultProjectPriority(ctx context.Context, projectID uuid.UUID) (ProjectPriority, error)
 	GetDefaultProjectState(ctx context.Context, projectID uuid.UUID) (ProjectState, error)
 	// A single global preference row for one user, or no rows when unset (the
 	// caller then applies the registry default). Used off the request path, e.g.
@@ -173,6 +186,9 @@ type Querier interface {
 	GetProjectLabelByProjectAndName(ctx context.Context, arg GetProjectLabelByProjectAndNameParams) (ProjectLabel, error)
 	GetProjectMember(ctx context.Context, arg GetProjectMemberParams) (GetProjectMemberRow, error)
 	GetProjectMemberRole(ctx context.Context, arg GetProjectMemberRoleParams) (string, error)
+	GetProjectPriorityByID(ctx context.Context, id uuid.UUID) (ProjectPriority, error)
+	GetProjectPriorityByProjectAndName(ctx context.Context, arg GetProjectPriorityByProjectAndNameParams) (ProjectPriority, error)
+	GetProjectPriorityByProjectAndRank(ctx context.Context, arg GetProjectPriorityByProjectAndRankParams) (ProjectPriority, error)
 	GetProjectStateByID(ctx context.Context, id uuid.UUID) (ProjectState, error)
 	// ==================== IMPORT HELPERS ====================
 	GetProjectStateByProjectAndName(ctx context.Context, arg GetProjectStateByProjectAndNameParams) (ProjectState, error)
@@ -223,9 +239,9 @@ type Querier interface {
 	ListAllProjectsFiltered(ctx context.Context, arg ListAllProjectsFilteredParams) ([]ListAllProjectsFilteredRow, error)
 	ListAllWorkspaces(ctx context.Context, arg ListAllWorkspacesParams) ([]Workspace, error)
 	ListAllWorkspacesFiltered(ctx context.Context, arg ListAllWorkspacesFilteredParams) ([]Workspace, error)
+	ListAreasForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAreasForTasksRow, error)
 	// Filtered list and count are now built dynamically by internal/store/tasks_filter.go
 	// from a FilterTree. The projection here is documented for reference by that runner.
-	ListAreasForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAreasForTasksRow, error)
 	ListAssigneesForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAssigneesForTasksRow, error)
 	ListAttachmentsByEntity(ctx context.Context, arg ListAttachmentsByEntityParams) ([]ListAttachmentsByEntityRow, error)
 	ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]ListCycleAssigneesRow, error)
@@ -271,6 +287,8 @@ type Querier interface {
 	// (HTML tags stripped from content so markup/attributes don't produce matches).
 	ListProjectPages(ctx context.Context, arg ListProjectPagesParams) ([]ListProjectPagesRow, error)
 	ListProjectPreferences(ctx context.Context, arg ListProjectPreferencesParams) ([]ListProjectPreferencesRow, error)
+	// task_count lets the settings UI warn what an edit or delete touches.
+	ListProjectPriorities(ctx context.Context, projectID uuid.UUID) ([]ListProjectPrioritiesRow, error)
 	// task_count lets the settings UI warn how many tasks a state edit touches.
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ListProjectStatesRow, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)
@@ -401,6 +419,8 @@ type Querier interface {
 	SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error
 	SoftDeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	SubtasksCreatedPerDay(ctx context.Context, arg SubtasksCreatedPerDayParams) ([]SubtasksCreatedPerDayRow, error)
+	// Instance-wide aggregate: priorities are per-project entities, so tasks are
+	// grouped by level name (most urgent first by each name's highest rank).
 	TasksByPriority(ctx context.Context) ([]TasksByPriorityRow, error)
 	TasksByStateType(ctx context.Context) ([]TasksByStateTypeRow, error)
 	TasksCreatedPerDay(ctx context.Context, arg TasksCreatedPerDayParams) ([]TasksCreatedPerDayRow, error)
@@ -419,6 +439,7 @@ type Querier interface {
 	UpdateProjectArea(ctx context.Context, arg UpdateProjectAreaParams) (ProjectArea, error)
 	UpdateProjectLabel(ctx context.Context, arg UpdateProjectLabelParams) (ProjectLabel, error)
 	UpdateProjectMemberRole(ctx context.Context, arg UpdateProjectMemberRoleParams) error
+	UpdateProjectPriority(ctx context.Context, arg UpdateProjectPriorityParams) (ProjectPriority, error)
 	// `state_type` is passed as plain text; when empty string, no change. Avoids
 	// narg around the enum type under the string override.
 	UpdateProjectState(ctx context.Context, arg UpdateProjectStateParams) (ProjectState, error)

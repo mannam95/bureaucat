@@ -56,7 +56,7 @@ func TestCompileSinglePredicate(t *testing.T) {
 func TestCompileMultiplePredicatesAreAnded(t *testing.T) {
 	tree := FilterTree{Children: []FilterNode{
 		{Predicate: &Predicate{Field: "state_type", Op: "in", Value: mustRaw(t, []string{"started"})}},
-		{Predicate: &Predicate{Field: "priority", Op: "gte", Value: mustRaw(t, 3)}},
+		{Predicate: &Predicate{Field: "priority", Op: "gte", Value: mustRaw(t, uuid.New().String())}},
 	}}
 	c := compileOrFail(t, tree, uuid.Nil)
 	if strings.Contains(c.WhereSQL, " OR ") {
@@ -219,7 +219,7 @@ func TestCompileOverdue(t *testing.T) {
 func TestCompileEmptyInSetReturnsFalse(t *testing.T) {
 	// Empty IN list → FALSE (match nothing). Users sending empty arrays get no rows.
 	tree := FilterTree{Children: []FilterNode{
-		{Predicate: &Predicate{Field: "priority", Op: "in", Value: mustRaw(t, []int{})}},
+		{Predicate: &Predicate{Field: "priority", Op: "in", Value: mustRaw(t, []string{})}},
 	}}
 	c := compileOrFail(t, tree, uuid.Nil)
 	if !strings.Contains(c.WhereSQL, "FALSE") {

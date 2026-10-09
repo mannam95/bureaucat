@@ -63,9 +63,10 @@ type CompiledFilter struct {
 // Valid sort keys map the external name to the qualified column. Closed list —
 // anything else falls back to the default.
 var validSortKeys = map[string]string{
-	"created_at":      "t.created_at",
-	"updated_at":      "t.updated_at",
-	"priority":        "t.priority",
+	"created_at": "t.created_at",
+	"updated_at": "t.updated_at",
+	// Priority entities sort by their project-defined rank (higher = more urgent).
+	"priority":        "pp.rank",
 	"priority_rating": "t.priority_rating",
 	// Difficulty x Effort complexity score; unassessed tasks score 0.
 	"complexity": "(t.difficulty * t.effort)",
@@ -174,11 +175,11 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"state_type", "in"}:     stringIn("ps.state_type::text", false),
 	{"state_type", "not_in"}: stringIn("ps.state_type::text", true),
 
-	// ---- priority (0-4) ----
-	{"priority", "in"}:     intIn("t.priority", false),
-	{"priority", "not_in"}: intIn("t.priority", true),
-	{"priority", "gte"}:    intCompare("t.priority", ">="),
-	{"priority", "lte"}:    intCompare("t.priority", "<="),
+	// ---- priority (per-project entities; values are priority ids) ----
+	{"priority", "in"}:     uuidIn("t.priority_id", false),
+	{"priority", "not_in"}: uuidIn("t.priority_id", true),
+	{"priority", "gte"}:    priorityRankCompare(">="),
+	{"priority", "lte"}:    priorityRankCompare("<="),
 
 	// ---- created_by ----
 	{"created_by", "in"}:        uuidIn("t.created_by", false),
@@ -805,6 +806,27 @@ func nullCheck(col string, isNull bool) predicateHandler {
 	}
 }
 
+// -------- priority rank handler --------
+
+// priorityRankCompare implements "is at least/at most <priority>": the value is
+// a priority id, and tasks match when their priority's rank compares against
+// that priority's rank. The priorities join (pp) is always present in the base
+// query.
+func priorityRankCompare(op string) predicateHandler {
+	return func(a *argBuffer, _ uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		raw, err := decodeString(v)
+		if err != nil {
+			return "", err
+		}
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return "", fmt.Errorf("invalid priority id %q", raw)
+		}
+		p := a.push(id)
+		return "pp.rank " + op + " (SELECT rank FROM project_priorities WHERE id = " + p + "::uuid)", nil
+	}
+}
+
 // -------- complexity handler --------
 
 // complexityCompare filters on the computed score. Unassessed tasks (either
@@ -846,7 +868,10 @@ type FilteredTaskRow struct {
 	Title            string
 	Description      pgtype.Text
 	StateID          uuid.UUID
-	Priority         int32
+	PriorityID       uuid.UUID
+	PriorityName     string
+	PriorityColor    pgtype.Text
+	PriorityRank     int32
 	PriorityRating   int32
 	Difficulty       int32
 	Effort           int32
@@ -890,7 +915,7 @@ func NewFilterRunner(pool *pgxpool.Pool) *FilterRunner {
 	return &FilterRunner{pool: pool}
 }
 
-const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority, t.priority_rating, t.difficulty, t.effort, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
+const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, t.priority_rating, t.difficulty, t.effort, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
@@ -899,6 +924,7 @@ const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.d
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 WHERE t.project_id = $1
   AND t.deleted_at IS NULL
@@ -908,6 +934,7 @@ const filterCountBase = `SELECT COUNT(*)
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 WHERE t.project_id = $1
   AND t.deleted_at IS NULL
@@ -963,7 +990,7 @@ func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]Fil
 		var i FilteredTaskRow
 		if err := rows.Scan(
 			&i.ID, &i.ProjectID, &i.TaskNumber, &i.Title, &i.Description,
-			&i.StateID, &i.Priority, &i.PriorityRating, &i.Difficulty, &i.Effort, &i.CreatedBy, &i.StartDate, &i.DueDate,
+			&i.StateID, &i.PriorityID, &i.PriorityName, &i.PriorityColor, &i.PriorityRank, &i.PriorityRating, &i.Difficulty, &i.Effort, &i.CreatedBy, &i.StartDate, &i.DueDate,
 			&i.CreatedAt, &i.UpdatedAt, &i.DeletedAt, &i.ProjectKey,
 			&i.StateName, &i.StateType, &i.StateColor,
 			&i.CreatorUsername, &i.CreatorFirstName, &i.CreatorLastName, &i.CreatorAvatarUrl,

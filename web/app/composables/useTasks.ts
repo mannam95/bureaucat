@@ -659,7 +659,7 @@ export function useTasks() {
     payload: {
       target_project_key: string;
       state_id: string;
-      priority?: number;
+      priority_id?: string;
       assignees?: string[];
       labels?: string[];
       cycle_id?: string;

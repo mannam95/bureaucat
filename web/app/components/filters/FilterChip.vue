@@ -6,6 +6,7 @@ import type {
   ProjectMember,
   ProjectLabel,
   ProjectArea,
+  ProjectPriority,
   CycleSibling,
   FilterValue,
 } from "~/types";
@@ -17,6 +18,7 @@ const props = defineProps<{
   states: ProjectState[];
   labels: ProjectLabel[];
   areas: ProjectArea[];
+  priorities: ProjectPriority[];
   members: ProjectMember[];
   cycles: CycleSibling[];
   currentUserId?: string;
@@ -37,7 +39,7 @@ const valueLabel = computed<string>(() => {
   const v = props.predicate.value;
   const field = props.predicate.field;
   if (v === undefined || v === null) return "";
-  if (typeof v === "string") return v;
+  if (typeof v === "string") return formatSingle(field, v);
   if (typeof v === "number") return formatNumberValue(field, v);
   if (Array.isArray(v)) return formatArray(field, v as (string | number)[]);
   if (typeof v === "object" && "from" in v) {
@@ -61,6 +63,10 @@ function formatSingle(field: string, item: string | number): string {
     return s?.name ?? String(item).slice(0, 6);
   }
   if (field === "state_type") return stateTypeLabel(String(item));
+  if (field === "priority") {
+    const pr = props.priorities.find((x) => x.id === item);
+    return pr?.name ?? String(item).slice(0, 6);
+  }
   if (field === "labels") {
     const l = props.labels.find((x) => x.id === item);
     return l?.name ?? String(item).slice(0, 6);
@@ -81,11 +87,7 @@ function formatSingle(field: string, item: string | number): string {
   return String(item);
 }
 
-function formatNumberValue(field: string, n: number): string {
-  if (field === "priority") {
-    const map = ["None", "Low", "Med", "High", "Urgent"];
-    return map[n] ?? String(n);
-  }
+function formatNumberValue(_field: string, n: number): string {
   return String(n);
 }
 
@@ -132,6 +134,7 @@ void handleValueUpdate;
         :states="states"
         :labels="labels"
         :areas="areas"
+        :priorities="priorities"
         :members="members"
         :cycles="cycles"
         lock-field

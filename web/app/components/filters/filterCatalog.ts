@@ -32,6 +32,7 @@ export type ValueKind =
   | "date"
   | "date-range"
   | "number"
+  | "uuid"
   | "none";
 
 export type EntityKind = "state" | "state_type" | "priority" | "member" | "label" | "area" | "cycle";
@@ -131,10 +132,10 @@ export const FILTER_CATALOG: FieldDef[] = [
     icon: Flame,
     entityKind: "priority",
     ops: [
-      { op: "in", label: "is any of", valueKind: "int-array" },
-      { op: "not_in", label: "is none of", valueKind: "int-array" },
-      { op: "gte", label: "is at least", valueKind: "number" },
-      { op: "lte", label: "is at most", valueKind: "number" },
+      { op: "in", label: "is any of", valueKind: "uuid-array" },
+      { op: "not_in", label: "is none of", valueKind: "uuid-array" },
+      { op: "gte", label: "is at least", valueKind: "uuid" },
+      { op: "lte", label: "is at most", valueKind: "uuid" },
     ],
   },
   {
@@ -292,13 +293,6 @@ export const STATE_TYPE_OPTIONS = [
   { id: "archived", label: "Archived" },
 ];
 
-export const PRIORITY_OPTIONS = [
-  { id: "4", label: "Urgent", color: "#EF4444" },
-  { id: "3", label: "High", color: "#F97316" },
-  { id: "2", label: "Medium", color: "#EAB308" },
-  { id: "1", label: "Low", color: "#3B82F6" },
-  { id: "0", label: "No priority", color: "#6B7280" },
-];
 
 export const RELATIVE_DATE_OPTIONS = [
   { id: "today", label: "Today" },

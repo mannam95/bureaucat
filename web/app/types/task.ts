@@ -9,8 +9,13 @@ export interface Task {
   state_name: string;
   state_type: string;
   state_color: string;
-  priority: number;
-  /** Fine-grained 1-10 star rating; 0 = unset. Separate from `priority`. */
+  /** Priority is a per-project entity: its id plus resolved display fields. */
+  priority_id: string;
+  priority_name: string;
+  priority_color: string;
+  priority_rank: number;
+  priority_description?: string;
+  /** Fine-grained 1-10 star rating; 0 = unset. Separate from priority. */
   priority_rating?: number;
   /** DEV estimation: 1-5 each, 0 = not assessed. Score = difficulty x effort. */
   difficulty?: number;
@@ -171,7 +176,8 @@ export interface CreateTaskRequest {
   title: string;
   description?: string;
   state_id?: string;
-  priority?: number;
+  /** Priority entity id; omitted = the project's default (lowest active rank). */
+  priority_id?: string;
   /** DEV estimation inputs, 1-5 each (0 = not assessed). */
   difficulty?: number;
   effort?: number;
@@ -198,7 +204,8 @@ export interface UpdateTaskRequest {
   title?: string;
   description?: string;
   state_id?: string;
-  priority?: number;
+  /** Priority entity id. */
+  priority_id?: string;
   priority_rating?: number;
   /** DEV estimation inputs, 1-5 each (0 = not assessed). */
   difficulty?: number;
@@ -349,14 +356,6 @@ export const RELATIVE_DATE_KEYWORDS = [
 ] as const;
 
 export type RelativeDateKeyword = (typeof RELATIVE_DATE_KEYWORDS)[number];
-
-export const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  0: { label: "No priority", color: "#6B7280" },
-  1: { label: "Low", color: "#3B82F6" },
-  2: { label: "Medium", color: "#EAB308" },
-  3: { label: "High", color: "#F97316" },
-  4: { label: "Urgent", color: "#EF4444" },
-};
 
 export const STATE_TYPE_COLORS: Record<string, string> = {
   backlog: "#6B7280",

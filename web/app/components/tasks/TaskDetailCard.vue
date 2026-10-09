@@ -16,8 +16,14 @@ import {
 import { toast } from "vue-sonner";
 import { marked } from "marked";
 import { CalendarDate, type DateValue } from "@internationalized/date";
-import type { Task, ProjectState, ProjectMember, ProjectLabel, Comment } from "~/types";
-import { PRIORITY_LABELS } from "~/types";
+import type {
+  Task,
+  ProjectState,
+  ProjectMember,
+  ProjectLabel,
+  ProjectPriority,
+  Comment,
+} from "~/types";
 
 const props = withDefaults(
   defineProps<{
@@ -56,16 +62,22 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const updating = ref(false);
 
-const priorityOptions = Object.entries(PRIORITY_LABELS).map(([value, info]) => ({
-  value: parseInt(value),
-  label: info.label,
-  color: info.color,
-}));
+// The project's priority levels, fetched alongside the task (the card can pop
+// up anywhere, so it doesn't lean on a host page having loaded them). Active
+// ones only, most urgent first.
+const projectPriorities = ref<ProjectPriority[]>([]);
 
-const priority = computed(() => {
-  const p = task.value?.priority ?? 0;
-  return PRIORITY_LABELS[p] || PRIORITY_LABELS[0];
-});
+const priorityOptions = computed(() =>
+  projectPriorities.value
+    .filter((pr) => pr.active || pr.id === task.value?.priority_id)
+    .sort((a, b) => b.rank - a.rank)
+);
+
+const priority = computed(() => ({
+  label: task.value?.priority_name ?? "",
+  color: task.value?.priority_color || "#6B7280",
+  description: task.value?.priority_description,
+}));
 
 const renderedDescription = computed(() => {
   const desc = task.value?.description;
@@ -113,6 +125,17 @@ async function loadTask() {
     error.value = "Network error";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadPriorities() {
+  try {
+    const response = await fetch(`/api/v1/projects/${props.projectKey}/priorities`, {
+      headers: getAuthHeader(),
+    });
+    if (response.ok) projectPriorities.value = await response.json();
+  } catch {
+    // the dropdown just stays empty — the current level still displays
   }
 }
 
@@ -189,9 +212,9 @@ async function handleStateChange(stateId: string) {
   if (stateId === task.value?.state_id) return;
   await patchTask({ state_id: stateId }, "State updated");
 }
-async function handlePriorityChange(p: number) {
-  if (p === task.value?.priority) return;
-  await patchTask({ priority: p }, "Priority updated");
+async function handlePriorityChange(priorityId: string) {
+  if (priorityId === task.value?.priority_id) return;
+  await patchTask({ priority_id: priorityId }, "Priority updated");
 }
 
 // --- Dates ---
@@ -416,6 +439,7 @@ function handleCommentKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   loadTask();
+  loadPriorities();
   loadComments();
   loadAttachments();
 });
@@ -615,18 +639,19 @@ onMounted(() => {
                     class="size-2.5 rounded-full ring-1.5 ring-offset-1 ring-offset-background"
                     :style="{ backgroundColor: priority.color, '--tw-ring-color': priority.color }"
                   />
-                  {{ priority.label }}
+                  <span :title="priority.description || undefined">{{ priority.label }}</span>
                   <ChevronDown class="size-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" class="w-40">
                 <DropdownMenuItem
                   v-for="p in priorityOptions"
-                  :key="p.value"
-                  @click="handlePriorityChange(p.value)"
+                  :key="p.id"
+                  :title="p.description || undefined"
+                  @click="handlePriorityChange(p.id)"
                 >
-                  <span class="mr-2 size-2 rounded-full" :style="{ backgroundColor: p.color }" />
-                  {{ p.label }}
+                  <span class="mr-2 size-2 rounded-full" :style="{ backgroundColor: p.color || '#6B7280' }" />
+                  {{ p.name }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

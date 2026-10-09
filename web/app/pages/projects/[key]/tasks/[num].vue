@@ -26,7 +26,6 @@ import { toast } from "vue-sonner";
 import { complexityBand } from "~/utils/complexity";
 import { marked } from "marked";
 import { CalendarDate, type DateValue } from "@internationalized/date";
-import { PRIORITY_LABELS } from "~/types";
 
 const renderer = new marked.Renderer();
 renderer.link = ({ href, title, text }) => {
@@ -51,11 +50,13 @@ const {
   states,
   labels: projectLabels,
   areas: projectAreas,
+  priorities: projectPriorities,
   getProject,
   listMembers,
   listStates,
   listLabels,
   listAreas,
+  listPriorities,
 } = useProjects();
 
 const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, promoteSubtask, listParentCandidates } =
@@ -97,16 +98,19 @@ const isMember = computed(
 const isCreator = computed(() => user.value?.id === currentTask.value?.created_by);
 const canDelete = computed(() => !isDisabled.value && (isAdmin.value || isCreator.value));
 
-const priorityOptions = Object.entries(PRIORITY_LABELS).map(([value, info]) => ({
-  value: parseInt(value),
-  label: info.label,
-  color: info.color,
-}));
+// The project's priority levels (per-project entities), most urgent first.
+// Only active ones are offered; the task's current level shows regardless.
+const priorityOptions = computed(() =>
+  [...projectPriorities.value]
+    .filter((p) => p.active || p.id === currentTask.value?.priority_id)
+    .sort((a, b) => b.rank - a.rank)
+);
 
-const currentPriority = computed(() => {
-  const p = currentTask.value?.priority ?? 0;
-  return PRIORITY_LABELS[p] || PRIORITY_LABELS[0];
-});
+const currentPriority = computed(() => ({
+  label: currentTask.value?.priority_name ?? "",
+  color: currentTask.value?.priority_color ?? "#6B7280",
+  description: currentTask.value?.priority_description,
+}));
 
 const currentState = computed(() =>
   states.value.find((s) => s.id === currentTask.value?.state_id)
@@ -149,6 +153,7 @@ async function loadData() {
     listStates(projectKey.value),
     listLabels(projectKey.value),
     listAreas(projectKey.value),
+    listPriorities(projectKey.value),
     listComments(projectKey.value, taskNum.value),
     listActivity(projectKey.value, taskNum.value),
     loadTaskAttachments(),
@@ -238,10 +243,11 @@ async function handleStateChange(stateId: string) {
   }
 }
 
-async function handlePriorityChange(priority: number) {
+async function handlePriorityChange(priorityId: string) {
+  if (priorityId === currentTask.value?.priority_id) return;
   updating.value = true;
   const result = await updateTask(projectKey.value, taskNum.value, {
-    priority,
+    priority_id: priorityId,
   });
   updating.value = false;
 
@@ -1036,21 +1042,22 @@ onMounted(() => {
                           class="size-3 rounded-full ring-2 ring-offset-1 ring-offset-background"
                           :style="{ backgroundColor: currentPriority.color, '--tw-ring-color': currentPriority.color }"
                         />
-                        {{ currentPriority.label }}
+                        <span :title="currentPriority.description || undefined">{{ currentPriority.label }}</span>
                         <ChevronDown class="size-3.5 opacity-50" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" class="w-40">
                       <DropdownMenuItem
                         v-for="p in priorityOptions"
-                        :key="p.value"
-                        @click="handlePriorityChange(p.value)"
+                        :key="p.id"
+                        :title="p.description || undefined"
+                        @click="handlePriorityChange(p.id)"
                       >
                         <span
                           class="mr-2 size-2 rounded-full"
-                          :style="{ backgroundColor: p.color }"
+                          :style="{ backgroundColor: p.color || '#6B7280' }"
                         />
-                        {{ p.label }}
+                        {{ p.name }}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1473,6 +1480,7 @@ onMounted(() => {
           :labels="projectLabels"
           :areas="projectAreas"
           :members="members"
+          :priorities="projectPriorities"
           :parent-task-number="taskNum"
           @created="onSubtaskCreated"
         />

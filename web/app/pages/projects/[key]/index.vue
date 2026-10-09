@@ -23,7 +23,6 @@ import {
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task, ViewGroupBy, SortKey, SortDir, ViewDefaultTab, ViewVisibility } from "~/types";
-import { PRIORITY_LABELS } from "~/types";
 
 definePageMeta({
   middleware: ["auth"],
@@ -55,12 +54,14 @@ const {
   states,
   labels,
   areas: projectAreas,
+  priorities: projectPriorities,
   templates,
   getProject,
   listMembers,
   listStates,
   listLabels,
   listAreas,
+  listPriorities,
   listTemplates,
 } = useProjects();
 
@@ -269,7 +270,7 @@ async function exportTasks() {
         .map((a) => `${a.first_name} ${a.last_name}`.trim() || a.username)
         .join("; ");
       const labels = (t.labels ?? []).map((l) => l.name).join("; ");
-      const priority = PRIORITY_LABELS[t.priority]?.label ?? String(t.priority);
+      const priority = t.priority_name;
       const creator = `${t.creator_first_name} ${t.creator_last_name}`.trim() || t.creator_username;
       const parent = t.parent_task_id ? `${t.parent_task_id} ${t.parent_task_title ?? ""}`.trim() : "";
       lines.push(
@@ -430,6 +431,7 @@ async function loadProject() {
     listStates(projectKey.value),
     listLabels(projectKey.value),
     listAreas(projectKey.value),
+    listPriorities(projectKey.value),
     listTemplates(projectKey.value),
     listViews(projectKey.value),
     listAllCycles(projectKey.value).then((r) => {
@@ -868,6 +870,7 @@ onMounted(async () => {
                   :states="states"
                   :labels="labels"
                   :areas="projectAreas"
+                  :priorities="projectPriorities"
                   :members="members"
                   :cycles="projectCycles"
                   :show-group-by="activeTab === 'board'"
@@ -1073,6 +1076,7 @@ onMounted(async () => {
               <KanbanBoard
                 :tasks="boardTasks"
                 :states="states"
+                :priorities="projectPriorities"
                 :members="members"
                 :labels="labels"
                 :project-key="projectKey"
@@ -1193,6 +1197,15 @@ onMounted(async () => {
 
               <Separator />
 
+              <PrioritiesManager
+                :priorities="projectPriorities"
+                :project-key="projectKey"
+                :is-admin="isAdmin"
+                @refresh="listPriorities(projectKey)"
+              />
+
+              <Separator />
+
               <TemplatesManager
                 :templates="templates"
                 :project-key="projectKey"
@@ -1277,7 +1290,8 @@ onMounted(async () => {
           :edit-is-shared="viewEditor.isShared"
           :states="states"
           :labels="labels"
-      :areas="projectAreas"
+          :areas="projectAreas"
+          :priorities="projectPriorities"
           :members="members"
           :cycles="projectCycles"
           @update:open="(v) => (showViewEditor = v)"

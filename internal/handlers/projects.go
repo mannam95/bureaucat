@@ -88,6 +88,20 @@ var defaultStates = []struct {
 	{"cancelled", "Cancelled", "#9CA3AF", 7, false},
 }
 
+// The standard priority set seeded into every new project. Rank drives
+// ordering (higher = more urgent); projects customise freely afterwards.
+var defaultPriorities = []struct {
+	Name  string
+	Color string
+	Rank  int
+}{
+	{"No priority", "#6B7280", 0},
+	{"Low", "#3B82F6", 1},
+	{"Medium", "#EAB308", 2},
+	{"High", "#F97316", 3},
+	{"Urgent", "#EF4444", 4},
+}
+
 // ListProjects returns paginated list of projects with optional search.
 //
 //	@Summary		List projects
@@ -377,6 +391,20 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add creator as member")
+	}
+
+	// Create the default priority set (the standard five; admins can change
+	// them per project afterwards).
+	for _, pr := range defaultPriorities {
+		_, err := h.store.CreateProjectPriority(ctx, store.CreateProjectPriorityParams{
+			ProjectID: project.ID,
+			Name:      pr.Name,
+			Color:     pgtype.Text{String: pr.Color, Valid: true},
+			Rank:      int32(pr.Rank),
+		})
+		if err != nil {
+			continue
+		}
 	}
 
 	// Create default states
@@ -1591,6 +1619,194 @@ func (h *ProjectHandler) DeleteArea(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "area deleted"})
+}
+
+// PriorityResponse is the API shape for a project priority level.
+type PriorityResponse struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	Color       string    `json:"color"`
+	Rank        int       `json:"rank"`
+	Active      bool      `json:"active"`
+	CreatedAt   time.Time `json:"created_at"`
+	// TaskCount is how many (non-deleted) tasks sit on this level. Only filled
+	// on the list endpoint.
+	TaskCount int `json:"task_count"`
+}
+
+func priorityToResponse(p store.ProjectPriority) PriorityResponse {
+	return PriorityResponse{
+		ID:          p.ID,
+		Name:        p.Name,
+		Description: textToStringPtr(p.Description),
+		Color:       textToString(p.Color, "#6B7280"),
+		Rank:        int(p.Rank),
+		Active:      p.Active,
+		CreatedAt:   p.CreatedAt.Time,
+	}
+}
+
+// ListPriorities returns the project's priority levels, highest rank first.
+func (h *ProjectHandler) ListPriorities(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	rows, err := h.store.ListProjectPriorities(c.Request().Context(), projectID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list priorities")
+	}
+	out := make([]PriorityResponse, len(rows))
+	for i, r := range rows {
+		out[i] = PriorityResponse{
+			ID:          r.ID,
+			Name:        r.Name,
+			Description: textToStringPtr(r.Description),
+			Color:       textToString(r.Color, "#6B7280"),
+			Rank:        int(r.Rank),
+			Active:      r.Active,
+			CreatedAt:   r.CreatedAt.Time,
+			TaskCount:   int(r.TaskCount),
+		}
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// CreatePriorityRequest is the body for POST /priorities.
+type CreatePriorityRequest struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	Color       string  `json:"color"`
+	Rank        *int    `json:"rank"`
+}
+
+// CreatePriority adds a priority level. Requires project admin role.
+func (h *ProjectHandler) CreatePriority(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	var req CreatePriorityRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if req.Color == "" {
+		req.Color = "#6B7280"
+	}
+	rank := int32(0)
+	if req.Rank != nil {
+		rank = int32(*req.Rank)
+	}
+	prio, err := h.store.CreateProjectPriority(c.Request().Context(), store.CreateProjectPriorityParams{
+		ProjectID:   projectID,
+		Name:        req.Name,
+		Description: stringToPgtypeText(req.Description),
+		Color:       pgtype.Text{String: req.Color, Valid: true},
+		Rank:        rank,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			return echo.NewHTTPError(http.StatusConflict, "a priority with that name already exists in this project")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create priority")
+	}
+	return c.JSON(http.StatusCreated, priorityToResponse(prio))
+}
+
+// UpdatePriorityRequest is the body for PATCH /priorities/:priorityId.
+type UpdatePriorityRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+	Color       *string `json:"color"`
+	Rank        *int    `json:"rank"`
+	Active      *bool   `json:"active"`
+}
+
+// UpdatePriority edits a priority level: rename, describe, recolor, re-rank or
+// (de)activate. Deactivating hides it from pickers; tasks keep it. The last
+// active level cannot be deactivated. Requires project admin role.
+func (h *ProjectHandler) UpdatePriority(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	priorityID, err := uuid.Parse(c.Param("priorityId"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid priority ID")
+	}
+	var req UpdatePriorityRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	ctx := c.Request().Context()
+	existing, err := h.store.GetProjectPriorityByID(ctx, priorityID)
+	if err != nil || existing.ProjectID != projectID {
+		return echo.NewHTTPError(http.StatusNotFound, "priority not found")
+	}
+	if req.Active != nil && !*req.Active && existing.Active {
+		count, err := h.store.CountActiveProjectPriorities(ctx, projectID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to check priorities")
+		}
+		if count <= 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, "cannot deactivate the last active priority")
+		}
+	}
+
+	activeParam := pgtype.Bool{}
+	if req.Active != nil {
+		activeParam = pgtype.Bool{Bool: *req.Active, Valid: true}
+	}
+	prio, err := h.store.UpdateProjectPriority(ctx, store.UpdateProjectPriorityParams{
+		ID:          priorityID,
+		Name:        stringToPgtypeText(req.Name),
+		Description: stringToPgtypeText(req.Description),
+		Color:       stringToPgtypeText(req.Color),
+		Rank:        intToPgtypeInt4(req.Rank),
+		Active:      activeParam,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			return echo.NewHTTPError(http.StatusConflict, "a priority with that name already exists in this project")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update priority")
+	}
+	return c.JSON(http.StatusOK, priorityToResponse(prio))
+}
+
+// DeletePriority removes a priority level. Blocked while tasks still use it,
+// and for the last remaining level. Requires project admin role.
+func (h *ProjectHandler) DeletePriority(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	priorityID, err := uuid.Parse(c.Param("priorityId"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid priority ID")
+	}
+	ctx := c.Request().Context()
+	existing, err := h.store.GetProjectPriorityByID(ctx, priorityID)
+	if err != nil || existing.ProjectID != projectID {
+		return echo.NewHTTPError(http.StatusNotFound, "priority not found")
+	}
+	count, err := h.store.CountTasksInPriority(ctx, priorityID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check priority usage")
+	}
+	if count > 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot delete a priority that tasks still use")
+	}
+	if err := h.store.DeleteProjectPriority(ctx, priorityID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete priority")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "priority deleted"})
 }
 
 // LabelResponse represents a project label in API responses.

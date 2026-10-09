@@ -4,6 +4,7 @@ import type {
   ProjectMember,
   MoveImpactMember,
   ProjectState,
+  ProjectPriority,
   ProjectLabel,
   ProjectArea,
   TaskTemplate,
@@ -12,7 +13,9 @@ import type {
   AddMemberRequest,
   UpdateMemberRequest,
   CreateStateRequest,
+  CreatePriorityRequest,
   UpdateStateRequest,
+  UpdatePriorityRequest,
   CreateLabelRequest,
   CreateAreaRequest,
   UpdateLabelRequest,
@@ -26,6 +29,7 @@ interface ProjectsState {
   currentProject: Project | null;
   members: ProjectMember[];
   states: ProjectState[];
+  priorities: ProjectPriority[];
   labels: ProjectLabel[];
   areas: ProjectArea[];
   templates: TaskTemplate[];
@@ -41,6 +45,7 @@ const state = reactive<ProjectsState>({
   currentProject: null,
   members: [],
   states: [],
+  priorities: [],
   labels: [],
   areas: [],
   templates: [],
@@ -666,6 +671,88 @@ export function useProjects() {
     }
   }
 
+  async function listPriorities(
+    projectKey: string
+  ): Promise<{ success: boolean; data?: ProjectPriority[]; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/priorities`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to fetch priorities" };
+      }
+      const priorities: ProjectPriority[] = await response.json();
+      state.priorities = priorities;
+      return { success: true, data: priorities };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function createPriority(
+    projectKey: string,
+    data: CreatePriorityRequest
+  ): Promise<{ success: boolean; data?: ProjectPriority; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/priorities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to create priority" };
+      }
+      return { success: true, data: await response.json() };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function updatePriority(
+    projectKey: string,
+    priorityId: string,
+    data: UpdatePriorityRequest
+  ): Promise<{ success: boolean; data?: ProjectPriority; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/priorities/${priorityId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify(data),
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to update priority" };
+      }
+      return { success: true, data: await response.json() };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function deletePriority(
+    projectKey: string,
+    priorityId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/priorities/${priorityId}`,
+        { method: "DELETE", headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to delete priority" };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function listLabels(
     projectKey: string
   ): Promise<{ success: boolean; data?: ProjectLabel[]; error?: string }> {
@@ -871,6 +958,7 @@ export function useProjects() {
     currentProject: computed(() => state.currentProject),
     members: computed(() => state.members),
     states: computed(() => state.states),
+    priorities: computed(() => state.priorities),
     labels: computed(() => state.labels),
     areas: computed(() => state.areas),
     templates: computed(() => state.templates),
@@ -900,6 +988,10 @@ export function useProjects() {
 
     // States
     listStates,
+    listPriorities,
+    createPriority,
+    updatePriority,
+    deletePriority,
     createState,
     updateState,
     setDefaultState,

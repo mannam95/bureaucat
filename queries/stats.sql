@@ -30,11 +30,14 @@ GROUP BY ps.state_type
 ORDER BY count DESC;
 
 -- name: TasksByPriority :many
-SELECT t.priority AS priority, COUNT(*)::int AS count
+-- Instance-wide aggregate: priorities are per-project entities, so tasks are
+-- grouped by level name (most urgent first by each name's highest rank).
+SELECT pp.name AS priority, COUNT(*)::int AS count
 FROM tasks t
+JOIN project_priorities pp ON t.priority_id = pp.id
 WHERE t.deleted_at IS NULL AND t.parent_task_id IS NULL
-GROUP BY t.priority
-ORDER BY t.priority ASC;
+GROUP BY pp.name
+ORDER BY MAX(pp.rank) DESC;
 
 -- name: TopProjectsByTaskCount :many
 SELECT p.id AS project_id, p.name, p.project_key, COUNT(t.id)::int AS task_count

@@ -454,18 +454,21 @@ type MyTaskAssignee struct {
 
 // MyTaskItem represents a task assigned to the current user.
 type MyTaskItem struct {
-	ID           uuid.UUID        `json:"id"`
-	ProjectKey   string           `json:"project_key"`
-	TaskNumber   int32            `json:"task_number"`
-	TaskID       string           `json:"task_id"`
-	Title        string           `json:"title"`
-	StateID      uuid.UUID        `json:"state_id"`
-	StateName    string           `json:"state_name"`
-	StateType    string           `json:"state_type"`
-	StateColor   string           `json:"state_color"`
-	Priority     int32            `json:"priority"`
-	Assignees    []MyTaskAssignee `json:"assignees"`
-	CommentCount int              `json:"comment_count"`
+	ID            uuid.UUID        `json:"id"`
+	ProjectKey    string           `json:"project_key"`
+	TaskNumber    int32            `json:"task_number"`
+	TaskID        string           `json:"task_id"`
+	Title         string           `json:"title"`
+	StateID       uuid.UUID        `json:"state_id"`
+	StateName     string           `json:"state_name"`
+	StateType     string           `json:"state_type"`
+	StateColor    string           `json:"state_color"`
+	PriorityID    uuid.UUID        `json:"priority_id"`
+	PriorityName  string           `json:"priority_name"`
+	PriorityColor string           `json:"priority_color"`
+	PriorityRank  int32            `json:"priority_rank"`
+	Assignees     []MyTaskAssignee `json:"assignees"`
+	CommentCount  int              `json:"comment_count"`
 }
 
 // MyTasksResponse represents the paginated response for user's assigned tasks.
@@ -552,18 +555,21 @@ func (h *AuthHandler) MyTasks(c *echo.Context) error {
 		commentCount, _ := h.store.CountTaskComments(ctx, t.ID)
 
 		items[i] = MyTaskItem{
-			ID:           t.ID,
-			ProjectKey:   t.ProjectKey,
-			TaskNumber:   t.TaskNumber,
-			TaskID:       t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
-			Title:        t.Title,
-			StateID:      t.StateID,
-			StateName:    t.StateName,
-			StateType:    t.StateType,
-			StateColor:   stateColor,
-			Priority:     t.Priority,
-			Assignees:    assignees,
-			CommentCount: int(commentCount),
+			ID:            t.ID,
+			ProjectKey:    t.ProjectKey,
+			TaskNumber:    t.TaskNumber,
+			TaskID:        t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+			Title:         t.Title,
+			StateID:       t.StateID,
+			StateName:     t.StateName,
+			StateType:     t.StateType,
+			StateColor:    stateColor,
+			PriorityID:    t.PriorityID,
+			PriorityName:  t.PriorityName,
+			PriorityColor: t.PriorityColor.String,
+			PriorityRank:  t.PriorityRank,
+			Assignees:     assignees,
+			CommentCount:  int(commentCount),
 		}
 	}
 
