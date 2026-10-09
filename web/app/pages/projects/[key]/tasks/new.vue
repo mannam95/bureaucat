@@ -429,14 +429,14 @@ onMounted(() => {
               <Label for="difficulty">Difficulty (1–5)</Label>
               <NativeSelect id="difficulty" v-model.number="form.difficulty" :disabled="loading">
                 <option :value="0">Not assessed</option>
-                <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+                <option v-for="n in 5" :key="n" :value="n">{{ n }} · {{ DIFFICULTY_LABELS[n] }}</option>
               </NativeSelect>
             </div>
               <div class="space-y-2">
               <Label for="effort">Effort (1–5)</Label>
               <NativeSelect id="effort" v-model.number="form.effort" :disabled="loading">
                 <option :value="0">Not assessed</option>
-                <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+                <option v-for="n in 5" :key="n" :value="n">{{ n }} · {{ EFFORT_LABELS[n] }}</option>
               </NativeSelect>
             </div>
               <div class="space-y-2">
@@ -447,7 +447,7 @@ onMounted(() => {
                   class="rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums"
                   :style="{ color: estBand?.color, backgroundColor: estBand?.color + '1a' }"
                 >
-                  {{ estScore }} · {{ estBand?.label }}
+                  {{ estBand?.label }} · {{ estScore }}
                 </span>
                 <span v-else class="text-muted-foreground">—</span>
               </p>
