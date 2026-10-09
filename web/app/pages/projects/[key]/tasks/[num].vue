@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Copy as CopyIcon,
   ChevronDown,
   Loader2,
   Pencil,
@@ -412,6 +413,12 @@ async function handlePromote() {
 }
 
 const showMoveDialog = ref(false);
+const showCopyDialog = ref(false);
+
+async function handleTaskCopied(payload: { projectKey: string; taskNumber: number; taskId: string }) {
+  toast.success(`Copied to ${payload.taskId}`);
+  await navigateTo(`/projects/${payload.projectKey}/tasks/${payload.taskNumber}`);
+}
 
 // Subtasks
 const subtasks = ref<import("~/types").Subtask[]>([]);
@@ -1397,6 +1404,15 @@ onMounted(() => {
                   <FolderInput class="size-3.5" />
                   Move to project
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="w-full justify-start gap-2"
+                  @click="showCopyDialog = true"
+                >
+                  <CopyIcon class="size-3.5" />
+                  Copy to project
+                </Button>
               </div>
 
               <!-- Promote a sub-task to its own top-level task (keeps its fields;
@@ -1437,6 +1453,16 @@ onMounted(() => {
           :project-key="projectKey"
           :task-num="taskNum"
           @moved="handleTaskMoved"
+        />
+
+        <!-- Copy to another project -->
+        <CopyTaskDialog
+          v-if="currentTask"
+          v-model:open="showCopyDialog"
+          :project-key="projectKey"
+          :task-num="taskNum"
+          :task="currentTask"
+          @copied="handleTaskCopied"
         />
 
         <!-- Create subtask -->

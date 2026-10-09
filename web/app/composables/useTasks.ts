@@ -650,6 +650,44 @@ export function useTasks() {
     }
   }
 
+  // One-time copy of a task into another project. The server carries over
+  // everything except the project-specific fields given here, adds the
+  // back/forward links, and brings sub-tasks along.
+  async function copyTask(
+    projectKey: string,
+    taskNum: number,
+    payload: {
+      target_project_key: string;
+      state_id: string;
+      priority?: number;
+      assignees?: string[];
+      labels?: string[];
+      cycle_id?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    data?: { project_key: string; task_number: number; task_id: string };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/copy`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        return { success: false, error: error.message || "Failed to copy task" };
+      }
+      return { success: true, data: await response.json() };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   // Candidate parents for re-parenting a sub-task: top-level tasks only,
   // server-searched and capped — the picker never downloads the whole project.
   async function listParentCandidates(
@@ -774,6 +812,7 @@ export function useTasks() {
     promoteSubtask,
     listSubtaskCandidates,
     listParentCandidates,
+    copyTask,
     attachSubtasks,
 
     // Utils

@@ -301,6 +301,8 @@ func (s *Server) registerRoutes() {
 				projectGroup.POST("/tasks/delete", s.taskHandler.DeleteTasks, auth.ProjectRoleMiddleware("admin"))
 				projectGroup.GET("/tasks/:taskNum", s.taskHandler.GetTask)
 				projectGroup.POST("/tasks/:taskNum/move", s.taskHandler.MoveTask, auth.ProjectRoleMiddleware("member"))
+				// One-time copy into another project, with back/forward links.
+				projectGroup.POST("/tasks/:taskNum/copy", s.taskHandler.CopyTask, auth.ProjectRoleMiddleware("member"))
 				projectGroup.PATCH("/tasks/:taskNum", s.taskHandler.UpdateTask, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum", s.taskHandler.DeleteTask, auth.ProjectRoleMiddleware("member"))
 

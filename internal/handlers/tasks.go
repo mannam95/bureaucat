@@ -1757,6 +1757,274 @@ func (h *TaskHandler) ListParentCandidates(c *echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+// CopyTaskRequest is the body for POST /tasks/:taskNum/copy. The caller picks
+// the project-specific fields in the copy dialog; everything else is carried
+// over from the original as it is.
+type CopyTaskRequest struct {
+	TargetProjectKey string   `json:"target_project_key"`
+	StateID          string   `json:"state_id"`
+	Priority         *int     `json:"priority"`
+	Assignees        []string `json:"assignees"`
+	Labels           []string `json:"labels"`
+	CycleID          *string  `json:"cycle_id"`
+}
+
+// CopyTask creates a one-time copy of a task in another project. The copy's
+// description starts with a line linking back to the original, the original
+// gets a comment linking forward, and sub-tasks come along (starting in the
+// chosen state). Comments and watchers stay on the original; areas are
+// remapped by name; attachments reference the same stored files.
+//
+//	@Summary		Copy a task to another project
+//	@Tags			Tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string			true	"Source project key"
+//	@Param			taskNum		path		int				true	"Task number"
+//	@Param			body		body		CopyTaskRequest	true	"Target and project-specific fields"
+//	@Success		201			{object}	TaskResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/copy [post]
+func (h *TaskHandler) CopyTask(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+	var req CopyTaskRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	ctx := c.Request().Context()
+
+	src, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+
+	// Same membership/disabled checks as moving a task.
+	dest, err := h.resolveMoveTarget(ctx, c, req.TargetProjectKey, userID)
+	if err != nil {
+		return err
+	}
+
+	// Validate the project-specific picks against the TARGET project.
+	stateID, err := uuid.Parse(req.StateID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid state_id")
+	}
+	destState, err := h.store.GetProjectStateByID(ctx, stateID)
+	if err != nil || destState.ProjectID != dest.ID {
+		return echo.NewHTTPError(http.StatusBadRequest, "state does not belong to the target project")
+	}
+	priority := src.Priority
+	if req.Priority != nil {
+		if *req.Priority < 0 || *req.Priority > 4 {
+			return echo.NewHTTPError(http.StatusBadRequest, "priority must be between 0 and 4")
+		}
+		priority = int32(*req.Priority)
+	}
+	labelIDs := make([]uuid.UUID, 0, len(req.Labels))
+	for _, l := range req.Labels {
+		id, err := uuid.Parse(l)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid label id")
+		}
+		lbl, err := h.store.GetProjectLabelByID(ctx, id)
+		if err != nil || lbl.ProjectID != dest.ID {
+			return echo.NewHTTPError(http.StatusBadRequest, "label does not belong to the target project")
+		}
+		labelIDs = append(labelIDs, id)
+	}
+	assigneeIDs := make([]uuid.UUID, 0, len(req.Assignees))
+	for _, a := range req.Assignees {
+		id, err := uuid.Parse(a)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid assignee id")
+		}
+		isMember, err := h.store.IsProjectMember(ctx, store.IsProjectMemberParams{
+			ProjectID: dest.ID,
+			UserID:    id,
+		})
+		if err != nil || !isMember {
+			return echo.NewHTTPError(http.StatusBadRequest, "assignee is not a member of the target project")
+		}
+		assigneeIDs = append(assigneeIDs, id)
+	}
+	var cycleID *uuid.UUID
+	if req.CycleID != nil && *req.CycleID != "" {
+		id, err := uuid.Parse(*req.CycleID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid cycle id")
+		}
+		cyc, err := h.store.GetCycleByID(ctx, id)
+		if err != nil || cyc.ProjectID != dest.ID {
+			return echo.NewHTTPError(http.StatusBadRequest, "cycle does not belong to the target project")
+		}
+		cycleID = &id
+	}
+
+	// The copy's description opens with a line pointing back at the original.
+	srcRef := src.ProjectKey + "-" + strconv.Itoa(int(src.TaskNumber))
+	origin := "<p>Originated from <a href=\"/projects/" + src.ProjectKey + "/tasks/" +
+		strconv.Itoa(int(src.TaskNumber)) + "\">" + srcRef + "</a></p><hr>"
+	description := origin
+	if src.Description.Valid {
+		description += src.Description.String
+	}
+
+	nextNumber, err := h.store.GetNextTaskNumber(ctx, dest.ID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get next task number")
+	}
+
+	copyTask, err := h.store.CreateTask(ctx, store.CreateTaskParams{
+		ProjectID:      dest.ID,
+		TaskNumber:     nextNumber,
+		Title:          src.Title,
+		Description:    pgtype.Text{String: description, Valid: true},
+		StateID:        stateID,
+		Priority:       priority,
+		CreatedBy:      userID,
+		StartDate:      src.StartDate,
+		DueDate:        src.DueDate,
+		FigmaLink:      src.FigmaLink,
+		Branch:         src.Branch,
+		PullRequest:    src.PullRequest,
+		PriorityRating: pgtype.Int4{Int32: src.PriorityRating, Valid: true},
+		Difficulty:     pgtype.Int4{Int32: src.Difficulty, Valid: true},
+		Effort:         pgtype.Int4{Int32: src.Effort, Valid: true},
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create the copy")
+	}
+
+	// The copier is the requester of record on the copy.
+	_, _ = h.store.AddTaskOriginator(ctx, store.AddTaskOriginatorParams{
+		TaskID:  copyTask.ID,
+		UserID:  userID,
+		AddedBy: userID,
+	})
+	for _, id := range assigneeIDs {
+		_, _ = h.store.AddTaskAssignee(ctx, store.AddTaskAssigneeParams{
+			TaskID:     copyTask.ID,
+			UserID:     id,
+			AssignedBy: userID,
+		})
+	}
+	for _, id := range labelIDs {
+		_ = h.store.AddTaskLabel(ctx, store.AddTaskLabelParams{
+			TaskID:  copyTask.ID,
+			LabelID: id,
+			AddedBy: userID,
+		})
+	}
+	// Areas remap by name into the target project; unmatched ones are dropped.
+	if srcAreas, err := h.store.ListTaskAreas(ctx, src.ID); err == nil {
+		for _, ar := range srcAreas {
+			destArea, err := h.store.GetProjectAreaByProjectAndName(ctx, store.GetProjectAreaByProjectAndNameParams{
+				ProjectID: dest.ID,
+				Name:      ar.Name,
+			})
+			if err != nil {
+				continue
+			}
+			_ = h.store.AddTaskArea(ctx, store.AddTaskAreaParams{
+				TaskID:  copyTask.ID,
+				AreaID:  destArea.ID,
+				AddedBy: userID,
+			})
+		}
+	}
+	// Attachments reference the same stored files; nothing is re-uploaded.
+	if atts, err := h.store.ListAttachmentsByEntity(ctx, store.ListAttachmentsByEntityParams{
+		EntityType: "task",
+		EntityID:   src.ID,
+	}); err == nil {
+		for _, a := range atts {
+			_, _ = h.store.CreateAttachment(ctx, store.CreateAttachmentParams{
+				UploadID:   a.UploadID,
+				EntityType: "task",
+				EntityID:   copyTask.ID,
+				CreatedBy:  userID,
+			})
+		}
+	}
+	if cycleID != nil {
+		_ = h.store.AddTasksToCycle(ctx, store.AddTasksToCycleParams{
+			CycleID: *cycleID,
+			AddedBy: userID,
+			TaskIds: []uuid.UUID{copyTask.ID},
+		})
+	}
+
+	// Sub-tasks come along, starting in the chosen state.
+	if subs, err := h.store.ListSubtasks(ctx, src.ID); err == nil {
+		for _, sub := range subs {
+			full, err := h.store.GetTaskByID(ctx, sub.ID)
+			if err != nil {
+				continue
+			}
+			subNumber, err := h.store.GetNextTaskNumber(ctx, dest.ID)
+			if err != nil {
+				continue
+			}
+			subCopy, err := h.store.CreateTask(ctx, store.CreateTaskParams{
+				ProjectID:      dest.ID,
+				TaskNumber:     subNumber,
+				Title:          full.Title,
+				Description:    full.Description,
+				StateID:        stateID,
+				Priority:       full.Priority,
+				CreatedBy:      userID,
+				StartDate:      full.StartDate,
+				DueDate:        full.DueDate,
+				ParentTaskID:   pgtype.UUID{Bytes: copyTask.ID, Valid: true},
+				FigmaLink:      full.FigmaLink,
+				Branch:         full.Branch,
+				PullRequest:    full.PullRequest,
+				PriorityRating: pgtype.Int4{Int32: full.PriorityRating, Valid: true},
+				Difficulty:     pgtype.Int4{Int32: full.Difficulty, Valid: true},
+				Effort:         pgtype.Int4{Int32: full.Effort, Valid: true},
+			})
+			if err != nil {
+				continue
+			}
+			_, _ = h.store.AddTaskOriginator(ctx, store.AddTaskOriginatorParams{
+				TaskID:  subCopy.ID,
+				UserID:  userID,
+				AddedBy: userID,
+			})
+		}
+	}
+
+	// A forward link on the original, so the copy is discoverable from there.
+	destRef := dest.ProjectKey + "-" + strconv.Itoa(int(nextNumber))
+	_, _ = h.store.CreateComment(ctx, store.CreateCommentParams{
+		TaskID: src.ID,
+		Content: "<p>Copied to <a href=\"/projects/" + dest.ProjectKey + "/tasks/" +
+			strconv.Itoa(int(nextNumber)) + "\">" + destRef + "</a></p>",
+		CreatedBy: userID,
+	})
+
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"project_key": dest.ProjectKey,
+		"task_number": int(nextNumber),
+		"task_id":     destRef,
+	})
+}
+
 // AttachSubtasksRequest carries the ids of existing tasks to attach as subtasks.
 type AttachSubtasksRequest struct {
 	TaskIDs []string `json:"task_ids"`
