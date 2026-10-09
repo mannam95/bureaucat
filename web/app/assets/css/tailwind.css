@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Tailwind v4 wraps hover: in @media (hover: hover), which Chromium on
+   touch-capable laptops can evaluate as "no hover" — hover-revealed controls
+   (edit pencils, drag grips) then stay invisible while remaining clickable.
+   Restore the plain :hover behaviour so hover styles always apply. */
+@custom-variant hover (&:hover);
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

@@ -47,7 +47,15 @@ func (h *UploadHandler) authorized(c *echo.Context) bool {
 	}
 	authz := c.Request().Header.Get("Authorization")
 	if parts := strings.SplitN(authz, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-		if _, err := h.authManager.ValidateAccessToken(parts[1]); err == nil {
+		token := parts[1]
+		// Personal Access Tokens can download files too: a PAT that may read
+		// task and attachment metadata must be able to fetch the bytes those
+		// records point at. Serving is a read, so any valid PAT qualifies.
+		if strings.HasPrefix(token, "bcat_") {
+			_, err := h.store.GetPersonalAccessTokenByHash(c.Request().Context(), auth.HashToken(token))
+			return err == nil
+		}
+		if _, err := h.authManager.ValidateAccessToken(token); err == nil {
 			return true
 		}
 	}
