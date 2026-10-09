@@ -31,6 +31,8 @@ export interface Task {
   /** Watchers follow the task for its updates (in-app notifications). */
   watchers?: TaskWatcher[];
   labels?: TaskLabel[];
+  /** Admin-defined classification values (Areas). */
+  areas?: TaskArea[];
   comment_count: number;
   parent_task_id?: string;
   parent_task_number?: number;
@@ -152,6 +154,13 @@ export interface TaskLabel {
   color: string;
 }
 
+// An admin-defined Area attached to a task (multi-select classification).
+export interface TaskArea {
+  id: string;
+  name: string;
+  color: string;
+}
+
 // A module a task belongs to. Tasks can be in several modules at once.
 export interface TaskModule {
   id: string;
@@ -170,6 +179,8 @@ export interface CreateTaskRequest {
   due_date?: string;
   assignees?: string[];
   labels?: string[];
+  /** Area ids to attach (admin-defined classification). */
+  areas?: string[];
   figma_link?: string;
   branch?: string;
   pull_request?: string;
@@ -229,6 +240,7 @@ export type FilterField =
   | "watchers"
   | "created_by"
   | "labels"
+  | "areas"
   | "cycle"
   | "complexity"
   | "start_date"

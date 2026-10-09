@@ -206,6 +206,12 @@ func (s *Server) registerRoutes() {
 			projectGroup.POST("/states/:stateId/default", s.projectHandler.SetDefaultState, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("/states/:stateId", s.projectHandler.DeleteState, auth.ProjectRoleMiddleware("admin"))
 
+			// Project areas (admin-defined classification values)
+			projectGroup.GET("/areas", s.projectHandler.ListAreas)
+			projectGroup.POST("/areas", s.projectHandler.CreateArea, auth.ProjectRoleMiddleware("admin"))
+			projectGroup.PATCH("/areas/:areaId", s.projectHandler.UpdateArea, auth.ProjectRoleMiddleware("admin"))
+			projectGroup.DELETE("/areas/:areaId", s.projectHandler.DeleteArea, auth.ProjectRoleMiddleware("admin"))
+
 			// Project labels
 			projectGroup.GET("/labels", s.projectHandler.ListLabels)
 			projectGroup.POST("/labels", s.projectHandler.CreateLabel, auth.ProjectRoleMiddleware("admin"))
@@ -322,6 +328,10 @@ func (s *Server) registerRoutes() {
 				projectGroup.DELETE("/tasks/:taskNum/watchers/:userId", s.taskHandler.RemoveWatcher, auth.ProjectRoleMiddleware("member"))
 
 				// Task labels
+				// Task areas
+				projectGroup.POST("/tasks/:taskNum/areas", s.taskHandler.AddArea, auth.ProjectRoleMiddleware("member"))
+				projectGroup.DELETE("/tasks/:taskNum/areas/:areaId", s.taskHandler.RemoveArea, auth.ProjectRoleMiddleware("member"))
+
 				projectGroup.POST("/tasks/:taskNum/labels", s.taskHandler.AddLabel, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/labels/:labelId", s.taskHandler.RemoveLabel, auth.ProjectRoleMiddleware("member"))
 			}

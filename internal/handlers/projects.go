@@ -1406,6 +1406,193 @@ func (h *ProjectHandler) DeleteState(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "state deleted"})
 }
 
+// AreaResponse represents a project area in API responses.
+type AreaResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// CreateAreaRequest represents the request to create a area.
+type CreateAreaRequest struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// UpdateAreaRequest represents the request to update a area.
+type UpdateAreaRequest struct {
+	Name  *string `json:"name"`
+	Color *string `json:"color"`
+}
+
+// ListAreas returns project areas.
+//
+//	@Summary		List areas
+//	@Description	Returns all areas for a project.
+//	@Tags			Project Areas
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Success		200			{array}		AreaResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/areas [get]
+func (h *ProjectHandler) ListAreas(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	ctx := c.Request().Context()
+
+	areas, err := h.store.ListProjectAreas(ctx, projectID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list areas")
+	}
+
+	areaResponses := make([]AreaResponse, len(areas))
+	for i, l := range areas {
+		areaResponses[i] = AreaResponse{
+			ID:        l.ID,
+			Name:      l.Name,
+			Color:     textToString(l.Color, "#3B82F6"),
+			CreatedAt: l.CreatedAt.Time,
+		}
+	}
+
+	return c.JSON(http.StatusOK, areaResponses)
+}
+
+// CreateArea creates a new area.
+//
+//	@Summary		Create area
+//	@Description	Create a new project area.
+//	@Tags			Project Areas
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string				true	"Project key"
+//	@Param			body		body		CreateAreaRequest	true	"Area details"
+//	@Success		201			{object}	AreaResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/areas [post]
+func (h *ProjectHandler) CreateArea(c *echo.Context) error {
+	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+
+	var req CreateAreaRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	if req.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+
+	if req.Color == "" {
+		req.Color = "#3B82F6"
+	}
+
+	ctx := c.Request().Context()
+
+	area, err := h.store.CreateProjectArea(ctx, store.CreateProjectAreaParams{
+		ProjectID: projectID,
+		Name:      req.Name,
+		Color:     pgtype.Text{String: req.Color, Valid: true},
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create area")
+	}
+
+	return c.JSON(http.StatusCreated, AreaResponse{
+		ID:        area.ID,
+		Name:      area.Name,
+		Color:     textToString(area.Color, "#3B82F6"),
+		CreatedAt: area.CreatedAt.Time,
+	})
+}
+
+// UpdateArea updates a area.
+//
+//	@Summary		Update area
+//	@Description	Update a project area. Requires project admin role.
+//	@Tags			Project Areas
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string				true	"Project key"
+//	@Param			areaId		path		string				true	"Area ID"
+//	@Param			body		body		UpdateAreaRequest	true	"Fields to update"
+//	@Success		200			{object}	AreaResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/areas/{areaId} [patch]
+func (h *ProjectHandler) UpdateArea(c *echo.Context) error {
+	areaIDStr := c.Param("areaId")
+	areaID, err := uuid.Parse(areaIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid area ID")
+	}
+
+	var req UpdateAreaRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	ctx := c.Request().Context()
+
+	area, err := h.store.UpdateProjectArea(ctx, store.UpdateProjectAreaParams{
+		ID:    areaID,
+		Name:  stringToPgtypeText(req.Name),
+		Color: stringToPgtypeText(req.Color),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update area")
+	}
+
+	return c.JSON(http.StatusOK, AreaResponse{
+		ID:        area.ID,
+		Name:      area.Name,
+		Color:     textToString(area.Color, "#3B82F6"),
+		CreatedAt: area.CreatedAt.Time,
+	})
+}
+
+// DeleteArea deletes a area.
+//
+//	@Summary		Delete area
+//	@Description	Delete a project area.
+//	@Tags			Project Areas
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			areaId		path		string	true	"Area ID"
+//	@Success		200			{object}	MessageResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/areas/{areaId} [delete]
+func (h *ProjectHandler) DeleteArea(c *echo.Context) error {
+	areaIDStr := c.Param("areaId")
+	areaID, err := uuid.Parse(areaIDStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid area ID")
+	}
+
+	ctx := c.Request().Context()
+
+	err = h.store.DeleteProjectArea(ctx, areaID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete area")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "area deleted"})
+}
+
 // LabelResponse represents a project label in API responses.
 type LabelResponse struct {
 	ID        uuid.UUID `json:"id"`

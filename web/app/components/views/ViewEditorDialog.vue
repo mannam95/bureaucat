@@ -9,6 +9,7 @@ import type {
   SortDir,
   ProjectState,
   ProjectLabel,
+  ProjectArea,
   ProjectMember,
   CycleSibling,
 } from "~/types";
@@ -33,6 +34,7 @@ const props = defineProps<{
   // Vocabulary for the filter editor.
   states: ProjectState[];
   labels: ProjectLabel[];
+  areas: ProjectArea[];
   members: ProjectMember[];
   cycles: CycleSibling[];
 }>();
@@ -166,6 +168,7 @@ async function save() {
               :group-by="scratchGroupBy"
               :states="states"
               :labels="labels"
+              :areas="areas"
               :members="members"
               :cycles="cycles"
               :show-group-by="defaultTab === 'board'"

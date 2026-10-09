@@ -436,6 +436,13 @@ type Project struct {
 	WorkspaceID uuid.UUID          `json:"workspace_id"`
 }
 
+type ProjectArea struct {
+	ID        uuid.UUID          `json:"id"`
+	ProjectID uuid.UUID          `json:"project_id"`
+	Name      string             `json:"name"`
+	Color     pgtype.Text        `json:"color"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
 type ProjectLabel struct {
 	ID        uuid.UUID          `json:"id"`
 	ProjectID uuid.UUID          `json:"project_id"`
@@ -527,6 +534,12 @@ type Task struct {
 	Effort         int32              `json:"effort"`
 }
 
+type TaskArea struct {
+	TaskID  uuid.UUID          `json:"task_id"`
+	AreaID  uuid.UUID          `json:"area_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	AddedBy uuid.UUID          `json:"added_by"`
+}
 type TaskAssignee struct {
 	ID         uuid.UUID          `json:"id"`
 	TaskID     uuid.UUID          `json:"task_id"`

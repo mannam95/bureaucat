@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DateValue } from "reka-ui";
 import { CalendarDate } from "@internationalized/date";
-import type { FilterField, FilterOp, FilterValue, ProjectState, ProjectMember, ProjectLabel, CycleSibling } from "~/types";
+import type { FilterField, FilterOp, FilterValue, ProjectState, ProjectMember, ProjectLabel,
+  ProjectArea, CycleSibling } from "~/types";
 import type { ValueKind } from "./filterCatalog";
 import {
   findOpDef,
@@ -17,6 +18,7 @@ const props = defineProps<{
   value: FilterValue | undefined;
   states: ProjectState[];
   labels: ProjectLabel[];
+  areas: ProjectArea[];
   members: ProjectMember[];
   cycles: CycleSibling[];
 }>();
@@ -239,6 +241,24 @@ function updateIntArray(next: string[]) {
           :style="{ backgroundColor: (item as ProjectLabel).color || '#3B82F6' }"
         />
         <span class="truncate">{{ (item as ProjectLabel).name }}</span>
+      </template>
+    </EntityMultiSelect>
+
+    <!-- areas (uuid-array) -->
+    <EntityMultiSelect
+      v-else-if="valueKind === 'uuid-array' && field === 'areas'"
+      :items="areas"
+      :model-value="asStringArray"
+      placeholder="Find area…"
+      empty-message="No areas"
+      @update:model-value="updateStringArray"
+    >
+      <template #option="{ item }">
+        <span
+          class="size-3 rounded"
+          :style="{ backgroundColor: (item as ProjectArea).color || '#3B82F6' }"
+        />
+        <span class="truncate">{{ (item as ProjectArea).name }}</span>
       </template>
     </EntityMultiSelect>
 

@@ -7,6 +7,7 @@ import type {
   ProjectState,
   ProjectMember,
   ProjectLabel,
+  ProjectArea,
   CycleSibling,
   SortKey,
   SortDir,
@@ -25,6 +26,7 @@ const props = defineProps<{
   groupBy: ViewGroupBy;
   states: ProjectState[];
   labels: ProjectLabel[];
+  areas: ProjectArea[];
   members: ProjectMember[];
   cycles: CycleSibling[];
   /** When true, show the Group-by control (board tab only). */
@@ -102,6 +104,7 @@ function updatePredicate(index: number, p: Predicate) {
           <FilterPredicateEditor
             :states="states"
             :labels="labels"
+            :areas="areas"
             :members="members"
             :cycles="cycles"
             @confirm="addTopLevelPredicate"
@@ -151,6 +154,7 @@ function updatePredicate(index: number, p: Predicate) {
           :predicate="child.predicate"
           :states="states"
           :labels="labels"
+            :areas="areas"
           :members="members"
           :cycles="cycles"
           @update="(p) => updatePredicate(i, p)"

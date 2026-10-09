@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Clock,
   Gauge,
+  Shapes,
 } from "lucide-vue-next";
 import type { FilterField, FilterOp } from "~/types";
 
@@ -33,7 +34,7 @@ export type ValueKind =
   | "number"
   | "none";
 
-export type EntityKind = "state" | "state_type" | "priority" | "member" | "label" | "cycle";
+export type EntityKind = "state" | "state_type" | "priority" | "member" | "label" | "area" | "cycle";
 
 export interface OpDef {
   op: FilterOp;
@@ -147,6 +148,19 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
       { op: "is_empty", label: "has no labels", valueKind: "none" },
       { op: "is_set", label: "has any label", valueKind: "none" },
+    ],
+  },
+  {
+    field: "areas",
+    label: "Areas",
+    icon: Shapes,
+    entityKind: "area",
+    ops: [
+      { op: "has_any", label: "include any of", valueKind: "uuid-array" },
+      { op: "has_all", label: "include all of", valueKind: "uuid-array" },
+      { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "has no areas", valueKind: "none" },
+      { op: "is_set", label: "has any area", valueKind: "none" },
     ],
   },
   {

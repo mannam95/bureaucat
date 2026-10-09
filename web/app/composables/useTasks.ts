@@ -435,6 +435,35 @@ export function useTasks() {
     }
   }
 
+  async function addArea(
+    projectKey: string,
+    taskNum: number,
+    areaId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/areas`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ area_id: areaId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to add area" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function removeLabel(
     projectKey: string,
     taskNum: number,
@@ -452,6 +481,31 @@ export function useTasks() {
       if (!response.ok) {
         const error = await response.json();
         return { success: false, error: error.message || "Failed to remove label" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function removeArea(
+    projectKey: string,
+    taskNum: number,
+    areaId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/areas/${areaId}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeader(),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to remove area" };
       }
 
       return { success: true };
@@ -705,6 +759,8 @@ export function useTasks() {
     // Labels
     addLabel,
     removeLabel,
+    addArea,
+    removeArea,
 
     // Move
     moveTask,

@@ -5,6 +5,7 @@ import type {
   Project,
   ProjectState,
   ProjectLabel,
+  ProjectArea,
   ProjectMember,
   TaskTemplate,
   SubtaskCandidate,
@@ -19,6 +20,7 @@ const props = withDefaults(
     projectKey?: string;
     states?: ProjectState[];
     labels?: ProjectLabel[];
+    areas?: ProjectArea[];
     members?: ProjectMember[];
     templates?: TaskTemplate[];
     // Selector mode (e.g. opened from /dashboard or Shift+C): the dialog fetches
@@ -40,6 +42,7 @@ const props = withDefaults(
   {
     states: () => [],
     labels: () => [],
+    areas: () => [],
     members: () => [],
     templates: () => [],
   }
@@ -65,7 +68,7 @@ const {
   clear: clearPendingFiles,
   attachAll: attachPendingFiles,
 } = usePendingAttachments();
-const { listStates, listLabels, listMembers, listTemplates } = useProjects();
+const { listStates, listLabels, listAreas, listMembers, listTemplates } = useProjects();
 
 // --- Project selection ---
 // Selector mode is active when the caller opts into the project picker; the
@@ -100,6 +103,7 @@ async function fetchProjects() {
 // Metadata fetched on-demand when a project is chosen (selector mode only).
 const fetchedStates = ref<ProjectState[]>([]);
 const fetchedLabels = ref<ProjectLabel[]>([]);
+const fetchedAreas = ref<ProjectArea[]>([]);
 const fetchedMembers = ref<ProjectMember[]>([]);
 const fetchedTemplates = ref<TaskTemplate[]>([]);
 
@@ -108,6 +112,7 @@ const effectiveProjectKey = computed(() =>
 );
 const effStates = computed(() => (selectable.value ? fetchedStates.value : props.states));
 const effLabels = computed(() => (selectable.value ? fetchedLabels.value : props.labels));
+const effAreas = computed(() => (selectable.value ? fetchedAreas.value : props.areas));
 const effMembers = computed(() => (selectable.value ? fetchedMembers.value : props.members));
 const effTemplates = computed(() =>
   selectable.value ? fetchedTemplates.value : props.templates
@@ -131,6 +136,7 @@ const form = ref({
   priority: 0,
   assignees: [] as string[],
   labels: [] as string[],
+  areas: [] as string[],
   figma_link: "",
   branch: "",
   pull_request: "",
@@ -190,6 +196,7 @@ function resetForm() {
     priority: 0,
     assignees: [],
     labels: [],
+    areas: [],
     figma_link: "",
     branch: "",
     pull_request: "",
@@ -232,14 +239,16 @@ async function loadCycles(key: string) {
 
 async function loadProjectMeta(key: string) {
   metaLoading.value = true;
-  const [s, l, m, t] = await Promise.all([
+  const [s, l, ar, m, t] = await Promise.all([
     listStates(key),
     listLabels(key),
+    listAreas(key),
     listMembers(key),
     listTemplates(key),
   ]);
   fetchedStates.value = s.data ?? [];
   fetchedLabels.value = l.data ?? [];
+  fetchedAreas.value = ar.data ?? [];
   fetchedMembers.value = m.data ?? [];
   fetchedTemplates.value = t.data ?? [];
   await loadCycles(key);
@@ -248,6 +257,7 @@ async function loadProjectMeta(key: string) {
   form.value.state_id = defaultState.value?.id || "";
   form.value.assignees = [];
   form.value.labels = [];
+  form.value.areas = [];
   form.value.watchers = [];
   selectedTemplateId.value = "";
 }
@@ -323,6 +333,7 @@ watch(open, async (isOpen) => {
       selectedProjectKey.value = "";
       fetchedStates.value = [];
       fetchedLabels.value = [];
+      fetchedAreas.value = [];
       fetchedMembers.value = [];
       fetchedTemplates.value = [];
       await fetchProjects();
@@ -377,6 +388,7 @@ async function handleSubmit() {
     effort: form.value.effort || undefined,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
     labels: form.value.labels.length > 0 ? form.value.labels : undefined,
+    areas: form.value.areas.length > 0 ? form.value.areas : undefined,
     figma_link: form.value.figma_link.trim() || undefined,
     branch: form.value.branch.trim() || undefined,
     pull_request: form.value.pull_request.trim() || undefined,
@@ -555,6 +567,26 @@ function addAssignee(userId: string) {
 
 function removeAssignee(userId: string) {
   form.value.assignees = form.value.assignees.filter((id) => id !== userId);
+}
+
+const selectedAreas = computed(() =>
+  effAreas.value.filter((a) => form.value.areas.includes(a.id))
+);
+
+// Areas not yet picked — the pool offered in the area popover.
+const availableAreas = computed(() => {
+  const selected = new Set(form.value.areas);
+  return effAreas.value.filter((a) => !selected.has(a.id));
+});
+
+function addArea(areaId: string) {
+  if (!form.value.areas.includes(areaId)) {
+    form.value.areas.push(areaId);
+  }
+}
+
+function removeArea(areaId: string) {
+  form.value.areas = form.value.areas.filter((id) => id !== areaId);
 }
 
 function addLabel(labelId: string) {
@@ -957,6 +989,34 @@ function removeLabel(labelId: string) {
                   :style="{ backgroundColor: label.color }"
                 />
                 {{ label.name }}
+              </template>
+            </TokenSelect>
+          </div>
+
+          <div v-if="effAreas.length > 0" class="space-y-2">
+            <Label>Areas</Label>
+            <TokenSelect
+              :selected="selectedAreas"
+              :available="availableAreas"
+              :get-key="(a) => a.id"
+              :get-search-text="(a) => a.name"
+              :chip-style="(a) => ({ backgroundColor: a.color + '20', color: a.color })"
+              :chip-class="() => 'pl-2 pr-1 font-medium'"
+              :disabled="loading"
+              placeholder="Add areas..."
+              empty-text="No matching areas"
+              @add="(a) => addArea(a.id)"
+              @remove="(a) => removeArea(a.id)"
+            >
+              <template #chip="{ item: area }">
+                <span class="truncate">{{ area.name }}</span>
+              </template>
+              <template #option="{ item: area }">
+                <div
+                  class="size-3 shrink-0 rounded-full"
+                  :style="{ backgroundColor: area.color }"
+                />
+                {{ area.name }}
               </template>
             </TokenSelect>
           </div>

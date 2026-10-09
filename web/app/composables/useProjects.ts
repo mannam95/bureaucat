@@ -5,6 +5,7 @@ import type {
   MoveImpactMember,
   ProjectState,
   ProjectLabel,
+  ProjectArea,
   TaskTemplate,
   CreateProjectRequest,
   UpdateProjectRequest,
@@ -13,7 +14,9 @@ import type {
   CreateStateRequest,
   UpdateStateRequest,
   CreateLabelRequest,
+  CreateAreaRequest,
   UpdateLabelRequest,
+  UpdateAreaRequest,
   CreateTemplateRequest,
   UpdateTemplateRequest,
 } from "~/types";
@@ -24,6 +27,7 @@ interface ProjectsState {
   members: ProjectMember[];
   states: ProjectState[];
   labels: ProjectLabel[];
+  areas: ProjectArea[];
   templates: TaskTemplate[];
   loading: boolean;
   total: number;
@@ -38,6 +42,7 @@ const state = reactive<ProjectsState>({
   members: [],
   states: [],
   labels: [],
+  areas: [],
   templates: [],
   loading: false,
   total: 0,
@@ -566,6 +571,101 @@ export function useProjects() {
   }
 
   // Labels
+  async function listAreas(
+    projectKey: string
+  ): Promise<{ success: boolean; data?: ProjectArea[]; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/areas`, {
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to fetch areas" };
+      }
+
+      const areas: ProjectArea[] = await response.json();
+      state.areas = areas;
+      return { success: true, data: areas };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function createArea(
+    projectKey: string,
+    data: CreateAreaRequest
+  ): Promise<{ success: boolean; data?: ProjectArea; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/areas`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to create area" };
+      }
+
+      const area: ProjectArea = await response.json();
+      return { success: true, data: area };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function updateArea(
+    projectKey: string,
+    areaId: string,
+    data: UpdateAreaRequest
+  ): Promise<{ success: boolean; data?: ProjectArea; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/areas/${areaId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to update area" };
+      }
+
+      const area: ProjectArea = await response.json();
+      return { success: true, data: area };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function deleteArea(
+    projectKey: string,
+    areaId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectKey}/areas/${areaId}`, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to delete area" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   async function listLabels(
     projectKey: string
   ): Promise<{ success: boolean; data?: ProjectLabel[]; error?: string }> {
@@ -772,6 +872,7 @@ export function useProjects() {
     members: computed(() => state.members),
     states: computed(() => state.states),
     labels: computed(() => state.labels),
+    areas: computed(() => state.areas),
     templates: computed(() => state.templates),
     loading: computed(() => state.loading),
     total: computed(() => state.total),
@@ -806,9 +907,13 @@ export function useProjects() {
 
     // Labels
     listLabels,
+    listAreas,
     createLabel,
+    createArea,
     updateLabel,
+    updateArea,
     deleteLabel,
+    deleteArea,
 
     // Templates
     listTemplates,

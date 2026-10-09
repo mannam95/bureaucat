@@ -67,6 +67,13 @@ export interface ProjectLabel {
   created_at: string;
 }
 
+export interface ProjectArea {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
 export interface CreateProjectRequest {
   project_key: string;
   name: string;
@@ -114,7 +121,17 @@ export interface CreateLabelRequest {
   color: string;
 }
 
+export interface CreateAreaRequest {
+  name: string;
+  color: string;
+}
+
 export interface UpdateLabelRequest {
+  name?: string;
+  color?: string;
+}
+
+export interface UpdateAreaRequest {
   name?: string;
   color?: string;
 }

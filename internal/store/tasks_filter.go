@@ -207,6 +207,13 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"labels", "is_empty"}: labelsPresence(false),
 	{"labels", "is_set"}:   labelsPresence(true),
 
+	// ---- areas (admin-defined classification; join via task_areas) ----
+	{"areas", "has_any"}:  areasExists(false),
+	{"areas", "has_all"}:  areasHasAll,
+	{"areas", "has_none"}: areasExists(true),
+	{"areas", "is_empty"}: areasPresence(false),
+	{"areas", "is_set"}:   areasPresence(true),
+
 	// ---- cycle (sprint; join via cycle_tasks, one cycle per task) ----
 	{"cycle", "in"}:       cycleExists(false),
 	{"cycle", "not_in"}:   cycleExists(true),
@@ -577,6 +584,51 @@ func labelsPresence(set bool) predicateHandler {
 			prefix = ""
 		}
 		return prefix + "EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)", nil
+	}
+}
+
+// -------- areas handlers (join via task_areas) --------
+
+func areasExists(negate bool) predicateHandler {
+	return func(a *argBuffer, _ uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		ids, err := decodeUUIDArray(v, uuid.Nil)
+		if err != nil {
+			return "", err
+		}
+		if len(ids) == 0 {
+			if negate {
+				return "TRUE", nil
+			}
+			return "FALSE", nil
+		}
+		p := a.push(ids)
+		prefix := ""
+		if negate {
+			prefix = "NOT "
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_areas tar WHERE tar.task_id = t.id AND tar.area_id = ANY(" + p + "::uuid[]))", nil
+	}
+}
+
+func areasHasAll(a *argBuffer, _ uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+	ids, err := decodeUUIDArray(v, uuid.Nil)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "TRUE", nil
+	}
+	p := a.push(ids)
+	return "(SELECT COUNT(DISTINCT tar.area_id) FROM task_areas tar WHERE tar.task_id = t.id AND tar.area_id = ANY(" + p + "::uuid[])) = " + strconv.Itoa(len(ids)), nil
+}
+
+func areasPresence(set bool) predicateHandler {
+	return func(*argBuffer, uuid.UUID, time.Time, json.RawMessage) (string, error) {
+		prefix := "NOT "
+		if set {
+			prefix = ""
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_areas tar WHERE tar.task_id = t.id)", nil
 	}
 }
 

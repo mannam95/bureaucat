@@ -474,6 +474,61 @@ JOIN users u ON ta.user_id = u.id
 WHERE ta.task_id = ANY(@task_ids::uuid[])
 ORDER BY ta.assigned_at ASC;
 
+-- ==================== PROJECT AREAS ====================
+-- Areas are admin-defined classification values (multi-select per task),
+-- mirroring labels structurally but managed as a controlled list.
+
+-- name: CreateProjectArea :one
+INSERT INTO project_areas (project_id, name, color)
+VALUES ($1, $2, $3)
+RETURNING id, project_id, name, color, created_at;
+
+-- name: ListProjectAreas :many
+SELECT id, project_id, name, color, created_at
+FROM project_areas
+WHERE project_id = $1
+ORDER BY name ASC;
+
+-- name: GetProjectAreaByID :one
+SELECT id, project_id, name, color, created_at
+FROM project_areas
+WHERE id = $1;
+
+-- name: UpdateProjectArea :one
+UPDATE project_areas
+SET name = COALESCE(sqlc.narg('name'), name),
+    color = COALESCE(sqlc.narg('color'), color)
+WHERE id = $1
+RETURNING id, project_id, name, color, created_at;
+
+-- name: DeleteProjectArea :exec
+DELETE FROM project_areas WHERE id = $1;
+
+-- name: AddTaskArea :exec
+INSERT INTO task_areas (task_id, area_id, added_by)
+VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveTaskArea :exec
+DELETE FROM task_areas
+WHERE task_id = $1 AND area_id = $2;
+
+-- name: ListTaskAreas :many
+SELECT ta.task_id, ta.area_id, ta.added_at, ta.added_by,
+       pa.name, pa.color
+FROM task_areas ta
+JOIN project_areas pa ON ta.area_id = pa.id
+WHERE ta.task_id = $1
+ORDER BY pa.name ASC;
+
+-- name: ListAreasForTasks :many
+SELECT ta.task_id, ta.area_id, ta.added_at,
+       pa.name, pa.color
+FROM task_areas ta
+JOIN project_areas pa ON ta.area_id = pa.id
+WHERE ta.task_id = ANY(@task_ids::uuid[])
+ORDER BY pa.name ASC;
+
 -- name: ListLabelsForTasks :many
 SELECT tl.task_id, tl.label_id, tl.added_at,
        pl.name, pl.color
@@ -907,6 +962,12 @@ SELECT DISTINCT user_id FROM (
 -- name: GetProjectStateByProjectAndName :one
 SELECT id, project_id, state_type, name, color, position, is_default, created_at, description
 FROM project_states
+WHERE project_id = $1 AND name = $2
+LIMIT 1;
+
+-- name: GetProjectAreaByProjectAndName :one
+SELECT id, project_id, name, color, created_at
+FROM project_areas
 WHERE project_id = $1 AND name = $2
 LIMIT 1;
 

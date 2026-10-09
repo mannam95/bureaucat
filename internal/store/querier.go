@@ -26,6 +26,7 @@ type Querier interface {
 	// who are already members. Used when moving a project to keep members' access.
 	AddProjectMembersToWorkspace(ctx context.Context, arg AddProjectMembersToWorkspaceParams) error
 	// ==================== TASK ASSIGNEES ====================
+	AddTaskArea(ctx context.Context, arg AddTaskAreaParams) error
 	AddTaskAssignee(ctx context.Context, arg AddTaskAssigneeParams) (TaskAssignee, error)
 	// ==================== TASK LABELS ====================
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
@@ -102,6 +103,7 @@ type Querier interface {
 	// ==================== PROJECTS ====================
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	// ==================== PROJECT LABELS ====================
+	CreateProjectArea(ctx context.Context, arg CreateProjectAreaParams) (ProjectArea, error)
 	CreateProjectLabel(ctx context.Context, arg CreateProjectLabelParams) (ProjectLabel, error)
 	// ==================== PROJECT STATES ====================
 	CreateProjectState(ctx context.Context, arg CreateProjectStateParams) (ProjectState, error)
@@ -129,6 +131,7 @@ type Querier interface {
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
 	DeleteGlobalPreference(ctx context.Context, arg DeleteGlobalPreferenceParams) error
 	DeletePersonalAccessToken(ctx context.Context, arg DeletePersonalAccessTokenParams) error
+	DeleteProjectArea(ctx context.Context, id uuid.UUID) error
 	DeleteProjectLabel(ctx context.Context, id uuid.UUID) error
 	DeleteProjectPreference(ctx context.Context, arg DeleteProjectPreferenceParams) error
 	DeleteProjectState(ctx context.Context, id uuid.UUID) error
@@ -162,6 +165,8 @@ type Querier interface {
 	GetOpenNotification(ctx context.Context, arg GetOpenNotificationParams) (GetOpenNotificationRow, error)
 	GetPageByProjectAndNumber(ctx context.Context, arg GetPageByProjectAndNumberParams) (GetPageByProjectAndNumberRow, error)
 	GetPersonalAccessTokenByHash(ctx context.Context, tokenHash string) (GetPersonalAccessTokenByHashRow, error)
+	GetProjectAreaByID(ctx context.Context, id uuid.UUID) (ProjectArea, error)
+	GetProjectAreaByProjectAndName(ctx context.Context, arg GetProjectAreaByProjectAndNameParams) (ProjectArea, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
 	GetProjectByKey(ctx context.Context, projectKey string) (Project, error)
 	GetProjectLabelByID(ctx context.Context, id uuid.UUID) (ProjectLabel, error)
@@ -220,6 +225,7 @@ type Querier interface {
 	ListAllWorkspacesFiltered(ctx context.Context, arg ListAllWorkspacesFilteredParams) ([]Workspace, error)
 	// Filtered list and count are now built dynamically by internal/store/tasks_filter.go
 	// from a FilterTree. The projection here is documented for reference by that runner.
+	ListAreasForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAreasForTasksRow, error)
 	ListAssigneesForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAssigneesForTasksRow, error)
 	ListAttachmentsByEntity(ctx context.Context, arg ListAttachmentsByEntityParams) ([]ListAttachmentsByEntityRow, error)
 	ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]ListCycleAssigneesRow, error)
@@ -252,6 +258,7 @@ type Querier interface {
 	// Server-searched and capped — never meant to list a whole project.
 	ListParentCandidates(ctx context.Context, arg ListParentCandidatesParams) ([]ListParentCandidatesRow, error)
 	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]ListPersonalAccessTokensByUserRow, error)
+	ListProjectAreas(ctx context.Context, projectID uuid.UUID) ([]ProjectArea, error)
 	ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error)
 	ListProjectCyclesAll(ctx context.Context, projectID uuid.UUID) ([]ListProjectCyclesAllRow, error)
 	ListProjectLabels(ctx context.Context, projectID uuid.UUID) ([]ProjectLabel, error)
@@ -289,6 +296,7 @@ type Querier interface {
 	// Direct children of a task, in task-number order. Used on the parent's detail page.
 	ListSubtasks(ctx context.Context, parentID uuid.UUID) ([]ListSubtasksRow, error)
 	ListTaskActivity(ctx context.Context, taskID uuid.UUID) ([]ListTaskActivityRow, error)
+	ListTaskAreas(ctx context.Context, taskID uuid.UUID) ([]ListTaskAreasRow, error)
 	ListTaskAssignees(ctx context.Context, taskID uuid.UUID) ([]ListTaskAssigneesRow, error)
 	ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]ListTaskCommentsRow, error)
 	ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListTaskLabelsRow, error)
@@ -336,6 +344,7 @@ type Querier interface {
 	RemoveModuleMember(ctx context.Context, arg RemoveModuleMemberParams) error
 	RemoveModuleTask(ctx context.Context, arg RemoveModuleTaskParams) error
 	RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error
+	RemoveTaskArea(ctx context.Context, arg RemoveTaskAreaParams) error
 	RemoveTaskAssignee(ctx context.Context, arg RemoveTaskAssigneeParams) error
 	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
@@ -407,6 +416,7 @@ type Querier interface {
 	UpdatePersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdatePersonalAccessTokenScope(ctx context.Context, arg UpdatePersonalAccessTokenScopeParams) (UpdatePersonalAccessTokenScopeRow, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateProjectArea(ctx context.Context, arg UpdateProjectAreaParams) (ProjectArea, error)
 	UpdateProjectLabel(ctx context.Context, arg UpdateProjectLabelParams) (ProjectLabel, error)
 	UpdateProjectMemberRole(ctx context.Context, arg UpdateProjectMemberRoleParams) error
 	// `state_type` is passed as plain text; when empty string, no change. Avoids

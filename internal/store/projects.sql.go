@@ -59,6 +59,25 @@ func (q *Queries) AddProjectMembersToWorkspace(ctx context.Context, arg AddProje
 	return err
 }
 
+const addTaskArea = `-- name: AddTaskArea :exec
+
+INSERT INTO task_areas (task_id, area_id, added_by)
+VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING
+`
+
+type AddTaskAreaParams struct {
+	TaskID  uuid.UUID `json:"task_id"`
+	AreaID  uuid.UUID `json:"area_id"`
+	AddedBy uuid.UUID `json:"added_by"`
+}
+
+// ==================== TASK LABELS ====================
+func (q *Queries) AddTaskArea(ctx context.Context, arg AddTaskAreaParams) error {
+	_, err := q.db.Exec(ctx, addTaskArea, arg.TaskID, arg.AreaID, arg.AddedBy)
+	return err
+}
+
 const addTaskAssignee = `-- name: AddTaskAssignee :one
 
 INSERT INTO task_assignees (task_id, user_id, assigned_by)
@@ -467,6 +486,33 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 	return i, err
 }
 
+const createProjectArea = `-- name: CreateProjectArea :one
+
+INSERT INTO project_areas (project_id, name, color)
+VALUES ($1, $2, $3)
+RETURNING id, project_id, name, color, created_at
+`
+
+type CreateProjectAreaParams struct {
+	ProjectID uuid.UUID   `json:"project_id"`
+	Name      string      `json:"name"`
+	Color     pgtype.Text `json:"color"`
+}
+
+// ==================== PROJECT LABELS ====================
+func (q *Queries) CreateProjectArea(ctx context.Context, arg CreateProjectAreaParams) (ProjectArea, error) {
+	row := q.db.QueryRow(ctx, createProjectArea, arg.ProjectID, arg.Name, arg.Color)
+	var i ProjectArea
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createProjectLabel = `-- name: CreateProjectLabel :one
 
 INSERT INTO project_labels (project_id, name, color)
@@ -668,6 +714,15 @@ func (q *Queries) CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplate
 	return i, err
 }
 
+const deleteProjectArea = `-- name: DeleteProjectArea :exec
+DELETE FROM project_areas WHERE id = $1
+`
+
+func (q *Queries) DeleteProjectArea(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProjectArea, id)
+	return err
+}
+
 const deleteProjectLabel = `-- name: DeleteProjectLabel :exec
 DELETE FROM project_labels WHERE id = $1
 `
@@ -806,6 +861,50 @@ func (q *Queries) GetNextTaskNumber(ctx context.Context, projectID uuid.UUID) (i
 	var next_number int32
 	err := row.Scan(&next_number)
 	return next_number, err
+}
+
+const getProjectAreaByID = `-- name: GetProjectAreaByID :one
+SELECT id, project_id, name, color, created_at
+FROM project_areas
+WHERE id = $1
+`
+
+func (q *Queries) GetProjectAreaByID(ctx context.Context, id uuid.UUID) (ProjectArea, error) {
+	row := q.db.QueryRow(ctx, getProjectAreaByID, id)
+	var i ProjectArea
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getProjectAreaByProjectAndName = `-- name: GetProjectAreaByProjectAndName :one
+SELECT id, project_id, name, color, created_at
+FROM project_areas
+WHERE project_id = $1 AND name = $2
+LIMIT 1
+`
+
+type GetProjectAreaByProjectAndNameParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Name      string    `json:"name"`
+}
+
+func (q *Queries) GetProjectAreaByProjectAndName(ctx context.Context, arg GetProjectAreaByProjectAndNameParams) (ProjectArea, error) {
+	row := q.db.QueryRow(ctx, getProjectAreaByProjectAndName, arg.ProjectID, arg.Name)
+	var i ProjectArea
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getProjectByID = `-- name: GetProjectByID :one
@@ -1470,6 +1569,49 @@ func (q *Queries) ListAllProjectsFiltered(ctx context.Context, arg ListAllProjec
 	return items, nil
 }
 
+const listAreasForTasks = `-- name: ListAreasForTasks :many
+SELECT ta.task_id, ta.area_id, ta.added_at,
+       pa.name, pa.color
+FROM task_areas ta
+JOIN project_areas pa ON ta.area_id = pa.id
+WHERE ta.task_id = ANY($1::uuid[])
+ORDER BY pa.name ASC
+`
+
+type ListAreasForTasksRow struct {
+	TaskID  uuid.UUID          `json:"task_id"`
+	AreaID  uuid.UUID          `json:"area_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	Name    string             `json:"name"`
+	Color   pgtype.Text        `json:"color"`
+}
+
+func (q *Queries) ListAreasForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAreasForTasksRow, error) {
+	rows, err := q.db.Query(ctx, listAreasForTasks, taskIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAreasForTasksRow{}
+	for rows.Next() {
+		var i ListAreasForTasksRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.AreaID,
+			&i.AddedAt,
+			&i.Name,
+			&i.Color,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssigneesForTasks = `-- name: ListAssigneesForTasks :many
 
 SELECT ta.task_id, ta.id, ta.user_id, ta.assigned_at,
@@ -1752,6 +1894,39 @@ func (q *Queries) ListParentCandidates(ctx context.Context, arg ListParentCandid
 			&i.StateName,
 			&i.StateType,
 			&i.StateColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectAreas = `-- name: ListProjectAreas :many
+SELECT id, project_id, name, color, created_at
+FROM project_areas
+WHERE project_id = $1
+ORDER BY name ASC
+`
+
+func (q *Queries) ListProjectAreas(ctx context.Context, projectID uuid.UUID) ([]ProjectArea, error) {
+	rows, err := q.db.Query(ctx, listProjectAreas, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProjectArea{}
+	for rows.Next() {
+		var i ProjectArea
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.Color,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2267,6 +2442,51 @@ func (q *Queries) ListTaskActivity(ctx context.Context, taskID uuid.UUID) ([]Lis
 			&i.FirstName,
 			&i.LastName,
 			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskAreas = `-- name: ListTaskAreas :many
+SELECT ta.task_id, ta.area_id, ta.added_at, ta.added_by,
+       pa.name, pa.color
+FROM task_areas ta
+JOIN project_areas pa ON ta.area_id = pa.id
+WHERE ta.task_id = $1
+ORDER BY pa.name ASC
+`
+
+type ListTaskAreasRow struct {
+	TaskID  uuid.UUID          `json:"task_id"`
+	AreaID  uuid.UUID          `json:"area_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	AddedBy uuid.UUID          `json:"added_by"`
+	Name    string             `json:"name"`
+	Color   pgtype.Text        `json:"color"`
+}
+
+func (q *Queries) ListTaskAreas(ctx context.Context, taskID uuid.UUID) ([]ListTaskAreasRow, error) {
+	rows, err := q.db.Query(ctx, listTaskAreas, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskAreasRow{}
+	for rows.Next() {
+		var i ListTaskAreasRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.AreaID,
+			&i.AddedAt,
+			&i.AddedBy,
+			&i.Name,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -3135,6 +3355,21 @@ func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemb
 	return err
 }
 
+const removeTaskArea = `-- name: RemoveTaskArea :exec
+DELETE FROM task_areas
+WHERE task_id = $1 AND area_id = $2
+`
+
+type RemoveTaskAreaParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	AreaID uuid.UUID `json:"area_id"`
+}
+
+func (q *Queries) RemoveTaskArea(ctx context.Context, arg RemoveTaskAreaParams) error {
+	_, err := q.db.Exec(ctx, removeTaskArea, arg.TaskID, arg.AreaID)
+	return err
+}
+
 const removeTaskAssignee = `-- name: RemoveTaskAssignee :exec
 DELETE FROM task_assignees
 WHERE task_id = $1 AND user_id = $2
@@ -3662,6 +3897,33 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.DeletedAt,
 		&i.Disabled,
 		&i.WorkspaceID,
+	)
+	return i, err
+}
+
+const updateProjectArea = `-- name: UpdateProjectArea :one
+UPDATE project_areas
+SET name = COALESCE($2, name),
+    color = COALESCE($3, color)
+WHERE id = $1
+RETURNING id, project_id, name, color, created_at
+`
+
+type UpdateProjectAreaParams struct {
+	ID    uuid.UUID   `json:"id"`
+	Name  pgtype.Text `json:"name"`
+	Color pgtype.Text `json:"color"`
+}
+
+func (q *Queries) UpdateProjectArea(ctx context.Context, arg UpdateProjectAreaParams) (ProjectArea, error) {
+	row := q.db.QueryRow(ctx, updateProjectArea, arg.ID, arg.Name, arg.Color)
+	var i ProjectArea
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
 	)
 	return i, err
 }

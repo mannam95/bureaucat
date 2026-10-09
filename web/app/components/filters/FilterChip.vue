@@ -5,6 +5,7 @@ import type {
   ProjectState,
   ProjectMember,
   ProjectLabel,
+  ProjectArea,
   CycleSibling,
   FilterValue,
 } from "~/types";
@@ -15,6 +16,7 @@ const props = defineProps<{
   predicate: Predicate;
   states: ProjectState[];
   labels: ProjectLabel[];
+  areas: ProjectArea[];
   members: ProjectMember[];
   cycles: CycleSibling[];
   currentUserId?: string;
@@ -62,6 +64,10 @@ function formatSingle(field: string, item: string | number): string {
   if (field === "labels") {
     const l = props.labels.find((x) => x.id === item);
     return l?.name ?? String(item).slice(0, 6);
+  }
+  if (field === "areas") {
+    const ar = props.areas.find((x) => x.id === item);
+    return ar?.name ?? String(item).slice(0, 6);
   }
   if (field === "cycle") {
     const c = props.cycles.find((x) => x.id === item);
@@ -125,6 +131,7 @@ void handleValueUpdate;
         :initial="predicate"
         :states="states"
         :labels="labels"
+        :areas="areas"
         :members="members"
         :cycles="cycles"
         lock-field

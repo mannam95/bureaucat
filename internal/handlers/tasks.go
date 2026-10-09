@@ -136,6 +136,7 @@ type TaskResponse struct {
 	// without being an assignee or originator. Detail-only, like originators.
 	Watchers         []WatcherResponse `json:"watchers,omitempty"`
 	Labels           []TaskLabelInfo   `json:"labels,omitempty"`
+	Areas            []TaskAreaInfo    `json:"areas,omitempty"`
 	CommentCount     int               `json:"comment_count"`
 	ParentTaskID     *uuid.UUID        `json:"parent_task_id,omitempty"`
 	ParentTaskNumber *int              `json:"parent_task_number,omitempty"`
@@ -241,6 +242,13 @@ type TaskLabelInfo struct {
 	Color string    `json:"color"`
 }
 
+// TaskAreaInfo mirrors TaskLabelInfo for the admin-defined Areas classification.
+type TaskAreaInfo struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
 // complexityScore is Difficulty x Effort when both are assessed, else 0.
 func complexityScore(difficulty, effort int32) int {
 	if difficulty > 0 && effort > 0 {
@@ -268,6 +276,7 @@ type CreateTaskRequest struct {
 	DueDate     *time.Time `json:"due_date"`
 	Assignees   []string   `json:"assignees"`
 	Labels      []string   `json:"labels"`
+	Areas       []string   `json:"areas"`
 	FigmaLink   *string    `json:"figma_link"`
 	Branch      *string    `json:"branch"`
 	PullRequest *string    `json:"pull_request"`
@@ -383,7 +392,7 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 	}
 
 	// Batch-decorate assignees and labels in two queries total.
-	assigneesByTask, labelsByTask, err := h.decorateTasks(ctx, tasks)
+	assigneesByTask, labelsByTask, areasByTask, err := h.decorateTasks(ctx, tasks)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task associations")
 	}
@@ -415,6 +424,7 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 			CreatorAvatarURL: textToStringPtr(t.CreatorAvatarUrl),
 			Assignees:        assigneesByTask[t.ID],
 			Labels:           labelsByTask[t.ID],
+			Areas:            areasByTask[t.ID],
 			CommentCount:     int(t.CommentCount),
 			SubtaskCount:     int(t.SubtaskCount),
 			CreatedAt:        t.CreatedAt.Time,
@@ -425,6 +435,9 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 		}
 		if taskResponses[i].Labels == nil {
 			taskResponses[i].Labels = []TaskLabelInfo{}
+		}
+		if taskResponses[i].Areas == nil {
+			taskResponses[i].Areas = []TaskAreaInfo{}
 		}
 	}
 
@@ -483,10 +496,11 @@ func (h *TaskHandler) resolveListFilter(ctx context.Context, c *echo.Context, pr
 	return store.FilterTree{}, nil
 }
 
-// decorateTasks loads assignees and labels for the given rows in two queries.
-func (h *TaskHandler) decorateTasks(ctx context.Context, tasks []store.FilteredTaskRow) (map[uuid.UUID][]AssigneeResponse, map[uuid.UUID][]TaskLabelInfo, error) {
+// decorateTasks loads assignees, labels and areas for the given rows in three
+// batched queries.
+func (h *TaskHandler) decorateTasks(ctx context.Context, tasks []store.FilteredTaskRow) (map[uuid.UUID][]AssigneeResponse, map[uuid.UUID][]TaskLabelInfo, map[uuid.UUID][]TaskAreaInfo, error) {
 	if len(tasks) == 0 {
-		return map[uuid.UUID][]AssigneeResponse{}, map[uuid.UUID][]TaskLabelInfo{}, nil
+		return map[uuid.UUID][]AssigneeResponse{}, map[uuid.UUID][]TaskLabelInfo{}, map[uuid.UUID][]TaskAreaInfo{}, nil
 	}
 	ids := make([]uuid.UUID, len(tasks))
 	for i, t := range tasks {
@@ -495,7 +509,7 @@ func (h *TaskHandler) decorateTasks(ctx context.Context, tasks []store.FilteredT
 
 	assignees, err := h.store.ListAssigneesForTasks(ctx, ids)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	assigneesByTask := make(map[uuid.UUID][]AssigneeResponse, len(tasks))
 	for _, a := range assignees {
@@ -512,7 +526,7 @@ func (h *TaskHandler) decorateTasks(ctx context.Context, tasks []store.FilteredT
 
 	labels, err := h.store.ListLabelsForTasks(ctx, ids)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	labelsByTask := make(map[uuid.UUID][]TaskLabelInfo, len(tasks))
 	for _, l := range labels {
@@ -523,7 +537,20 @@ func (h *TaskHandler) decorateTasks(ctx context.Context, tasks []store.FilteredT
 		})
 	}
 
-	return assigneesByTask, labelsByTask, nil
+	areas, err := h.store.ListAreasForTasks(ctx, ids)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	areasByTask := make(map[uuid.UUID][]TaskAreaInfo, len(tasks))
+	for _, ar := range areas {
+		areasByTask[ar.TaskID] = append(areasByTask[ar.TaskID], TaskAreaInfo{
+			ID:    ar.AreaID,
+			Name:  ar.Name,
+			Color: textToString(ar.Color, "#3B82F6"),
+		})
+	}
+
+	return assigneesByTask, labelsByTask, areasByTask, nil
 }
 
 // CreateTask creates a new task.
@@ -768,6 +795,23 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		})
 	}
 
+	// Add areas (admin-defined classification). No activity log entry — the
+	// activity enum doesn't cover areas yet.
+	for _, areaIDStr := range req.Areas {
+		areaID, err := uuid.Parse(areaIDStr)
+		if err != nil {
+			continue
+		}
+		if _, err := h.store.GetProjectAreaByID(ctx, areaID); err != nil {
+			continue
+		}
+		_ = h.store.AddTaskArea(ctx, store.AddTaskAreaParams{
+			TaskID:  task.ID,
+			AreaID:  areaID,
+			AddedBy: userID,
+		})
+	}
+
 	// Add labels
 	for _, labelIDStr := range req.Labels {
 		labelID, err := uuid.Parse(labelIDStr)
@@ -894,6 +938,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 	// Get assignees and labels
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
+	areas := h.getTaskAreas(ctx, task.ID)
 
 	return c.JSON(http.StatusCreated, TaskResponse{
 		ID:               fullTask.ID,
@@ -922,6 +967,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		Assignees:        assignees,
 		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
+		Areas:            areas,
 		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
@@ -975,6 +1021,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 	// Get assignees and labels
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
+	areas := h.getTaskAreas(ctx, task.ID)
 
 	// Cycle/modules shown on the task. For a sub-task, surface the parent's links
 	// (sub-tasks follow their parent) so the detail page can show them read-only.
@@ -1011,6 +1058,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		Assignees:        assignees,
 		Watchers:         h.watchersForTask(ctx, task.ID),
 		Labels:           labels,
+		Areas:            areas,
 		ParentTaskID:     pgUUIDToUUIDPtr(task.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(task.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(task.ParentTaskTitle),
@@ -1325,6 +1373,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 	// Get assignees and labels
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
+	areas := h.getTaskAreas(ctx, task.ID)
 
 	// Decorate exactly like GetTask: the frontend replaces its current task with
 	// this response, so any field missing here (cycle, modules, parent info)
@@ -1363,6 +1412,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		Assignees:        assignees,
 		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
+		Areas:            areas,
 		ParentTaskID:     pgUUIDToUUIDPtr(fullTask.ParentTaskID),
 		ParentTaskNumber: pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:  textToStringPtr(fullTask.ParentTaskTitle),
@@ -2485,6 +2535,90 @@ type AddLabelRequest struct {
 //	@Failure		500			{object}	ErrorResponse
 //	@Security		BearerAuth
 //	@Router			/projects/{projectKey}/tasks/{taskNum}/labels [post]
+//
+// AddAreaRequest attaches one area to a task.
+type AddAreaRequest struct {
+	AreaID string `json:"area_id"`
+}
+
+// AddArea attaches an area to a task. No activity log entry yet — the
+// activity enum doesn't cover areas.
+func (h *TaskHandler) AddArea(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+	var req AddAreaRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	areaID, err := uuid.Parse(req.AreaID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid area_id")
+	}
+
+	ctx := c.Request().Context()
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	area, err := h.store.GetProjectAreaByID(ctx, areaID)
+	if err != nil || area.ProjectID != projectID {
+		return echo.NewHTTPError(http.StatusNotFound, "area not found")
+	}
+	if err := h.store.AddTaskArea(ctx, store.AddTaskAreaParams{
+		TaskID:  task.ID,
+		AreaID:  areaID,
+		AddedBy: userID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add area")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "area added"})
+}
+
+// RemoveArea detaches an area from a task.
+func (h *TaskHandler) RemoveArea(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+	areaID, err := uuid.Parse(c.Param("areaId"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid area ID")
+	}
+
+	ctx := c.Request().Context()
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	if err := h.store.RemoveTaskArea(ctx, store.RemoveTaskAreaParams{
+		TaskID: task.ID,
+		AreaID: areaID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove area")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "area removed"})
+}
+
 func (h *TaskHandler) AddLabel(c *echo.Context) error {
 	projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
 	projectID, err := uuid.Parse(projectIDStr)
@@ -2822,6 +2956,35 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		return 0, err
 	}
 
+	// Remap areas by name, mirroring the label remap below: drop the source
+	// areas, re-add ones matching by name in the destination project.
+	taskAreas, err := q.ListTaskAreas(ctx, taskID)
+	if err != nil {
+		return 0, err
+	}
+	for _, ar := range taskAreas {
+		if err := q.RemoveTaskArea(ctx, store.RemoveTaskAreaParams{
+			TaskID: taskID,
+			AreaID: ar.AreaID,
+		}); err != nil {
+			return 0, err
+		}
+		destArea, err := q.GetProjectAreaByProjectAndName(ctx, store.GetProjectAreaByProjectAndNameParams{
+			ProjectID: dest.ID,
+			Name:      ar.Name,
+		})
+		if err != nil {
+			continue // no matching area in the destination; drop it
+		}
+		if err := q.AddTaskArea(ctx, store.AddTaskAreaParams{
+			TaskID:  taskID,
+			AreaID:  destArea.ID,
+			AddedBy: ar.AddedBy,
+		}); err != nil {
+			return 0, err
+		}
+	}
+
 	// Remap labels by name: drop the source labels, re-add matching ones from
 	// the destination project. Unmatched labels are silently dropped.
 	labels, err := q.ListTaskLabels(ctx, taskID)
@@ -2919,6 +3082,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 	}
 	assignees := h.getTaskAssignees(ctx, task.ID)
 	labels := h.getTaskLabels(ctx, task.ID)
+	areas := h.getTaskAreas(ctx, task.ID)
 
 	return c.JSON(http.StatusOK, TaskResponse{
 		ID:               fullTask.ID,
@@ -2947,6 +3111,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		Assignees:        assignees,
 		Watchers:         h.watchersForTask(ctx, fullTask.ID),
 		Labels:           labels,
+		Areas:            areas,
 		FigmaLink:        textToStringPtr(fullTask.FigmaLink),
 		Branch:           textToStringPtr(fullTask.Branch),
 		PullRequest:      textToStringPtr(fullTask.PullRequest),
@@ -3157,6 +3322,23 @@ func requestBaseURL(c *echo.Context) string {
 		}
 	}
 	return scheme + "://" + c.Request().Host
+}
+
+func (h *TaskHandler) getTaskAreas(ctx context.Context, taskID uuid.UUID) []TaskAreaInfo {
+	areas, err := h.store.ListTaskAreas(ctx, taskID)
+	if err != nil {
+		return []TaskAreaInfo{}
+	}
+
+	result := make([]TaskAreaInfo, len(areas))
+	for i, ar := range areas {
+		result[i] = TaskAreaInfo{
+			ID:    ar.AreaID,
+			Name:  ar.Name,
+			Color: textToString(ar.Color, "#3B82F6"),
+		}
+	}
+	return result
 }
 
 func (h *TaskHandler) getTaskLabels(ctx context.Context, taskID uuid.UUID) []TaskLabelInfo {

@@ -159,8 +159,28 @@ const assignedTo = computed<Person[]>(() =>
         <span class="truncate">{{ task.task_id }}</span>
       </span>
 
-      <!-- Col 2: Title -->
-      <span class="truncate text-sm font-medium min-w-0">{{ task.title }}</span>
+      <!-- Col 2: Title (+ up to two area chips) -->
+      <span class="flex min-w-0 items-center gap-1.5">
+        <span class="truncate text-sm font-medium min-w-0">{{ task.title }}</span>
+        <template v-if="task.areas?.length">
+          <span
+            v-for="ar in task.areas.slice(0, 2)"
+            :key="ar.id"
+            class="hidden shrink-0 rounded px-1 py-0.5 text-[10px] font-medium sm:inline"
+            :style="{ backgroundColor: ar.color + '20', color: ar.color }"
+            :title="`Area: ${ar.name}`"
+          >
+            {{ ar.name }}
+          </span>
+          <span
+            v-if="task.areas.length > 2"
+            class="hidden shrink-0 text-[10px] text-muted-foreground sm:inline"
+            :title="task.areas.map((a) => a.name).join(', ')"
+          >
+            +{{ task.areas.length - 2 }}
+          </span>
+        </template>
+      </span>
 
       <!-- Col 3: State badge (editable for members) -->
       <div class="justify-self-end" @click.stop.prevent>

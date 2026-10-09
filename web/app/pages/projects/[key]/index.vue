@@ -54,11 +54,13 @@ const {
   members,
   states,
   labels,
+  areas: projectAreas,
   templates,
   getProject,
   listMembers,
   listStates,
   listLabels,
+  listAreas,
   listTemplates,
 } = useProjects();
 
@@ -427,6 +429,7 @@ async function loadProject() {
     listMembers(projectKey.value),
     listStates(projectKey.value),
     listLabels(projectKey.value),
+    listAreas(projectKey.value),
     listTemplates(projectKey.value),
     listViews(projectKey.value),
     listAllCycles(projectKey.value).then((r) => {
@@ -864,6 +867,7 @@ onMounted(async () => {
                   :group-by="groupBy"
                   :states="states"
                   :labels="labels"
+                  :areas="projectAreas"
                   :members="members"
                   :cycles="projectCycles"
                   :show-group-by="activeTab === 'board'"
@@ -1180,6 +1184,15 @@ onMounted(async () => {
 
               <Separator />
 
+              <AreasManager
+                :areas="projectAreas"
+                :project-key="projectKey"
+                :is-admin="isAdmin"
+                @refresh="listAreas(projectKey)"
+              />
+
+              <Separator />
+
               <TemplatesManager
                 :templates="templates"
                 :project-key="projectKey"
@@ -1264,6 +1277,7 @@ onMounted(async () => {
           :edit-is-shared="viewEditor.isShared"
           :states="states"
           :labels="labels"
+      :areas="projectAreas"
           :members="members"
           :cycles="projectCycles"
           @update:open="(v) => (showViewEditor = v)"

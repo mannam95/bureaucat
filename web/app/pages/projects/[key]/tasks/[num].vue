@@ -49,10 +49,12 @@ const {
   members,
   states,
   labels: projectLabels,
+  areas: projectAreas,
   getProject,
   listMembers,
   listStates,
   listLabels,
+  listAreas,
 } = useProjects();
 
 const { currentTask, getTask, updateTask, deleteTask, listSubtasks, attachSubtasks, promoteSubtask, listParentCandidates } =
@@ -145,6 +147,7 @@ async function loadData() {
     listMembers(projectKey.value),
     listStates(projectKey.value),
     listLabels(projectKey.value),
+    listAreas(projectKey.value),
     listComments(projectKey.value, taskNum.value),
     listActivity(projectKey.value, taskNum.value),
     loadTaskAttachments(),
@@ -1342,6 +1345,18 @@ onMounted(() => {
                   />
                 </div>
 
+                <!-- Areas (admin-defined classification) -->
+                <div v-if="projectAreas.length > 0 || (currentTask.areas?.length ?? 0) > 0" class="py-3">
+                  <TaskAreas
+                    :task-areas="currentTask.areas || []"
+                    :project-key="projectKey"
+                    :task-num="taskNum"
+                    :project-areas="projectAreas"
+                    :is-member="isMember"
+                    @refresh="refreshTask"
+                  />
+                </div>
+
                 <!-- Created By -->
                 <div class="py-3">
                   <p class="mb-2 text-xs text-muted-foreground">Created by</p>
@@ -1430,6 +1445,7 @@ onMounted(() => {
           :project-key="projectKey"
           :states="states"
           :labels="projectLabels"
+          :areas="projectAreas"
           :members="members"
           :parent-task-number="taskNum"
           @created="onSubtaskCreated"
