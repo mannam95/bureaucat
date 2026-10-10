@@ -7,6 +7,8 @@ interface User {
   user_type: string;
   avatar_url?: string;
   created_at: string;
+  /** True only for the break-glass account (SUPERADMIN_EMAIL). */
+  is_super_admin?: boolean;
 }
 
 interface AuthResponse {

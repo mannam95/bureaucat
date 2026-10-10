@@ -32,19 +32,6 @@ export interface MattermostSettings {
   bot_token: string;
 }
 
-export interface SMTPSettings {
-  enabled: boolean;
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  from_address: string;
-  from_name: string;
-  tls_mode: "starttls" | "tls";
-  app_url: string;
-  embed_logo: boolean;
-}
-
 export interface FeedbackSettings {
   receive_enabled: boolean;
   send_to_main_enabled: boolean;
@@ -369,17 +356,21 @@ export function useSettings() {
     }
   }
 
-  // --- SMTP Settings ---
+  // --- Test emails (super admin only; SMTP config comes from the environment) ---
 
-  async function fetchSMTPSettings(): Promise<{ success: boolean; data?: SMTPSettings; error?: string }> {
+  async function fetchEmailStatus(): Promise<{
+    success: boolean;
+    data?: { configured: boolean; from?: string };
+    error?: string;
+  }> {
     try {
-      const response = await fetch("/api/v1/admin/settings/smtp", {
+      const response = await fetch("/api/v1/admin/email", {
         headers: { ...getAuthHeader() },
         credentials: "include",
       });
       if (!response.ok) {
-        const data = await response.json();
-        return { success: false, error: data.message || "Failed to fetch SMTP settings" };
+        const data = await response.json().catch(() => ({}));
+        return { success: false, error: data.message || "Failed to fetch email status" };
       }
       return { success: true, data: await response.json() };
     } catch {
@@ -387,42 +378,22 @@ export function useSettings() {
     }
   }
 
-  async function updateSMTPSettings(
-    settings: SMTPSettings
-  ): Promise<{ success: boolean; data?: SMTPSettings; error?: string }> {
+  async function sendTestEmail(
+    userId: string,
+    event: string
+  ): Promise<{ success: boolean; sentTo?: string; error?: string }> {
     try {
-      const response = await fetch("/api/v1/admin/settings/smtp", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeader(),
-        },
-        credentials: "include",
-        body: JSON.stringify(settings),
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        return { success: false, error: data.message || "Failed to update SMTP settings" };
-      }
-      return { success: true, data: await response.json() };
-    } catch {
-      return { success: false, error: "Network error" };
-    }
-  }
-
-  async function testSMTPSettings(to: string, template = "connection"): Promise<{ success: boolean; message?: string; error?: string }> {
-    try {
-      const response = await fetch("/api/v1/admin/settings/smtp/test", {
+      const response = await fetch("/api/v1/admin/email/test", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         credentials: "include",
-        body: JSON.stringify({ to, template }),
+        body: JSON.stringify({ user_id: userId, event }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         return { success: false, error: data.message || "Failed to send test email" };
       }
-      return { success: true, message: data.message };
+      return { success: true, sentTo: data.sent_to };
     } catch {
       return { success: false, error: "Network error" };
     }
@@ -446,9 +417,8 @@ export function useSettings() {
     fetchMattermostSettings,
     updateMattermostSettings,
     testMattermostConnection,
-    fetchSMTPSettings,
-    updateSMTPSettings,
-    testSMTPSettings,
+    fetchEmailStatus,
+    sendTestEmail,
     feedbackPublic,
     feedbackPublicLoaded,
     fetchFeedbackPublicSettings,

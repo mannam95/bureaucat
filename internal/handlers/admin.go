@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/auth"
+	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
 )
 
@@ -43,18 +44,22 @@ type AdminHandler struct {
 	// deleted, demoted, or password-reset through the API/frontend; it can only
 	// be changed at the database level or by pointing the env var elsewhere.
 	superAdminEmail string
+	// smtp is the env-configured mail setup, used by the super admin's
+	// send-test-email endpoint. Zero value = email not configured.
+	smtp notifier.SMTPConfig
 }
 
 // NewAdminHandler creates a new admin handler. superAdminEmail (may be empty)
 // designates the protected break-glass account; pool backs the transactional
-// admin actions (user merge).
-func NewAdminHandler(store store.Querier, pool *pgxpool.Pool, authManager *auth.Manager, devMode bool, superAdminEmail string) *AdminHandler {
+// admin actions (user merge); smtp backs the super admin's test emails.
+func NewAdminHandler(store store.Querier, pool *pgxpool.Pool, authManager *auth.Manager, devMode bool, superAdminEmail string, smtp notifier.SMTPConfig) *AdminHandler {
 	return &AdminHandler{
 		store:           store,
 		pool:            pool,
 		authManager:     authManager,
 		devMode:         devMode,
 		superAdminEmail: strings.TrimSpace(superAdminEmail),
+		smtp:            smtp,
 	}
 }
 

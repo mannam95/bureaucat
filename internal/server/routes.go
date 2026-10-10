@@ -391,6 +391,10 @@ func (s *Server) registerRoutes() {
 		admin.PUT("/users/:id/password", s.adminHandler.ResetUserPassword)
 		admin.PUT("/users/:id/active", s.adminHandler.SetUserActive)
 		admin.POST("/users/:id/merge", s.adminHandler.MergeUser)
+
+		// Test emails (super admin only; SMTP stays env-configured)
+		admin.GET("/email", s.adminHandler.EmailStatus)
+		admin.POST("/email/test", s.adminHandler.SendTestEmail)
 		admin.GET("/tokens", s.adminHandler.ListTokens)
 		admin.DELETE("/tokens/:id", s.adminHandler.RevokeToken)
 		admin.DELETE("/tokens/expired", s.adminHandler.CleanupExpiredTokens)

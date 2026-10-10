@@ -73,14 +73,18 @@ type AuthHandler struct {
 	store       store.Querier
 	authManager *auth.Manager
 	devMode     bool
+	// superAdminEmail marks the break-glass account on /me responses.
+	superAdminEmail string
 }
 
-// NewAuthHandler creates a new auth handler.
-func NewAuthHandler(store store.Querier, authManager *auth.Manager, devMode bool) *AuthHandler {
+// NewAuthHandler creates a new auth handler. superAdminEmail (may be empty)
+// identifies the break-glass account so /me can mark it for the UI.
+func NewAuthHandler(store store.Querier, authManager *auth.Manager, devMode bool, superAdminEmail string) *AuthHandler {
 	return &AuthHandler{
-		store:       store,
-		authManager: authManager,
-		devMode:     devMode,
+		store:           store,
+		authManager:     authManager,
+		devMode:         devMode,
+		superAdminEmail: strings.TrimSpace(superAdminEmail),
 	}
 }
 
@@ -322,15 +326,22 @@ func (h *AuthHandler) Me(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		UserType:  user.UserType,
-		AvatarURL: textToStringPtr(user.AvatarUrl),
-		CreatedAt: user.CreatedAt.Time,
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		UserType:     user.UserType,
+		AvatarURL:    textToStringPtr(user.AvatarUrl),
+		CreatedAt:    user.CreatedAt.Time,
+		IsSuperAdmin: h.isSuperAdmin(user.Email),
 	})
+}
+
+// isSuperAdmin reports whether the email belongs to the configured
+// break-glass account. An unset SUPERADMIN_EMAIL marks no one.
+func (h *AuthHandler) isSuperAdmin(email string) bool {
+	return h.superAdminEmail != "" && strings.EqualFold(strings.TrimSpace(email), h.superAdminEmail)
 }
 
 // UpdateAvatarRequest is the body for PUT /me/avatar. An empty avatar_url
@@ -383,14 +394,15 @@ func (h *AuthHandler) UpdateMyAvatar(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 	return c.JSON(http.StatusOK, UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		UserType:  user.UserType,
-		AvatarURL: textToStringPtr(user.AvatarUrl),
-		CreatedAt: user.CreatedAt.Time,
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		UserType:     user.UserType,
+		AvatarURL:    textToStringPtr(user.AvatarUrl),
+		CreatedAt:    user.CreatedAt.Time,
+		IsSuperAdmin: h.isSuperAdmin(user.Email),
 	})
 }
 
@@ -430,14 +442,15 @@ func (h *AuthHandler) GetUserProfile(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		UserType:  user.UserType,
-		AvatarURL: textToStringPtr(user.AvatarUrl),
-		CreatedAt: user.CreatedAt.Time,
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		UserType:     user.UserType,
+		AvatarURL:    textToStringPtr(user.AvatarUrl),
+		CreatedAt:    user.CreatedAt.Time,
+		IsSuperAdmin: h.isSuperAdmin(user.Email),
 	})
 }
 
@@ -686,14 +699,15 @@ func (h *AuthHandler) GenerateTokensAndSetCookies(c *echo.Context, ctx context.C
 
 	return &AuthResponse{
 		User: UserResponse{
-			ID:        user.ID,
-			Username:  user.Username,
-			Email:     user.Email,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
-			UserType:  user.UserType,
-			AvatarURL: user.AvatarURL,
-			CreatedAt: user.CreatedAt,
+			ID:           user.ID,
+			Username:     user.Username,
+			Email:        user.Email,
+			FirstName:    user.FirstName,
+			LastName:     user.LastName,
+			UserType:     user.UserType,
+			AvatarURL:    user.AvatarURL,
+			CreatedAt:    user.CreatedAt,
+			IsSuperAdmin: h.isSuperAdmin(user.Email),
 		},
 		AccessToken: accessToken,
 		ExpiresAt:   expiresAt.Unix(),

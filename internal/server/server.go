@@ -117,8 +117,18 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		superAdminEmail := strings.TrimSpace(os.Getenv("SUPERADMIN_EMAIL"))
 		ensureSuperAdmin(context.Background(), srv.store, superAdminEmail)
 
-		srv.authHandler = handlers.NewAuthHandler(srv.store, srv.authManager, devMode)
-		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.pool, srv.authManager, devMode, superAdminEmail)
+		// Env-configured SMTP; also handed to the admin handler so the super
+		// admin can send test emails through the exact same pipeline.
+		smtpCfg := notifier.SMTPConfig{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     os.Getenv("SMTP_PORT"),
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("SMTP_FROM_ADDRESS"),
+		}
+
+		srv.authHandler = handlers.NewAuthHandler(srv.store, srv.authManager, devMode, superAdminEmail)
+		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.pool, srv.authManager, devMode, superAdminEmail, smtpCfg)
 
 		// Initialize upload service (S3-backed)
 		maxUploadSize := int64(10 * 1024 * 1024) // 10MB default
@@ -146,13 +156,6 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		// always-on provider when the core SMTP variables are set; otherwise
 		// email notifications are simply a no-op.
 		var staticNotifiers []notifier.Notifier
-		smtpCfg := notifier.SMTPConfig{
-			Host:     os.Getenv("SMTP_HOST"),
-			Port:     os.Getenv("SMTP_PORT"),
-			Username: os.Getenv("SMTP_USERNAME"),
-			Password: os.Getenv("SMTP_PASSWORD"),
-			From:     os.Getenv("SMTP_FROM_ADDRESS"),
-		}
 		if smtpCfg.Enabled() {
 			staticNotifiers = append(staticNotifiers, notifier.NewEmailNotifier(smtpCfg))
 			log.Printf("notifier: email (SMTP) enabled via %s:%s", smtpCfg.Host, smtpCfg.Port)
