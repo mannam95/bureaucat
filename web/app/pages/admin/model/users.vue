@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw, Pencil, Merge, Check } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw, Pencil, Merge, Check, RefreshCw, Copy } from "lucide-vue-next";
+import { toast } from "vue-sonner";
 import type { MergeUserResult } from "~/composables/useAdmin";
 
 definePageMeta({
@@ -123,6 +124,39 @@ const passwordError = ref<string | null>(null);
 const userToResetPassword = ref<User | null>(null);
 const newPassword = ref("");
 
+// --- Generated passwords (create + reset dialogs) ---
+// Generating reveals the value (the admin must be able to read and hand it
+// over); a manually typed password stays masked.
+const createPasswordVisible = ref(false);
+const resetPasswordVisible = ref(false);
+const copiedField = ref<"create" | "reset" | null>(null);
+
+function generateInto(target: "create" | "reset") {
+  const pwd = generateStrongPassword();
+  if (target === "create") {
+    createForm.value.password = pwd;
+    createPasswordVisible.value = true;
+  } else {
+    newPassword.value = pwd;
+    resetPasswordVisible.value = true;
+  }
+}
+
+async function copyPassword(target: "create" | "reset") {
+  const value = target === "create" ? createForm.value.password : newPassword.value;
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    toast.error("Could not copy to clipboard");
+    return;
+  }
+  copiedField.value = target;
+  setTimeout(() => {
+    if (copiedField.value === target) copiedField.value = null;
+  }, 1500);
+}
+
 // Restore dialog state
 const showRestoreDialog = ref(false);
 const restoreLoading = ref(false);
@@ -210,6 +244,7 @@ function resetCreateForm() {
     last_name: "",
     user_type: "user",
   };
+  createPasswordVisible.value = false;
   createError.value = null;
 }
 
@@ -320,6 +355,7 @@ async function handleRestore() {
 function openPasswordReset(user: User) {
   userToResetPassword.value = user;
   newPassword.value = "";
+  resetPasswordVisible.value = false;
   passwordError.value = null;
   showPasswordDialog.value = true;
 }
@@ -336,6 +372,7 @@ async function handleResetPassword() {
     showPasswordDialog.value = false;
     userToResetPassword.value = null;
     newPassword.value = "";
+    toast.success("Password reset");
   } else {
     passwordError.value = result.error || "Failed to reset password";
   }
@@ -693,7 +730,16 @@ onMounted(() => {
               </div>
               <div class="space-y-2">
                 <Label for="password">Password</Label>
-                <Input id="password" type="password" v-model="createForm.password" required :disabled="createLoading" />
+                <div class="flex gap-2">
+                  <Input id="password" :type="createPasswordVisible ? 'text' : 'password'" v-model="createForm.password" required class="flex-1 font-mono" :disabled="createLoading" />
+                  <Button type="button" variant="outline" size="icon" title="Generate a strong password" aria-label="Generate a strong password" :disabled="createLoading" @click="generateInto('create')">
+                    <RefreshCw class="size-4" />
+                  </Button>
+                  <Button type="button" variant="outline" size="icon" title="Copy to clipboard" aria-label="Copy password to clipboard" :disabled="createLoading || !createForm.password" @click="copyPassword('create')">
+                    <Check v-if="copiedField === 'create'" class="size-4 text-emerald-500" />
+                    <Copy v-else class="size-4" />
+                  </Button>
+                </div>
               </div>
               <div class="space-y-2">
                 <Label for="user_type">User Type</Label>
@@ -836,15 +882,25 @@ onMounted(() => {
               </div>
               <div class="space-y-2">
                 <Label for="new_password">New Password</Label>
-                <Input
-                  id="new_password"
-                  type="password"
-                  v-model="newPassword"
-                  required
-                  minlength="8"
-                  placeholder="Minimum 8 characters"
-                  :disabled="passwordLoading"
-                />
+                <div class="flex gap-2">
+                  <Input
+                    id="new_password"
+                    :type="resetPasswordVisible ? 'text' : 'password'"
+                    v-model="newPassword"
+                    required
+                    minlength="8"
+                    placeholder="Minimum 8 characters"
+                    class="flex-1 font-mono"
+                    :disabled="passwordLoading"
+                  />
+                  <Button type="button" variant="outline" size="icon" title="Generate a strong password" aria-label="Generate a strong password" :disabled="passwordLoading" @click="generateInto('reset')">
+                    <RefreshCw class="size-4" />
+                  </Button>
+                  <Button type="button" variant="outline" size="icon" title="Copy to clipboard" aria-label="Copy password to clipboard" :disabled="passwordLoading || !newPassword" @click="copyPassword('reset')">
+                    <Check v-if="copiedField === 'reset'" class="size-4 text-emerald-500" />
+                    <Copy v-else class="size-4" />
+                  </Button>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" @click="showPasswordDialog = false" :disabled="passwordLoading">
