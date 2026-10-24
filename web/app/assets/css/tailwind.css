@@ -296,7 +296,14 @@
 }
 /* Tables */
 .prose table {
-  width: 100%;
+  /* A table cannot shrink below its content, so a wide one (long code spans in
+     cells) escapes the min-w-0 column and runs under the task sidebar. Render
+     it as a block capped at the container and scroll it horizontally instead;
+     narrow tables keep their natural width. */
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin-top: 0.75em;
   margin-bottom: 0.75em;
