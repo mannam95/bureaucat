@@ -75,7 +75,11 @@ var validSortKeys = map[string]string{
 	"start_date": "t.start_date",
 	"title":      "t.title",
 	// Board order of the task's state (the states join is always present).
-	"state": "ps.position",
+	// Lifecycle order (as every picker groups states), then the project's own
+	// ordering, then name as a deterministic tiebreak - plain ps.position alone
+	// interleaves states that share a position. Row comparison keeps ASC/DESC
+	// applying to the whole key.
+	"state": "(CASE ps.state_type WHEN 'backlog' THEN 0 WHEN 'unstarted' THEN 1 WHEN 'started' THEN 2 WHEN 'completed' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END, ps.position, ps.name)",
 }
 
 var validSortDirs = map[string]string{

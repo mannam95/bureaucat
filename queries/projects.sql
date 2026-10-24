@@ -202,8 +202,12 @@ SELECT EXISTS (
 -- ==================== PROJECT STATES ====================
 
 -- name: CreateProjectState :one
+-- An omitted position appends the state after the project's current last one,
+-- so states added over time keep a meaningful, non-colliding order.
 INSERT INTO project_states (project_id, state_type, name, color, position, is_default, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES (sqlc.arg('project_id'), sqlc.arg('state_type'), sqlc.arg('name'), sqlc.arg('color'),
+        COALESCE(sqlc.narg('position')::int, (SELECT COALESCE(MAX(ps2.position), -1) + 1 FROM project_states ps2 WHERE ps2.project_id = sqlc.arg('project_id'))),
+        sqlc.arg('is_default'), sqlc.arg('description'))
 RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description;
 
 -- name: GetProjectStateByID :one

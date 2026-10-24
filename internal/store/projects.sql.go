@@ -656,7 +656,9 @@ func (q *Queries) CreateProjectPriority(ctx context.Context, arg CreateProjectPr
 const createProjectState = `-- name: CreateProjectState :one
 
 INSERT INTO project_states (project_id, state_type, name, color, position, is_default, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES ($1, $2, $3, $4,
+        COALESCE($5::int, (SELECT COALESCE(MAX(ps2.position), -1) + 1 FROM project_states ps2 WHERE ps2.project_id = $1)),
+        $6, $7)
 RETURNING id, project_id, state_type, name, color, position, is_default, created_at, description
 `
 
@@ -665,12 +667,14 @@ type CreateProjectStateParams struct {
 	StateType   string      `json:"state_type"`
 	Name        string      `json:"name"`
 	Color       pgtype.Text `json:"color"`
-	Position    int32       `json:"position"`
+	Position    pgtype.Int4 `json:"position"`
 	IsDefault   bool        `json:"is_default"`
 	Description pgtype.Text `json:"description"`
 }
 
 // ==================== PROJECT STATES ====================
+// An omitted position appends the state after the project's current last one,
+// so states added over time keep a meaningful, non-colliding order.
 func (q *Queries) CreateProjectState(ctx context.Context, arg CreateProjectStateParams) (ProjectState, error) {
 	row := q.db.QueryRow(ctx, createProjectState,
 		arg.ProjectID,

@@ -418,7 +418,7 @@ func (h *ProjectHandler) CreateProject(c *echo.Context) error {
 			StateType: state.StateType,
 			Name:      state.Name,
 			Color:     pgtype.Text{String: state.Color, Valid: true},
-			Position:  int32(state.Position),
+			Position:  pgtype.Int4{Int32: int32(state.Position), Valid: true},
 			IsDefault: state.IsDefault,
 		})
 		if err != nil {
@@ -1248,9 +1248,12 @@ func (h *ProjectHandler) CreateState(c *echo.Context) error {
 		req.Color = "#6B7280"
 	}
 
-	position := int32(0)
+	// No position in the request = append after the project's last state (the
+	// query handles it); position 0 used to be the default, which made every
+	// added state collide at the front and broke sorting by state.
+	position := pgtype.Int4{}
 	if req.Position != nil {
-		position = int32(*req.Position)
+		position = pgtype.Int4{Int32: int32(*req.Position), Valid: true}
 	}
 
 	ctx := c.Request().Context()
