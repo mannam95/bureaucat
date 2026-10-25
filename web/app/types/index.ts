@@ -2,6 +2,7 @@ export * from "./workspace";
 export * from "./project";
 export * from "./page";
 export * from "./task";
+export * from "./insights";
 export * from "./view";
 export * from "./comment";
 export * from "./activity";

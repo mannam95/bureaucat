@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LayoutDashboard, FolderKanban, Eye, Repeat, Layers, Network, Timer, MessageCircle, Newspaper, BookOpen, Shield, Settings } from "lucide-vue-next";
+import { LayoutDashboard, FolderKanban, Eye, Repeat, Layers, Network, ChartColumn, Timer, MessageCircle, Newspaper, BookOpen, Shield, Settings } from "lucide-vue-next";
 
 const { user } = useAuth();
 const route = useRoute();
@@ -126,6 +126,15 @@ onMounted(() => {
         :class="isActive('/graph') && 'bg-amber-500/15 text-amber-700 dark:text-amber-400'"
       >
         <Network class="size-4.5" />
+      </NuxtLink>
+
+      <NuxtLink
+        to="/insights"
+        title="Insights"
+        class="flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        :class="isActive('/insights') && 'bg-amber-500/15 text-amber-700 dark:text-amber-400'"
+      >
+        <ChartColumn class="size-4.5" />
       </NuxtLink>
     </nav>
 
