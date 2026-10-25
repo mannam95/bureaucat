@@ -35,6 +35,7 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 	ev := &Evidence{
 		Scope:  e.scope(d, w, cycle),
 		Metric: p.Metric,
+		Rows:   []EvidenceRow{},
 	}
 
 	units := d.leafUnits()

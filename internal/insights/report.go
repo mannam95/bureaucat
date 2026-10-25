@@ -233,6 +233,7 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		Removed:        Tile{Metric: "descoped", Count: len(removed)},
 		CarriedOver:    Tile{Metric: "carried", Count: len(carried), Cx: cxOver(carried)},
 		AtClose:        len(atClose),
+		Days:           []DayPoint{},
 		Bands:          bandsOver(deliveredList),
 	}
 	if d.hasType("cancelled") {
@@ -318,6 +319,7 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 	sec := &RangeSection{
 		Completed: Tile{Metric: "completed", Count: len(deliveredList), Cx: cxOver(deliveredList)},
 		Created:   Tile{Metric: "created", Count: len(created)},
+		Days:      []DayPoint{},
 		Bands:     bandsOver(deliveredList),
 		HasCycles: len(d.cycles) > 0,
 	}
@@ -363,7 +365,7 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	}
 
 	topRank, _ := d.topRank()
-	table := PersonTable{CreditRule: creditRule, TotalCx: cxOver(delivered), TotalDelivered: len(delivered)}
+	table := PersonTable{Rows: []PersonRow{}, CreditRule: creditRule, TotalCx: cxOver(delivered), TotalDelivered: len(delivered)}
 
 	for _, t := range delivered {
 		c := deliveredAt[t.id]
@@ -435,7 +437,12 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 
 func (e *Engine) health(d *projectData) Health {
 	now := e.now()
-	h := Health{}
+	h := Health{
+		OpenByState: []StateCount{},
+		PriorityMix: []RankCount{},
+		Aging:       []AgingRow{},
+		Due:         []DueRow{},
+	}
 	byState := map[uuid.UUID]int{}
 	byPrio := map[uuid.UUID]int{}
 	units := d.leafUnits()

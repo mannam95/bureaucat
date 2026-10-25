@@ -4,7 +4,12 @@ import type { InsightsHealth } from "~/types";
 // Question 3: is the project healthy right now? A snapshot at generation
 // time, independent of the selected window. Aging rows always name the state,
 // so a deliberately parked item reads as parked, not stuck.
-const props = defineProps<{ health: InsightsHealth; projectName: string }>();
+const props = defineProps<{ health: InsightsHealth; projectName: string; projectKey: string }>();
+
+// Task keys open in a new tab: the report stays where the reader left it.
+function taskHref(key: string): string {
+  return `/projects/${props.projectKey}/tasks/${key.split("-").pop()}`;
+}
 
 const emit = defineEmits<{
   open: [metric: string, params?: { state_id?: string; rank?: number }];
@@ -26,7 +31,7 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
 
 <template>
   <section>
-    <h2 class="text-lg font-semibold">3 · Is {{ projectName }} healthy right now?</h2>
+    <h2 class="text-lg font-semibold">3 · What's open right now?</h2>
     <p class="mt-1 text-sm text-muted-foreground">{{ narrative }}</p>
 
     <div class="mt-4 grid gap-6 lg:grid-cols-2">
@@ -92,7 +97,7 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
         </div>
         <div class="mt-2 space-y-1.5">
           <div v-for="a in health.aging.slice(0, 5)" :key="a.key" class="flex items-center gap-2 text-sm">
-            <span class="shrink-0 font-mono text-xs text-muted-foreground">{{ a.key }}</span>
+            <a :href="taskHref(a.key)" target="_blank" rel="noopener" class="shrink-0 font-mono text-xs text-muted-foreground underline-offset-2 hover:underline" title="Opens in a new tab">{{ a.key }}</a>
             <span class="min-w-0 flex-1 truncate">{{ a.title }}</span>
             <span class="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px]" :style="{ borderColor: a.state.color, color: a.state.color }">
               {{ a.state.name }}
@@ -115,7 +120,7 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
         </div>
         <div class="mt-2 space-y-1.5">
           <div v-for="dr in health.due.slice(0, 5)" :key="dr.key" class="flex items-center gap-2 text-sm">
-            <span class="shrink-0 font-mono text-xs text-muted-foreground">{{ dr.key }}</span>
+            <a :href="taskHref(dr.key)" target="_blank" rel="noopener" class="shrink-0 font-mono text-xs text-muted-foreground underline-offset-2 hover:underline" title="Opens in a new tab">{{ dr.key }}</a>
             <span class="min-w-0 flex-1 truncate">{{ dr.title }}</span>
             <span class="shrink-0 text-xs tabular-nums" :class="dr.late_days > 0 ? 'font-medium text-red-700 dark:text-red-400' : 'text-muted-foreground'">
               {{ dr.late_days > 0 ? `${dr.late_days} d late` : `due in ${-dr.late_days} d` }}

@@ -34,7 +34,9 @@ func (e *Engine) Portfolio(ctx context.Context, projects []store.Project, from, 
 			Timezone: e.tz.String(), GeneratedAt: now, CountingRule: countingRule,
 		},
 		Rule: attentionRule,
+		Rows: []PortfolioRow{},
 	}
+	out.Delivered.ByProject = []ProjectCount{}
 
 	for _, p := range projects {
 		d, err := e.load(ctx, p)
@@ -46,10 +48,7 @@ func (e *Engine) Portfolio(ctx context.Context, projects []store.Project, from, 
 
 		out.Delivered.Total += row.Completed
 		out.Delivered.Cancelled += row.Cancelled
-		out.Delivered.ByProject = append(out.Delivered.ByProject, struct {
-			ProjectKey string `json:"project_key"`
-			Count      int    `json:"count"`
-		}{ProjectKey: d.key, Count: row.Completed})
+		out.Delivered.ByProject = append(out.Delivered.ByProject, ProjectCount{ProjectKey: d.key, Count: row.Completed})
 	}
 	sort.Slice(out.Delivered.ByProject, func(i, j int) bool {
 		return out.Delivered.ByProject[i].Count > out.Delivered.ByProject[j].Count
@@ -180,6 +179,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 		Scope:      e.scope(d, w, cycle),
 		User:       d.userRef(userID),
 		CreditRule: creditRule,
+		ByCycle:    []CycleCount{},
 	}
 
 	units := d.leafUnits()
@@ -250,10 +250,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 		}
 		if count > 0 {
 			refs := e.cycleRefs([]ListCycle{c})
-			rep.ByCycle = append(rep.ByCycle, struct {
-				Cycle CycleRef `json:"cycle"`
-				Count int      `json:"count"`
-			}{Cycle: refs[0], Count: count})
+			rep.ByCycle = append(rep.ByCycle, CycleCount{Cycle: refs[0], Count: count})
 		}
 	}
 	return rep, nil

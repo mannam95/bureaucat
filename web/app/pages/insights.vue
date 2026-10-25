@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from "vue-sonner";
-import { Copy, Printer, ArrowLeft } from "lucide-vue-next";
+import { Copy, RotateCcw, ArrowLeft } from "lucide-vue-next";
 import type {
   EvidenceQuery,
   InsightsEvidence,
@@ -72,6 +72,29 @@ function pickProject(key: string) {
 
 function pickCycle(id: string) {
   setQuery({ cycle_id: id === "__range__" ? undefined : id, open: undefined });
+}
+
+const hasFilters = computed(() => Object.keys(route.query).length > 0);
+
+function resetView() {
+  router.replace({ query: {} });
+}
+
+// Custom range inputs; applied once both ends are set.
+const customFrom = ref("");
+const customTo = ref("");
+watch(
+  () => [q.value.from, q.value.to],
+  () => {
+    customFrom.value = q.value.from;
+    customTo.value = q.value.to;
+  },
+  { immediate: true }
+);
+function applyCustomRange() {
+  if (!customFrom.value || !customTo.value) return;
+  if (customTo.value < customFrom.value) return;
+  setQuery({ from: customFrom.value, to: customTo.value, cycle_id: undefined, open: undefined });
 }
 
 function pickRange(days: number) {
@@ -175,10 +198,6 @@ async function copyViewLink() {
   }
 }
 
-function printReport() {
-  window.print();
-}
-
 async function exportCSV() {
   const eq = evidenceQuery.value;
   if (!eq || !q.value.project) return;
@@ -199,15 +218,24 @@ const questions = computed(() => {
   const list = [
     { id: "q1", label: "1 · How did it land?" },
     { id: "q2", label: "2 · What did each person deliver?" },
-    { id: "q3", label: "3 · Is the project healthy now?" },
+    { id: "q3", label: "3 · What's open right now?" },
   ];
   if (q.value.person && person.value) {
-    list.push({ id: "q5", label: `5 · What did ${person.value.user.first_name} deliver?` });
+    list.push({ id: "q4", label: `4 · What did ${person.value.user.first_name} deliver?` });
   }
   return list;
 });
 
 function jumpTo(id: string) {
+  // The project questions are not on screen while a person view is open:
+  // leave it first, then scroll once the sections exist.
+  if (q.value.person && id !== "q4") {
+    setQuery({ person: undefined });
+    nextTick(() => {
+      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    });
+    return;
+  }
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 </script>
@@ -247,14 +275,38 @@ function jumpTo(id: string) {
           <Button v-for="r in RANGES" :key="r.days" variant="ghost" size="sm" class="h-8 text-xs" @click="pickRange(r.days)">
             {{ r.label }}
           </Button>
+          <div class="ml-1 flex items-center gap-1 rounded-md border px-1.5 py-0.5">
+            <input
+              v-model="customFrom"
+              type="date"
+              class="h-6 bg-transparent text-xs outline-none"
+              aria-label="From date"
+              @change="applyCustomRange"
+            />
+            <span class="text-xs text-muted-foreground">–</span>
+            <input
+              v-model="customTo"
+              type="date"
+              class="h-6 bg-transparent text-xs outline-none"
+              aria-label="To date"
+              @change="applyCustomRange"
+            />
+          </div>
         </div>
 
         <div class="ml-auto flex items-center gap-1.5">
+          <Button
+            v-if="hasFilters"
+            variant="ghost"
+            size="sm"
+            class="h-8 gap-1.5 text-xs text-muted-foreground"
+            title="Back to the default view"
+            @click="resetView"
+          >
+            <RotateCcw class="size-3.5" /> Reset
+          </Button>
           <Button variant="outline" size="sm" class="h-8 gap-1.5 text-xs" @click="copyViewLink">
             <Copy class="size-3.5" /> Copy link
-          </Button>
-          <Button variant="outline" size="sm" class="h-8 gap-1.5 text-xs" @click="printReport">
-            <Printer class="size-3.5" /> Print report
           </Button>
         </div>
       </div>
@@ -328,7 +380,7 @@ function jumpTo(id: string) {
           </div>
 
           <template v-if="q.person && person">
-            <div id="q5" class="scroll-mt-16">
+            <div id="q4" class="scroll-mt-16">
               <button class="mb-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" @click="setQuery({ person: undefined })">
                 <ArrowLeft class="size-3" /> Back to the project report
               </button>
@@ -343,7 +395,7 @@ function jumpTo(id: string) {
               <PeopleSection :people="report.people" @person="openPerson" @open="(m, uid) => openEvidence(m, { user_id: uid })" />
             </div>
             <div id="q3" class="mt-10 scroll-mt-16 break-before-page">
-              <HealthSection :health="report.health" :project-name="report.scope.project_name || ''" @open="(m, p) => openEvidence(m, p)" />
+              <HealthSection :health="report.health" :project-name="report.scope.project_name || ''" :project-key="q.project" @open="(m, p) => openEvidence(m, p)" />
             </div>
           </template>
 

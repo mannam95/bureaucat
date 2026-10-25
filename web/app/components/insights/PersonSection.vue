@@ -49,12 +49,12 @@ const narrative = computed(() => {
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
       <div>
         <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Completions per week</h3>
-        <WeeklyBars class="mt-2" :weeks="person.weekly.map((w) => ({ ...w, created: 0 }))" />
+        <WeeklyBars class="mt-2" :weeks="(person.weekly ?? []).map((w) => ({ ...w, created: 0 }))" />
       </div>
-      <div v-if="person.by_cycle.length > 0">
+      <div v-if="(person.by_cycle ?? []).length > 0">
         <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Completions by cycle</h3>
         <div class="mt-2 space-y-1.5">
-          <div v-for="bc in person.by_cycle" :key="bc.cycle.id" class="flex items-center gap-2 text-sm">
+          <div v-for="bc in person.by_cycle ?? []" :key="bc.cycle.id" class="flex items-center gap-2 text-sm">
             <span class="w-40 shrink-0 truncate text-xs text-muted-foreground">{{ bc.cycle.title }}</span>
             <div class="h-3 rounded-sm bg-emerald-600/80 dark:bg-emerald-400/70" :style="{ width: Math.max(2, bc.count * 24) + 'px' }" />
             <span class="text-xs tabular-nums">{{ bc.count }}</span>

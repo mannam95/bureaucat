@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from "vue-sonner";
-import { Copy, Download, List, X } from "lucide-vue-next";
+import { Copy, Download, List } from "lucide-vue-next";
 import type { InsightsEvidence } from "~/types";
 
 // The evidence drawer: one reusable surface behind every number. It always
@@ -67,7 +67,7 @@ const cxLine = computed(() => {
       <template v-else-if="evidence">
         <SheetHeader class="border-b px-5 py-4">
           <div class="flex items-start justify-between gap-3">
-            <div>
+            <div class="pr-6">
               <p class="text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">Evidence</p>
               <SheetTitle class="mt-0.5 text-base">
                 {{ evidence.title }} · {{ evidence.count }} items
@@ -75,9 +75,6 @@ const cxLine = computed(() => {
               </SheetTitle>
               <SheetDescription class="mt-0.5 text-xs">{{ scopeLine }}</SheetDescription>
             </div>
-            <SheetClose class="rounded-md p-1 opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring">
-              <X class="size-4" />
-            </SheetClose>
           </div>
         </SheetHeader>
 
@@ -98,10 +95,13 @@ const cxLine = computed(() => {
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="text-sm">
-                    <NuxtLink
-                      :to="`/projects/${projectKey}/tasks/${row.key.split('-').pop()}`"
+                    <a
+                      :href="`/projects/${projectKey}/tasks/${row.key.split('-').pop()}`"
+                      target="_blank"
+                      rel="noopener"
                       class="font-mono text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    >{{ row.key }}</NuxtLink>
+                      title="Opens in a new tab"
+                    >{{ row.key }}</a>
                     <span class="ml-2 font-medium">{{ row.title }}</span>
                   </p>
                   <p v-if="row.parent_key" class="mt-0.5 truncate text-[11px] text-muted-foreground">
@@ -140,9 +140,14 @@ const cxLine = computed(() => {
           <Button variant="outline" size="sm" class="gap-1.5" @click="emit('csv')">
             <Download class="size-3.5" /> Export CSV
           </Button>
-          <NuxtLink v-if="evidence.task_list_query" :to="`/projects/${projectKey}?${evidence.task_list_query}`">
+          <a
+            v-if="evidence.task_list_query"
+            :href="`/projects/${projectKey}?${evidence.task_list_query}`"
+            target="_blank"
+            rel="noopener"
+          >
             <Button variant="outline" size="sm" class="gap-1.5"><List class="size-3.5" /> Open in task list</Button>
-          </NuxtLink>
+          </a>
           <span v-else class="ml-auto text-[10px] text-muted-foreground">
             Activity-derived population: link and CSV carry it exactly.
           </span>
