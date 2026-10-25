@@ -1568,12 +1568,13 @@ type MergeUserRequest struct {
 
 // MergeUserResponse reports how many rows were copied to the target user.
 type MergeUserResponse struct {
-	Workspaces   int64 `json:"workspaces"`
-	Projects     int64 `json:"projects"`
-	Assignments  int64 `json:"assignments"`
-	Modules      int64 `json:"modules"`
-	WatchedTasks int64 `json:"watched_tasks"`
-	Views        int64 `json:"views"`
+	Workspaces    int64 `json:"workspaces"`
+	Projects      int64 `json:"projects"`
+	Assignments   int64 `json:"assignments"`
+	Contributions int64 `json:"contributions"`
+	Modules       int64 `json:"modules"`
+	WatchedTasks  int64 `json:"watched_tasks"`
+	Views         int64 `json:"views"`
 }
 
 // MergeUser grants the target user everything the source user (:id) has.
@@ -1634,6 +1635,9 @@ func (h *AdminHandler) MergeUser(c *echo.Context) error {
 		}},
 		{&resp.Assignments, func() (int64, error) {
 			return q.MergeCopyTaskAssignees(ctx, store.MergeCopyTaskAssigneesParams{TargetID: req.TargetUserID, SourceID: sourceID})
+		}},
+		{&resp.Contributions, func() (int64, error) {
+			return q.MergeCopyTaskContributors(ctx, store.MergeCopyTaskContributorsParams{TargetID: req.TargetUserID, SourceID: sourceID})
 		}},
 		{&resp.Modules, func() (int64, error) {
 			return q.MergeCopyModuleMembers(ctx, store.MergeCopyModuleMembersParams{TargetID: req.TargetUserID, SourceID: sourceID})

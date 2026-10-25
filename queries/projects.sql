@@ -822,6 +822,31 @@ SELECT EXISTS (
     WHERE task_id = $1 AND user_id = $2
 ) AS is_watcher;
 
+-- ==================== TASK CONTRIBUTORS ====================
+-- The people who did the work on a task, independent of who is assigned right
+-- now. Mirrors task watchers; rows accrue automatically when an assignee is
+-- removed while the task sits in a started-type state (the hand-over moment in
+-- a build-then-verify workflow) and can be edited by hand.
+
+-- name: ListTaskContributors :many
+SELECT tc.id, tc.task_id, tc.user_id, tc.added_at, tc.added_by, tc.source,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_contributors tc
+JOIN users u ON tc.user_id = u.id
+WHERE tc.task_id = $1
+ORDER BY tc.added_at ASC;
+
+-- name: AddTaskContributor :execrows
+-- A duplicate add keeps the existing row and its source untouched; the rows
+-- affected say whether anything was inserted.
+INSERT INTO task_contributors (task_id, user_id, added_by, source)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (task_id, user_id) DO NOTHING;
+
+-- name: RemoveTaskContributor :exec
+DELETE FROM task_contributors
+WHERE task_id = $1 AND user_id = $2;
+
 -- ==================== TASK BLOCKERS ====================
 
 -- name: ListTaskBlockerLinks :many

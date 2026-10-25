@@ -36,7 +36,9 @@ export type ActivityType =
   | "comment_deleted"
   | "mentioned"
   | "blocker_added"
-  | "blocker_removed";
+  | "blocker_removed"
+  | "contributor_added"
+  | "contributor_removed";
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   task_created: "created the task",
@@ -62,6 +64,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   mentioned: "mentioned you",
   blocker_added: "linked a blocker",
   blocker_removed: "unlinked a blocker",
+  contributor_added: "added contributor",
+  contributor_removed: "removed contributor",
 };
 
 // field_name holds the relation as seen from the task the entry belongs to.

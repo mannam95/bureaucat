@@ -768,6 +768,15 @@ onMounted(() => {
           @refresh="onRelationChanged"
         />
 
+        <TaskContributors
+          :contributors="task.contributors || []"
+          :project-key="projectKey"
+          :task-num="taskNumber"
+          :members="members"
+          :is-member="isMember"
+          @refresh="onRelationChanged"
+        />
+
         <!-- Labels (editable) -->
         <TaskLabels
           :task-labels="task.labels || []"

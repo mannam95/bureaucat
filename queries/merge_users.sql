@@ -24,6 +24,13 @@ FROM task_assignees
 WHERE user_id = sqlc.arg('source_id')::uuid
 ON CONFLICT (task_id, user_id) DO NOTHING;
 
+-- name: MergeCopyTaskContributors :execrows
+INSERT INTO task_contributors (task_id, user_id, added_by, source)
+SELECT task_id, sqlc.arg('target_id')::uuid, sqlc.arg('target_id')::uuid, source
+FROM task_contributors
+WHERE user_id = sqlc.arg('source_id')::uuid
+ON CONFLICT (task_id, user_id) DO NOTHING;
+
 -- name: MergeCopyModuleMembers :execrows
 INSERT INTO module_members (module_id, user_id, added_by)
 SELECT module_id, sqlc.arg('target_id')::uuid, added_by

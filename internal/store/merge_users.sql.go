@@ -104,6 +104,27 @@ func (q *Queries) MergeCopyTaskAssignees(ctx context.Context, arg MergeCopyTaskA
 	return result.RowsAffected(), nil
 }
 
+const mergeCopyTaskContributors = `-- name: MergeCopyTaskContributors :execrows
+INSERT INTO task_contributors (task_id, user_id, added_by, source)
+SELECT task_id, $1::uuid, $1::uuid, source
+FROM task_contributors
+WHERE user_id = $2::uuid
+ON CONFLICT (task_id, user_id) DO NOTHING
+`
+
+type MergeCopyTaskContributorsParams struct {
+	TargetID uuid.UUID `json:"target_id"`
+	SourceID uuid.UUID `json:"source_id"`
+}
+
+func (q *Queries) MergeCopyTaskContributors(ctx context.Context, arg MergeCopyTaskContributorsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, mergeCopyTaskContributors, arg.TargetID, arg.SourceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const mergeCopyWorkspaceMembers = `-- name: MergeCopyWorkspaceMembers :execrows
 
 INSERT INTO workspace_members (workspace_id, user_id)

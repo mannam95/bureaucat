@@ -35,6 +35,10 @@ export interface Task {
   assignees?: TaskAssignee[];
   /** Watchers follow the task for its updates (in-app notifications). */
   watchers?: TaskWatcher[];
+  /** Contributors did the work, independent of who is assigned right now.
+   *  Accrues automatically when an assignee is removed while the task is in a
+   *  started-type state; editable by hand. */
+  contributors?: TaskContributor[];
   labels?: TaskLabel[];
   /** Admin-defined classification values (Areas). */
   areas?: TaskArea[];
@@ -159,6 +163,18 @@ export interface TaskWatcher {
   first_name: string;
   last_name: string;
   avatar_url?: string;
+}
+
+export interface TaskContributor {
+  id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url?: string;
+  /** How the row came to be: "auto" (hand-over rule), "manual" or "backfill". */
+  source: string;
 }
 
 export interface TaskLabel {

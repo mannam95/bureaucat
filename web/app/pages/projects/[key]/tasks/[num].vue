@@ -1485,6 +1485,18 @@ onMounted(() => {
                   />
                 </div>
 
+                <!-- Contributors -->
+                <div class="py-3">
+                  <TaskContributors
+                    :contributors="currentTask.contributors || []"
+                    :project-key="projectKey"
+                    :task-num="taskNum"
+                    :members="members"
+                    :is-member="isMember && !isDisabled"
+                    @refresh="refreshTask"
+                  />
+                </div>
+
                 <!-- Labels -->
                 <div class="py-3">
                   <TaskLabels

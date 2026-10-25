@@ -407,6 +407,59 @@ export function useTasks() {
     }
   }
 
+  async function addContributor(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/contributors`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ user_id: userId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to add contributor" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+  async function removeContributor(
+    projectKey: string,
+    taskNum: number,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/v1/projects/${projectKey}/tasks/${taskNum}/contributors/${userId}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeader(),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to remove contributor" };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   // Labels
   async function addLabel(
     projectKey: string,
@@ -885,6 +938,8 @@ export function useTasks() {
     removeOriginator,
     addWatcher,
     removeWatcher,
+    addContributor,
+    removeContributor,
 
     // Labels
     addLabel,

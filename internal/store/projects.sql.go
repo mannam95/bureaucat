@@ -122,6 +122,34 @@ func (q *Queries) AddTaskBlocker(ctx context.Context, arg AddTaskBlockerParams) 
 	return result.RowsAffected(), nil
 }
 
+const addTaskContributor = `-- name: AddTaskContributor :execrows
+INSERT INTO task_contributors (task_id, user_id, added_by, source)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (task_id, user_id) DO NOTHING
+`
+
+type AddTaskContributorParams struct {
+	TaskID  uuid.UUID `json:"task_id"`
+	UserID  uuid.UUID `json:"user_id"`
+	AddedBy uuid.UUID `json:"added_by"`
+	Source  string    `json:"source"`
+}
+
+// A duplicate add keeps the existing row and its source untouched; the rows
+// affected say whether anything was inserted.
+func (q *Queries) AddTaskContributor(ctx context.Context, arg AddTaskContributorParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addTaskContributor,
+		arg.TaskID,
+		arg.UserID,
+		arg.AddedBy,
+		arg.Source,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const addTaskLabel = `-- name: AddTaskLabel :exec
 
 INSERT INTO task_labels (task_id, label_id, added_by)
@@ -3126,6 +3154,61 @@ func (q *Queries) ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]Lis
 	return items, nil
 }
 
+const listTaskContributors = `-- name: ListTaskContributors :many
+SELECT tc.id, tc.task_id, tc.user_id, tc.added_at, tc.added_by, tc.source,
+       u.username, u.email, u.first_name, u.last_name, u.avatar_url
+FROM task_contributors tc
+JOIN users u ON tc.user_id = u.id
+WHERE tc.task_id = $1
+ORDER BY tc.added_at ASC
+`
+
+type ListTaskContributorsRow struct {
+	ID        uuid.UUID          `json:"id"`
+	TaskID    uuid.UUID          `json:"task_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AddedAt   pgtype.Timestamptz `json:"added_at"`
+	AddedBy   uuid.UUID          `json:"added_by"`
+	Source    string             `json:"source"`
+	Username  string             `json:"username"`
+	Email     string             `json:"email"`
+	FirstName string             `json:"first_name"`
+	LastName  string             `json:"last_name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+func (q *Queries) ListTaskContributors(ctx context.Context, taskID uuid.UUID) ([]ListTaskContributorsRow, error) {
+	rows, err := q.db.Query(ctx, listTaskContributors, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskContributorsRow{}
+	for rows.Next() {
+		var i ListTaskContributorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.UserID,
+			&i.AddedAt,
+			&i.AddedBy,
+			&i.Source,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTaskLabels = `-- name: ListTaskLabels :many
 SELECT tl.task_id, tl.label_id, tl.added_at, tl.added_by,
        pl.name, pl.color
@@ -3960,6 +4043,21 @@ func (q *Queries) RemoveTaskBlockerLink(ctx context.Context, arg RemoveTaskBlock
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeTaskContributor = `-- name: RemoveTaskContributor :exec
+DELETE FROM task_contributors
+WHERE task_id = $1 AND user_id = $2
+`
+
+type RemoveTaskContributorParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveTaskContributor(ctx context.Context, arg RemoveTaskContributorParams) error {
+	_, err := q.db.Exec(ctx, removeTaskContributor, arg.TaskID, arg.UserID)
+	return err
 }
 
 const removeTaskLabel = `-- name: RemoveTaskLabel :exec

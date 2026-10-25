@@ -139,22 +139,23 @@ type TaskResponse struct {
 	Assignees   []AssigneeResponse   `json:"assignees,omitempty"`
 	// Watchers follow the task to receive its updates (in-app notifications),
 	// without being an assignee or originator. Detail-only, like originators.
-	Watchers         []WatcherResponse `json:"watchers,omitempty"`
-	Labels           []TaskLabelInfo   `json:"labels,omitempty"`
-	Areas            []TaskAreaInfo    `json:"areas,omitempty"`
-	CommentCount     int               `json:"comment_count"`
-	ParentTaskID     *uuid.UUID        `json:"parent_task_id,omitempty"`
-	ParentTaskNumber *int              `json:"parent_task_number,omitempty"`
-	ParentTaskTitle  *string           `json:"parent_task_title,omitempty"`
-	SubtaskCount     int               `json:"subtask_count"`
-	CycleID          *uuid.UUID        `json:"cycle_id,omitempty"`
-	CycleTitle       *string           `json:"cycle_title,omitempty"`
-	Modules          []TaskModuleInfo  `json:"modules,omitempty"`
-	FigmaLink        *string           `json:"figma_link,omitempty"`
-	Branch           *string           `json:"branch,omitempty"`
-	PullRequest      *string           `json:"pull_request,omitempty"`
-	CreatedAt        time.Time         `json:"created_at"`
-	UpdatedAt        time.Time         `json:"updated_at"`
+	Watchers         []WatcherResponse     `json:"watchers,omitempty"`
+	Contributors     []ContributorResponse `json:"contributors,omitempty"`
+	Labels           []TaskLabelInfo       `json:"labels,omitempty"`
+	Areas            []TaskAreaInfo        `json:"areas,omitempty"`
+	CommentCount     int                   `json:"comment_count"`
+	ParentTaskID     *uuid.UUID            `json:"parent_task_id,omitempty"`
+	ParentTaskNumber *int                  `json:"parent_task_number,omitempty"`
+	ParentTaskTitle  *string               `json:"parent_task_title,omitempty"`
+	SubtaskCount     int                   `json:"subtask_count"`
+	CycleID          *uuid.UUID            `json:"cycle_id,omitempty"`
+	CycleTitle       *string               `json:"cycle_title,omitempty"`
+	Modules          []TaskModuleInfo      `json:"modules,omitempty"`
+	FigmaLink        *string               `json:"figma_link,omitempty"`
+	Branch           *string               `json:"branch,omitempty"`
+	PullRequest      *string               `json:"pull_request,omitempty"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
 }
 
 // AssigneeResponse represents a task assignee.
@@ -210,6 +211,44 @@ type WatcherResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	AvatarURL *string   `json:"avatar_url,omitempty"`
+}
+
+// ContributorResponse is a person who did the work on a task, independent of
+// who is assigned right now. Source says how the row came to be: "auto" (the
+// hand-over rule), "manual" (edited on the task page) or "backfill".
+type ContributorResponse struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+	Source    string    `json:"source"`
+}
+
+// contributorsForTask loads a task's contributors as response objects. Errors
+// are swallowed to an empty slice so a decoration failure never fails the
+// request.
+func (h *TaskHandler) contributorsForTask(ctx context.Context, taskID uuid.UUID) []ContributorResponse {
+	rows, err := h.store.ListTaskContributors(ctx, taskID)
+	if err != nil {
+		return []ContributorResponse{}
+	}
+	out := make([]ContributorResponse, len(rows))
+	for i, c := range rows {
+		out[i] = ContributorResponse{
+			ID:        c.ID,
+			UserID:    c.UserID,
+			Username:  c.Username,
+			Email:     c.Email,
+			FirstName: c.FirstName,
+			LastName:  c.LastName,
+			AvatarURL: textToStringPtr(c.AvatarUrl),
+			Source:    c.Source,
+		}
+	}
+	return out
 }
 
 // watchersForTask loads a task's watchers as response objects. Errors are
@@ -1005,6 +1044,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		Originators:         h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:           assignees,
 		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Contributors:        h.contributorsForTask(ctx, fullTask.ID),
 		Labels:              labels,
 		Areas:               areas,
 		ParentTaskID:        pgUUIDToUUIDPtr(fullTask.ParentTaskID),
@@ -1100,6 +1140,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		Originators:         h.originatorsForTask(ctx, task.ID),
 		Assignees:           assignees,
 		Watchers:            h.watchersForTask(ctx, task.ID),
+		Contributors:        h.contributorsForTask(ctx, task.ID),
 		Labels:              labels,
 		Areas:               areas,
 		ParentTaskID:        pgUUIDToUUIDPtr(task.ParentTaskID),
@@ -1500,6 +1541,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		Originators:         h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:           assignees,
 		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Contributors:        h.contributorsForTask(ctx, fullTask.ID),
 		Labels:              labels,
 		Areas:               areas,
 		ParentTaskID:        pgUUIDToUUIDPtr(fullTask.ParentTaskID),
@@ -2553,6 +2595,34 @@ func (h *TaskHandler) RemoveAssignee(c *echo.Context) error {
 		},
 	})
 
+	// The hand-over rule: someone unassigned while the task is being worked
+	// (a started-type state) did work on it, so they are recorded as a
+	// contributor — delivery credit survives the assignee change to the next
+	// stage (e.g. developer handing over to a tester). Best-effort: a failure
+	// here never fails the removal, and a duplicate changes nothing.
+	if task.StateType == "started" {
+		inserted, err := h.store.AddTaskContributor(ctx, store.AddTaskContributorParams{
+			TaskID:  task.ID,
+			UserID:  assigneeID,
+			AddedBy: userID,
+			Source:  "auto",
+		})
+		if err == nil && inserted > 0 {
+			h.activityService.LogActivity(ctx, activity.LogActivityParams{
+				TaskID:       task.ID,
+				ActivityType: activity.ContributorAdded,
+				ActorID:      userID,
+				NewValue: map[string]interface{}{
+					"user_id":    assigneeID.String(),
+					"username":   assigneeUser.Username,
+					"first_name": assigneeUser.FirstName,
+					"last_name":  assigneeUser.LastName,
+					"source":     "auto",
+				},
+			})
+		}
+	}
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "assignee removed"})
 }
 
@@ -2980,13 +3050,168 @@ type AddLabelRequest struct {
 //	@Security		BearerAuth
 //	@Router			/projects/{projectKey}/tasks/{taskNum}/labels [post]
 //
+// AddContributorRequest represents the request to add a contributor.
+type AddContributorRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// AddContributor records a user as having worked on a task.
+//
+//	@Summary		Add contributor
+//	@Description	Record a user as a contributor on a task (someone who did the work, independent of current assignment).
+//	@Tags			Task Contributors
+//	@Accept			json
+//	@Produce		json
+//	@Param			projectKey	path		string					true	"Project key"
+//	@Param			taskNum		path		int						true	"Task number"
+//	@Param			body		body		AddContributorRequest	true	"User to add"
+//	@Success		201			{object}	MessageResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		404			{object}	ErrorResponse
+//	@Failure		409			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/contributors [post]
+func (h *TaskHandler) AddContributor(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+	var req AddContributorRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	contributorID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user_id")
+	}
+
+	ctx := c.Request().Context()
+
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	contributorUser, err := h.store.GetUserByID(ctx, contributorID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	inserted, err := h.store.AddTaskContributor(ctx, store.AddTaskContributorParams{
+		TaskID:  task.ID,
+		UserID:  contributorID,
+		AddedBy: userID,
+		Source:  "manual",
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add contributor")
+	}
+	if inserted == 0 {
+		return echo.NewHTTPError(http.StatusConflict, "user is already a contributor")
+	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.ContributorAdded,
+		ActorID:      userID,
+		NewValue: map[string]interface{}{
+			"user_id":    contributorID.String(),
+			"username":   contributorUser.Username,
+			"first_name": contributorUser.FirstName,
+			"last_name":  contributorUser.LastName,
+			"source":     "manual",
+		},
+	})
+
+	return c.JSON(http.StatusCreated, map[string]string{"message": "contributor added"})
+}
+
+// RemoveContributor removes a contributor from a task.
+//
+//	@Summary		Remove contributor
+//	@Description	Remove a user from a task's contributors.
+//	@Tags			Task Contributors
+//	@Produce		json
+//	@Param			projectKey	path		string	true	"Project key"
+//	@Param			taskNum		path		int		true	"Task number"
+//	@Param			userId		path		string	true	"User ID"
+//	@Success		200			{object}	MessageResponse
+//	@Failure		400			{object}	ErrorResponse
+//	@Failure		404			{object}	ErrorResponse
+//	@Failure		500			{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/projects/{projectKey}/tasks/{taskNum}/contributors/{userId} [delete]
+func (h *TaskHandler) RemoveContributor(c *echo.Context) error {
+	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	taskNum, err := strconv.Atoi(c.Param("taskNum"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
+	}
+	contributorID, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+
+	ctx := c.Request().Context()
+
+	task, err := h.store.GetTaskByProjectAndNumber(ctx, store.GetTaskByProjectAndNumberParams{
+		ProjectID:  projectID,
+		TaskNumber: int32(taskNum),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "task not found")
+	}
+	contributorUser, err := h.store.GetUserByID(ctx, contributorID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	if err := h.store.RemoveTaskContributor(ctx, store.RemoveTaskContributorParams{
+		TaskID: task.ID,
+		UserID: contributorID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove contributor")
+	}
+
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.ContributorRemoved,
+		ActorID:      userID,
+		OldValue: map[string]interface{}{
+			"user_id":    contributorID.String(),
+			"username":   contributorUser.Username,
+			"first_name": contributorUser.FirstName,
+			"last_name":  contributorUser.LastName,
+		},
+	})
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "contributor removed"})
+}
+
 // AddAreaRequest attaches one area to a task.
 type AddAreaRequest struct {
 	AreaID string `json:"area_id"`
 }
 
-// AddArea attaches an area to a task. No activity log entry yet — the
-// activity enum doesn't cover areas.
+// AddArea attaches an area to a task and logs it on the task's activity.
 func (h *TaskHandler) AddArea(c *echo.Context) error {
 	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
 	if err != nil {
@@ -3612,6 +3837,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		Originators:         h.originatorsForTask(ctx, fullTask.ID),
 		Assignees:           assignees,
 		Watchers:            h.watchersForTask(ctx, fullTask.ID),
+		Contributors:        h.contributorsForTask(ctx, fullTask.ID),
 		Labels:              labels,
 		Areas:               areas,
 		FigmaLink:           textToStringPtr(fullTask.FigmaLink),

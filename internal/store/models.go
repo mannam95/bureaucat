@@ -571,6 +571,15 @@ type TaskBlocker struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type TaskContributor struct {
+	ID      uuid.UUID          `json:"id"`
+	TaskID  uuid.UUID          `json:"task_id"`
+	UserID  uuid.UUID          `json:"user_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+	AddedBy uuid.UUID          `json:"added_by"`
+	Source  string             `json:"source"`
+}
+
 type TaskLabel struct {
 	TaskID  uuid.UUID          `json:"task_id"`
 	LabelID uuid.UUID          `json:"label_id"`

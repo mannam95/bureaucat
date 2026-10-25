@@ -30,6 +30,9 @@ type Querier interface {
 	AddTaskAssignee(ctx context.Context, arg AddTaskAssigneeParams) (TaskAssignee, error)
 	AddTaskBlocker(ctx context.Context, arg AddTaskBlockerParams) (int64, error)
 	// ==================== TASK LABELS ====================
+	// A duplicate add keeps the existing row and its source untouched; the rows
+	// affected say whether anything was inserted.
+	AddTaskContributor(ctx context.Context, arg AddTaskContributorParams) (int64, error)
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
 	AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorParams) (TaskOriginator, error)
 	AddTaskWatcher(ctx context.Context, arg AddTaskWatcherParams) (TaskWatcher, error)
@@ -339,6 +342,7 @@ type Querier interface {
 	// blocker of the given task, false when the given task blocks it.
 	ListTaskBlockerLinks(ctx context.Context, taskID uuid.UUID) ([]ListTaskBlockerLinksRow, error)
 	ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]ListTaskCommentsRow, error)
+	ListTaskContributors(ctx context.Context, taskID uuid.UUID) ([]ListTaskContributorsRow, error)
 	ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListTaskLabelsRow, error)
 	// The modules a task belongs to (a task can be in more than one).
 	ListTaskModules(ctx context.Context, taskID uuid.UUID) ([]ListTaskModulesRow, error)
@@ -380,6 +384,7 @@ type Querier interface {
 	MergeCopyTaskAssignees(ctx context.Context, arg MergeCopyTaskAssigneesParams) (int64, error)
 	// Admin "merge user": additively grants the target everything the source has.
 	// The source user is never modified and activity_log is never touched.
+	MergeCopyTaskContributors(ctx context.Context, arg MergeCopyTaskContributorsParams) (int64, error)
 	MergeCopyWorkspaceMembers(ctx context.Context, arg MergeCopyWorkspaceMembersParams) (int64, error)
 	// The target starts watching every task the source created, watched or
 	// commented on, so the merged account keeps receiving those updates.
@@ -401,6 +406,7 @@ type Querier interface {
 	// Removes the link between two tasks in whichever direction it exists.
 	RemoveTaskBlockerLink(ctx context.Context, arg RemoveTaskBlockerLinkParams) ([]RemoveTaskBlockerLinkRow, error)
 	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
+	RemoveTaskContributor(ctx context.Context, arg RemoveTaskContributorParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
 	RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error
 	RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error

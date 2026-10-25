@@ -16,6 +16,8 @@ import {
   Link2,
   Link2Off,
   Shapes,
+  UserCheck,
+  UserX,
 } from "lucide-vue-next";
 import type { ActivityLogEntry, ActivityType } from "~/types";
 import { activityLabel } from "~/types";
@@ -42,6 +44,8 @@ const iconMap: Record<ActivityType, typeof Plus> = {
   mentioned: AtSign,
   blocker_added: Link2,
   blocker_removed: Link2Off,
+  contributor_added: UserCheck,
+  contributor_removed: UserX,
 };
 
 const Icon = computed(() => iconMap[props.activity.activity_type] || Circle);
