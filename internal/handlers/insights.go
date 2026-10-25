@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/auth"
@@ -54,6 +55,20 @@ func (h *InsightsHandler) parseRange(c *echo.Context) (time.Time, time.Time, err
 	return from, to, nil
 }
 
+// parseWorkspaceID reads the optional workspace_id param; invalid means a 400,
+// absent means "across all the viewer's workspaces" (NULL filter).
+func parseWorkspaceID(c *echo.Context) (pgtype.UUID, error) {
+	var ws pgtype.UUID
+	if s := strings.TrimSpace(c.QueryParam("workspace_id")); s != "" {
+		id, err := uuid.Parse(s)
+		if err != nil {
+			return ws, echo.NewHTTPError(http.StatusBadRequest, "invalid workspace_id")
+		}
+		ws = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	return ws, nil
+}
+
 func (h *InsightsHandler) projectFromContext(c *echo.Context) (store.Project, error) {
 	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
 	if err != nil {
@@ -72,9 +87,10 @@ func (h *InsightsHandler) projectFromContext(c *echo.Context) (store.Project, er
 //	@Description	Attention table and delivery overview across the viewer's projects.
 //	@Tags			Insights
 //	@Produce		json
-//	@Param			from	query		string	false	"Window start (YYYY-MM-DD)"
-//	@Param			to		query		string	false	"Window end (YYYY-MM-DD)"
-//	@Success		200		{object}	insights.Portfolio
+//	@Param			from			query		string	false	"Window start (YYYY-MM-DD)"
+//	@Param			to				query		string	false	"Window end (YYYY-MM-DD)"
+//	@Param			workspace_id	query		string	false	"Limit to one workspace; absent means all the viewer's workspaces"
+//	@Success		200				{object}	insights.Portfolio
 //	@Security		BearerAuth
 //	@Router			/insights/portfolio [get]
 func (h *InsightsHandler) Portfolio(c *echo.Context) error {
@@ -86,10 +102,14 @@ func (h *InsightsHandler) Portfolio(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	workspaceID, err := parseWorkspaceID(c)
+	if err != nil {
+		return err
+	}
 	ctx := c.Request().Context()
 
 	rows, err := h.store.ListUserProjectsFiltered(ctx, store.ListUserProjectsFilteredParams{
-		UserID: userID, Limit: 100, Offset: 0,
+		UserID: userID, Limit: 100, Offset: 0, WorkspaceID: workspaceID,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list projects")

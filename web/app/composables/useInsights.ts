@@ -38,8 +38,9 @@ export function useInsights() {
     }
   }
 
-  function fetchPortfolio(w: InsightsWindow) {
+  function fetchPortfolio(w: InsightsWindow, workspaceId?: string) {
     const p = windowParams(w);
+    if (workspaceId) p.set("workspace_id", workspaceId);
     return get<InsightsPortfolio>(`/api/v1/insights/portfolio?${p}`);
   }
 

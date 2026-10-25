@@ -20,6 +20,7 @@ const route = useRoute();
 const router = useRouter();
 const { fetchPortfolio, fetchProject, fetchPerson, fetchEvidence, downloadEvidenceCSV } = useInsights();
 const { listProjects } = useProjects();
+const { currentWorkspace } = useWorkspaces();
 
 const projects = ref<Project[]>([]);
 const portfolio = ref<InsightsPortfolio | null>(null);
@@ -141,7 +142,7 @@ async function loadMain() {
     if (!q.value.project) {
       person.value = null;
       report.value = null;
-      const res = await fetchPortfolio(win.value);
+      const res = await fetchPortfolio(win.value, currentWorkspace.value?.id);
       if (!res.success) error.value = res.error || "Failed to load";
       else portfolio.value = res.data!;
       return;
@@ -182,11 +183,16 @@ async function loadEvidence() {
 watch(() => [q.value.project, q.value.cycleId, q.value.from, q.value.to, q.value.person], loadMain, { immediate: true });
 watch(evidenceQuery, loadEvidence, { immediate: true });
 
-onMounted(async () => {
-  // Projects across all workspaces: insights is scoped by membership, not by
-  // the active workspace.
-  const res = await listProjects(1, 100, "", false);
+// Insights follows the active workspace, like every other list in the app;
+// within it, scope stays the viewer's memberships.
+async function loadProjectList() {
+  const res = await listProjects(1, 100, "");
   if (res.success && res.data) projects.value = res.data.projects;
+}
+onMounted(loadProjectList);
+watch(currentWorkspace, () => {
+  loadProjectList();
+  if (!q.value.project) loadMain();
 });
 
 async function copyViewLink() {
@@ -363,7 +369,7 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person], 
         <div v-if="scope" class="mt-auto rounded-lg border bg-muted/30 p-3">
           <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Scope of every number</p>
           <p class="mt-1.5 text-xs">
-            {{ scope.project_name || "All your projects" }}
+            {{ scope.project_name || (currentWorkspace ? `Your projects in ${currentWorkspace.name}` : "All your projects") }}
             <template v-if="scope.cycle_title"> · {{ scope.cycle_title }}</template>
           </p>
           <p class="text-xs text-muted-foreground">{{ fmtDate(scope.from) }} – {{ fmtDate(scope.to) }} · {{ scope.timezone }}</p>
@@ -383,7 +389,7 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person], 
         <!-- Portfolio (question 0) -->
         <template v-else-if="!q.project && portfolio">
           <div class="mb-6">
-            <h1 class="text-2xl font-semibold">Insights · All projects</h1>
+            <h1 class="text-2xl font-semibold">Insights · {{ currentWorkspace?.name ?? "All projects" }}</h1>
             <p class="mt-1 text-sm text-muted-foreground">
               {{ portfolio.rows.length }} projects · {{ fmtDate(portfolio.scope.from) }} – {{ fmtDate(portfolio.scope.to) }}
               · generated {{ new Date(portfolio.scope.generated_at).toLocaleString("en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) }}
