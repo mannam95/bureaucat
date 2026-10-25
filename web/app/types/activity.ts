@@ -22,6 +22,8 @@ export type ActivityType =
   | "assignee_removed"
   | "label_added"
   | "label_removed"
+  | "area_added"
+  | "area_removed"
   | "state_changed"
   | "cycle_added"
   | "cycle_removed"
@@ -45,6 +47,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   assignee_removed: "removed assignee",
   label_added: "added label",
   label_removed: "removed label",
+  area_added: "added area",
+  area_removed: "removed area",
   state_changed: "changed state",
   cycle_added: "added to a cycle",
   cycle_removed: "removed from a cycle",

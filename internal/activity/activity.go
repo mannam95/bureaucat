@@ -33,6 +33,8 @@ const (
 	WatcherRemoved    ActivityType = "watcher_removed"
 	LabelAdded        ActivityType = "label_added"
 	LabelRemoved      ActivityType = "label_removed"
+	AreaAdded         ActivityType = "area_added"
+	AreaRemoved       ActivityType = "area_removed"
 	StateChanged      ActivityType = "state_changed"
 	CommentCreated    ActivityType = "comment_created"
 	CommentUpdated    ActivityType = "comment_updated"

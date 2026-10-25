@@ -15,6 +15,7 @@ import {
   Circle,
   Link2,
   Link2Off,
+  Shapes,
 } from "lucide-vue-next";
 import type { ActivityLogEntry, ActivityType } from "~/types";
 import { activityLabel } from "~/types";
@@ -32,6 +33,8 @@ const iconMap: Record<ActivityType, typeof Plus> = {
   assignee_removed: UserMinus,
   label_added: Tag,
   label_removed: Tags,
+  area_added: Shapes,
+  area_removed: Shapes,
   state_changed: ArrowRight,
   comment_created: MessageSquarePlus,
   comment_updated: MessageSquareDiff,
@@ -74,6 +77,15 @@ const fieldLabel = computed(() => {
     description: "description",
     state: "state",
     priority: "priority",
+    priority_rating: "priority rating",
+    difficulty: "difficulty",
+    effort: "effort",
+    start_date: "start date",
+    due_date: "due date",
+    figma_link: "Figma link",
+    branch: "branch",
+    pull_request: "pull request",
+    parent: "parent task",
     assignees: "assignees",
     labels: "labels",
     content: "content",

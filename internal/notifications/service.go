@@ -47,6 +47,7 @@ func emailEventFor(activityType string) notifier.EventType {
 		return notifier.EventStateChanged
 	case "task_updated", "task_moved", "task_deleted",
 		"label_added", "label_removed",
+		"area_added", "area_removed",
 		"attachment_added", "attachment_removed",
 		"cycle_added", "cycle_removed",
 		"module_added", "module_removed",

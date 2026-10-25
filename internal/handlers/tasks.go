@@ -1364,6 +1364,28 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 			NewValue:     *req.PriorityRating,
 		})
 	}
+	// 0 means "not assessed" for both estimation fields; it is still a value
+	// worth logging, since clearing an estimate changes the complexity score.
+	if req.Difficulty != nil && int32(*req.Difficulty) != oldTask.Difficulty {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       task.ID,
+			ActivityType: activity.TaskUpdated,
+			ActorID:      userID,
+			FieldName:    activity.StringPtr("difficulty"),
+			OldValue:     oldTask.Difficulty,
+			NewValue:     *req.Difficulty,
+		})
+	}
+	if req.Effort != nil && int32(*req.Effort) != oldTask.Effort {
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       task.ID,
+			ActivityType: activity.TaskUpdated,
+			ActorID:      userID,
+			FieldName:    activity.StringPtr("effort"),
+			OldValue:     oldTask.Effort,
+			NewValue:     *req.Effort,
+		})
+	}
 	oldFigma := textToStringPtr(oldTask.FigmaLink)
 	if req.FigmaLink != nil && (oldFigma == nil || *req.FigmaLink != *oldFigma) {
 		h.activityService.LogActivity(ctx, activity.LogActivityParams{
@@ -2000,6 +2022,18 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create the copy")
 	}
 
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       copyTask.ID,
+		ActivityType: activity.TaskCreated,
+		ActorID:      userID,
+		NewValue: map[string]interface{}{
+			"title":       copyTask.Title,
+			"state_id":    copyTask.StateID.String(),
+			"priority":    destPrio.Name,
+			"copied_from": srcRef,
+		},
+	})
+
 	// The copier is the requester of record on the copy.
 	_, _ = h.store.AddTaskOriginator(ctx, store.AddTaskOriginatorParams{
 		TaskID:  copyTask.ID,
@@ -2091,6 +2125,17 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 			if err != nil {
 				continue
 			}
+			h.activityService.LogActivity(ctx, activity.LogActivityParams{
+				TaskID:       subCopy.ID,
+				ActivityType: activity.TaskCreated,
+				ActorID:      userID,
+				NewValue: map[string]interface{}{
+					"title":       subCopy.Title,
+					"state_id":    subCopy.StateID.String(),
+					"priority":    destPrio.Name,
+					"copied_from": full.ProjectKey + "-" + strconv.Itoa(int(full.TaskNumber)),
+				},
+			})
 			_, _ = h.store.AddTaskOriginator(ctx, store.AddTaskOriginatorParams{
 				TaskID:  subCopy.ID,
 				UserID:  userID,
@@ -2152,6 +2197,10 @@ func (h *TaskHandler) AttachSubtasks(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
 	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
 	taskNum, err := strconv.Atoi(c.Param("taskNum"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task number")
@@ -2202,12 +2251,26 @@ func (h *TaskHandler) AttachSubtasks(c *echo.Context) error {
 	}
 
 	for _, childID := range childIDs {
+		// The old parent (usually none, but attach may re-parent) makes the
+		// child's activity entry symmetric with the one promote writes.
+		var oldParent interface{}
+		if before, err := h.store.GetTaskByID(ctx, childID); err == nil && before.ParentTaskID.Valid {
+			oldParent = uuid.UUID(before.ParentTaskID.Bytes).String()
+		}
 		if err := h.store.SetTaskParent(ctx, store.SetTaskParentParams{
 			ID:           childID,
 			ParentTaskID: pgtype.UUID{Bytes: parent.ID, Valid: true},
 		}); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to attach subtask")
 		}
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       childID,
+			ActivityType: activity.TaskUpdated,
+			ActorID:      userID,
+			FieldName:    activity.StringPtr("parent"),
+			OldValue:     oldParent,
+			NewValue:     parent.ID.String(),
+		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]int{"attached": len(childIDs)})
@@ -2965,6 +3028,16 @@ func (h *TaskHandler) AddArea(c *echo.Context) error {
 	}); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add area")
 	}
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.AreaAdded,
+		ActorID:      userID,
+		NewValue: map[string]interface{}{
+			"area_id": areaID.String(),
+			"name":    area.Name,
+			"color":   area.Color,
+		},
+	})
 	return c.JSON(http.StatusOK, map[string]string{"message": "area added"})
 }
 
@@ -2973,6 +3046,10 @@ func (h *TaskHandler) RemoveArea(c *echo.Context) error {
 	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+	}
+	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
 	}
 	taskNum, err := strconv.Atoi(c.Param("taskNum"))
 	if err != nil {
@@ -2991,12 +3068,25 @@ func (h *TaskHandler) RemoveArea(c *echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "task not found")
 	}
+	// Fetched before the removal so the log can carry the name; best-effort,
+	// an already-deleted area still removes cleanly and logs its id alone.
+	oldValue := map[string]interface{}{"area_id": areaID.String()}
+	if area, err := h.store.GetProjectAreaByID(ctx, areaID); err == nil {
+		oldValue["name"] = area.Name
+		oldValue["color"] = area.Color
+	}
 	if err := h.store.RemoveTaskArea(ctx, store.RemoveTaskAreaParams{
 		TaskID: task.ID,
 		AreaID: areaID,
 	}); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove area")
 	}
+	h.activityService.LogActivity(ctx, activity.LogActivityParams{
+		TaskID:       task.ID,
+		ActivityType: activity.AreaRemoved,
+		ActorID:      userID,
+		OldValue:     oldValue,
+	})
 	return c.JSON(http.StatusOK, map[string]string{"message": "area removed"})
 }
 
