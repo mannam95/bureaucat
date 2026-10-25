@@ -148,6 +148,10 @@ type TaskResponse struct {
 	ParentTaskNumber *int                  `json:"parent_task_number,omitempty"`
 	ParentTaskTitle  *string               `json:"parent_task_title,omitempty"`
 	SubtaskCount     int                   `json:"subtask_count"`
+	// Children by state type (list responses only), for the board card's subtask
+	// fraction. Cancelled children never count as done.
+	SubtaskDoneCount      int `json:"subtask_done_count,omitempty"`
+	SubtaskCancelledCount int `json:"subtask_cancelled_count,omitempty"`
 	// Tree-mode list annotations: a parent kept only because a subtask matched
 	// the filter, how many of its children the filter hides, and the matching
 	// children embedded one level deep.
@@ -556,35 +560,37 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 // caller attaches the batch-decorated associations.
 func filteredRowToResponse(t store.FilteredTaskRow) TaskResponse {
 	r := TaskResponse{
-		ID:               t.ID,
-		ProjectKey:       t.ProjectKey,
-		TaskNumber:       int(t.TaskNumber),
-		TaskID:           t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
-		Title:            t.Title,
-		Description:      textToStringPtr(t.Description),
-		StateID:          t.StateID,
-		StateName:        t.StateName,
-		StateType:        t.StateType,
-		StateColor:       textToString(t.StateColor, "#6B7280"),
-		PriorityID:       t.PriorityID,
-		PriorityName:     t.PriorityName,
-		PriorityColor:    textToString(t.PriorityColor, "#6B7280"),
-		PriorityRank:     int(t.PriorityRank),
-		PriorityRating:   int(t.PriorityRating),
-		Difficulty:       int(t.Difficulty),
-		Effort:           int(t.Effort),
-		ComplexityScore:  complexityScore(t.Difficulty, t.Effort),
-		StartDate:        timestamptzToTimePtr(t.StartDate),
-		DueDate:          timestamptzToTimePtr(t.DueDate),
-		CreatedBy:        t.CreatedBy,
-		CreatorUsername:  t.CreatorUsername,
-		CreatorFirstName: t.CreatorFirstName,
-		CreatorLastName:  t.CreatorLastName,
-		CreatorAvatarURL: textToStringPtr(t.CreatorAvatarUrl),
-		CommentCount:     int(t.CommentCount),
-		SubtaskCount:     int(t.SubtaskCount),
-		CreatedAt:        t.CreatedAt.Time,
-		UpdatedAt:        t.UpdatedAt.Time,
+		ID:                    t.ID,
+		ProjectKey:            t.ProjectKey,
+		TaskNumber:            int(t.TaskNumber),
+		TaskID:                t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+		Title:                 t.Title,
+		Description:           textToStringPtr(t.Description),
+		StateID:               t.StateID,
+		StateName:             t.StateName,
+		StateType:             t.StateType,
+		StateColor:            textToString(t.StateColor, "#6B7280"),
+		PriorityID:            t.PriorityID,
+		PriorityName:          t.PriorityName,
+		PriorityColor:         textToString(t.PriorityColor, "#6B7280"),
+		PriorityRank:          int(t.PriorityRank),
+		PriorityRating:        int(t.PriorityRating),
+		Difficulty:            int(t.Difficulty),
+		Effort:                int(t.Effort),
+		ComplexityScore:       complexityScore(t.Difficulty, t.Effort),
+		StartDate:             timestamptzToTimePtr(t.StartDate),
+		DueDate:               timestamptzToTimePtr(t.DueDate),
+		CreatedBy:             t.CreatedBy,
+		CreatorUsername:       t.CreatorUsername,
+		CreatorFirstName:      t.CreatorFirstName,
+		CreatorLastName:       t.CreatorLastName,
+		CreatorAvatarURL:      textToStringPtr(t.CreatorAvatarUrl),
+		CommentCount:          int(t.CommentCount),
+		SubtaskCount:          int(t.SubtaskCount),
+		SubtaskDoneCount:      int(t.SubtaskDoneCount),
+		SubtaskCancelledCount: int(t.SubtaskCancelledCount),
+		CreatedAt:             t.CreatedAt.Time,
+		UpdatedAt:             t.UpdatedAt.Time,
 	}
 	if t.ParentTaskID.Valid {
 		pid := uuid.UUID(t.ParentTaskID.Bytes)

@@ -911,9 +911,13 @@ type FilteredTaskRow struct {
 	CreatorAvatarUrl pgtype.Text
 	CommentCount     int64
 	SubtaskCount     int64
-	ParentTaskID     pgtype.UUID
-	ParentTaskNumber pgtype.Int4
-	ParentTitle      pgtype.Text
+	// Children by state type, for the board card's subtask fraction. Cancelled
+	// children never count as done; open = count - done - cancelled.
+	SubtaskDoneCount      int64
+	SubtaskCancelledCount int64
+	ParentTaskID          pgtype.UUID
+	ParentTaskNumber      pgtype.Int4
+	ParentTitle           pgtype.Text
 	// Tree-mode annotations: whether the row matched the filter itself (false =
 	// kept as context for a matching subtask) and how many of its children
 	// match. Outside tree mode SelfMatched is TRUE and MatchedSubtaskCount
@@ -965,6 +969,8 @@ const filterSelectCols = `SELECT t.id, t.project_id, t.task_number, t.title, t.d
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL)::bigint as comment_count,
        (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       (SELECT COUNT(*) FROM tasks st JOIN project_states sst ON st.state_id = sst.id WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL AND sst.state_type = 'completed')::bigint as subtask_done_count,
+       (SELECT COUNT(*) FROM tasks st JOIN project_states sst ON st.state_id = sst.id WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL AND sst.state_type = 'cancelled')::bigint as subtask_cancelled_count,
        t.parent_task_id, pt.task_number as parent_task_number, pt.title as parent_title`
 
 const filterFromBase = `
@@ -1064,7 +1070,7 @@ func scanFilteredRows(rows pgx.Rows) ([]FilteredTaskRow, error) {
 			&i.CreatedAt, &i.UpdatedAt, &i.DeletedAt, &i.ProjectKey,
 			&i.StateName, &i.StateType, &i.StateColor,
 			&i.CreatorUsername, &i.CreatorFirstName, &i.CreatorLastName, &i.CreatorAvatarUrl,
-			&i.CommentCount, &i.SubtaskCount,
+			&i.CommentCount, &i.SubtaskCount, &i.SubtaskDoneCount, &i.SubtaskCancelledCount,
 			&i.ParentTaskID, &i.ParentTaskNumber, &i.ParentTitle,
 			&i.SelfMatched, &i.MatchedSubtaskCount,
 		); err != nil {

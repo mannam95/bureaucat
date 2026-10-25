@@ -47,6 +47,10 @@ export interface Task {
   parent_task_number?: number;
   parent_task_title?: string;
   subtask_count?: number;
+  /** Children by state type (list responses), for the board card's subtask
+   *  fraction. Cancelled children never count as done. */
+  subtask_done_count?: number;
+  subtask_cancelled_count?: number;
   /** Tree-mode list annotations (subtasks=expandable with an active filter):
    *  the parent is only context for a matching subtask, N children are hidden
    *  by the filter, and the matching children ride along one level deep. */
