@@ -576,6 +576,36 @@ def seed_sprint_project(p: Project):
          rank=3, dif=3, eff=4, due_in=2)
     p.mv("x3", "In Progress", m(3), T(9, "14:00"))
 
+    # ---- The admin's own plate, so the grouped dashboard has a story to tell
+    # for the login account: a parent with subtasks in flight (nesting), an
+    # orphan subtask on someone else's parent (the crumb), and planned work in
+    # mixed states. The full plate lives in WEB; the sibling sprint project
+    # gets a lighter touch so the two groups read differently.
+    if p.key == "WEB":
+        p.mk("n6", "Ship the insights report", T(3, "13:00"), assignees=[m(0)],
+             labels=["feature"], rank=3, dif=4, eff=3)
+        p.mk("n6a", "Report API endpoints", T(3, "13:05"), parent="n6",
+             assignees=[m(0)], dif=3, eff=3)
+        p.mk("n6b", "Evidence drawer UI", T(3, "13:06"), parent="n6",
+             assignees=[m(0)], dif=3, eff=2)
+        p.mk("n6c", "Report print styles", T(3, "13:07"), parent="n6",
+             assignees=[m(2)], dif=1, eff=2)
+        p.mk("n7", "Review the audit-log spec", T(2, "09:10"), assignees=[m(0)],
+             rank=2, dif=2, eff=2, due_in=4)
+        p.mk("n8", "Quarterly dependency audit", T(2, "09:40"), assignees=[m(0)],
+             rank=1, dif=2, eff=3)
+        for i, h in enumerate(["n6", "n7", "n8"]):
+            p.cyc_add(h, "Sprint 3", T(2, f"10:{i:02d}"))
+        p.mv("n6", "In Progress", m(0), T(2, "11:00"))
+        p.mv("n6a", "In Progress", m(0), T(2, "11:05"))
+        p.mv("n6b", "In Progress", m(0), T(1, "09:30"))
+        p.mv("n6b", "Testing", m(0), T(0, "09:40"))
+        # The crumb case: the admin picks up a subtask on m(1)'s open parent.
+        p.asg("p1c", m(0), T(2, "14:00"))
+    else:
+        p.asg("a3", m(0), T(1, "09:15"))
+        p.asg("x3", m(0), T(1, "09:20"))
+
 def seed_flow_project(p: Project):
     """A project without cycles: steady intake, completions spread over two
     months, an aging item, open top-severity work. The date-range report."""
@@ -607,6 +637,14 @@ def seed_flow_project(p: Project):
     p.mk("f12", "Log retention policy", T(2, "11:10"), rank=1)
     p.mk("f13", "SSO session bug", T(8, "09:00"), assignees=[m(6)], labels=["bug"], rank=3, dif=2, eff=2)
     p.mv("f13", "In Progress", m(6), T(7, "10:30"))
+
+    # The admin's share of the ops queue, so the dashboard's OPS group holds
+    # more than one row: planned, in progress, and shared work.
+    p.mk("f14", "Incident postmortem template", T(4, "10:20"), assignees=[m(0)],
+         rank=2, dif=1, eff=2, due_in=5)
+    p.mk("f15", "Review access policies", T(3, "09:30"), assignees=[m(0), m(4)],
+         rank=3, dif=2, eff=2)
+    p.mv("f15", "In Progress", m(0), T(1, "11:00"))
 
 # ---------------------------------------------------------------- seed
 def main():
@@ -788,6 +826,8 @@ def main():
         print(f"   {default_view_note}")
     print("   insights: /insights (portfolio) → WEB or MOBILE + Sprint 2 (the showcase),")
     print("             OPS as the no-cycles date-range report")
+    print("   dashboard: the admin's plate spans WEB (parent + subtasks, a crumb),")
+    print("              MOBILE and OPS — the grouped Assigned-to-You demo")
     print(f"   admin login: {ADMIN_EMAIL} / {ADMIN_PW}")
     print(f"   users: password '{USER_PW}', e.g. " + ", ".join(u["name"] for u in users[:3]) + ", …")
 
