@@ -28,7 +28,6 @@ then rebuilds, so `make seed` always yields the same clean dataset.
 
 Stdlib only. Configure via env: BUREAUCAT_URL, PG_CONTAINER, SEED, NUM_USERS.
 """
-import base64
 import json, os, random, subprocess, urllib.request, urllib.error
 from datetime import date, datetime, timedelta
 
@@ -250,24 +249,24 @@ def rechecksum():
     import hashlib
     rows = psql_rows("""
 SELECT a.id, a.task_id, a.activity_type::text, a.actor_id, coalesce(a.field_name,''),
-       encode(convert_to(coalesce(a.old_value::text,''),'UTF8'),'base64'),
-       encode(convert_to(coalesce(a.new_value::text,''),'UTF8'),'base64'),
+       encode(convert_to(coalesce(a.old_value::text,''),'UTF8'),'hex'),
+       encode(convert_to(coalesce(a.new_value::text,''),'UTF8'),'hex'),
        to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'),
        to_char(a.created_at AT TIME ZONE 'UTC', 'US')
 FROM activity_log a ORDER BY a.task_id, a.created_at ASC, a.id ASC;""")
     updates, prev_task, prev_sum = [], None, None
     seed_sum = "0" * 64
-    for rid, task_id, typ, actor, field, old_b64, new_b64, ts_sec, ts_us in rows:
+    for rid, task_id, typ, actor, field, old_hex, new_hex, ts_sec, ts_us in rows:
         if task_id != prev_task:
             prev_task, prev_sum = task_id, seed_sum
-        def norm(b64):
-            raw = base64.b64decode(b64.replace("\n", "")).decode("utf-8")
+        def norm(hx):
+            raw = bytes.fromhex(hx).decode("utf-8")
             if raw == "":
                 return ""
             return go_json(json.loads(raw))
         frac = ts_us.rstrip("0")
         stamp = ts_sec + (("." + frac) if frac else "") + "Z"
-        data = f"{prev_sum}|{task_id}|{typ}|{actor}|{field}|{norm(old_b64)}|{norm(new_b64)}|{stamp}"
+        data = f"{prev_sum}|{task_id}|{typ}|{actor}|{field}|{norm(old_hex)}|{norm(new_hex)}|{stamp}"
         prev_sum = hashlib.sha256(data.encode("utf-8")).hexdigest()
         updates.append(f"UPDATE activity_log SET checksum='{prev_sum}' WHERE id='{rid}';")
     psql("BEGIN;" + "\n".join(updates) + "COMMIT;")
