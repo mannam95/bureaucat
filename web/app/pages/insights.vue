@@ -238,6 +238,33 @@ function jumpTo(id: string) {
   }
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
+// Scroll spy: the rail shows which question is on screen. The portfolio and
+// person views each render a single section, so only the project report needs
+// the scroll position; "in view" means the last section whose top has passed
+// the sticky filter bar.
+const activeQ = ref("");
+function updateActiveQ() {
+  if (!q.value.project) {
+    activeQ.value = "q0";
+    return;
+  }
+  if (q.value.person) {
+    activeQ.value = "q4";
+    return;
+  }
+  let current = "q1";
+  for (const id of ["q1", "q2", "q3"]) {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top <= 120) current = id;
+  }
+  activeQ.value = current;
+}
+onMounted(() => window.addEventListener("scroll", updateActiveQ, { passive: true }));
+onBeforeUnmount(() => window.removeEventListener("scroll", updateActiveQ));
+watch([() => q.value.project, () => q.value.person, report, portfolio, person], () => nextTick(updateActiveQ), {
+  immediate: true,
+});
 </script>
 
 <template>
@@ -320,7 +347,13 @@ function jumpTo(id: string) {
           <button
             v-for="item in questions"
             :key="item.id"
-            class="block w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            class="block w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors"
+            :class="
+              item.id === activeQ
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            "
+            :aria-current="item.id === activeQ ? 'true' : undefined"
             @click="jumpTo(item.id)"
           >
             {{ item.label }}
