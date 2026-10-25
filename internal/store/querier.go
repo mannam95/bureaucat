@@ -29,10 +29,10 @@ type Querier interface {
 	// ==================== TASK ASSIGNEES ====================
 	AddTaskAssignee(ctx context.Context, arg AddTaskAssigneeParams) (TaskAssignee, error)
 	AddTaskBlocker(ctx context.Context, arg AddTaskBlockerParams) (int64, error)
-	// ==================== TASK LABELS ====================
 	// A duplicate add keeps the existing row and its source untouched; the rows
 	// affected say whether anything was inserted.
 	AddTaskContributor(ctx context.Context, arg AddTaskContributorParams) (int64, error)
+	// ==================== TASK LABELS ====================
 	AddTaskLabel(ctx context.Context, arg AddTaskLabelParams) error
 	AddTaskOriginator(ctx context.Context, arg AddTaskOriginatorParams) (TaskOriginator, error)
 	AddTaskWatcher(ctx context.Context, arg AddTaskWatcherParams) (TaskWatcher, error)
@@ -123,6 +123,8 @@ type Querier interface {
 	// urgent); deactivated values stay on tasks but leave the pickers.
 	CreateProjectPriority(ctx context.Context, arg CreateProjectPriorityParams) (ProjectPriority, error)
 	// ==================== PROJECT STATES ====================
+	// An omitted position appends the state after the project's current last one,
+	// so states added over time keep a meaningful, non-colliding order.
 	CreateProjectState(ctx context.Context, arg CreateProjectStateParams) (ProjectState, error)
 	// ==================== PROJECT VIEWS ====================
 	CreateProjectView(ctx context.Context, arg CreateProjectViewParams) (CreateProjectViewRow, error)
@@ -342,6 +344,11 @@ type Querier interface {
 	// blocker of the given task, false when the given task blocks it.
 	ListTaskBlockerLinks(ctx context.Context, taskID uuid.UUID) ([]ListTaskBlockerLinksRow, error)
 	ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]ListTaskCommentsRow, error)
+	// ==================== TASK CONTRIBUTORS ====================
+	// The people who did the work on a task, independent of who is assigned right
+	// now. Mirrors task watchers; rows accrue automatically when an assignee is
+	// removed while the task sits in a started-type state (the hand-over moment in
+	// a build-then-verify workflow) and can be edited by hand.
 	ListTaskContributors(ctx context.Context, taskID uuid.UUID) ([]ListTaskContributorsRow, error)
 	ListTaskLabels(ctx context.Context, taskID uuid.UUID) ([]ListTaskLabelsRow, error)
 	// The modules a task belongs to (a task can be in more than one).
@@ -382,9 +389,9 @@ type Querier interface {
 	MergeCopyPrivateViews(ctx context.Context, arg MergeCopyPrivateViewsParams) (int64, error)
 	MergeCopyProjectMembers(ctx context.Context, arg MergeCopyProjectMembersParams) (int64, error)
 	MergeCopyTaskAssignees(ctx context.Context, arg MergeCopyTaskAssigneesParams) (int64, error)
+	MergeCopyTaskContributors(ctx context.Context, arg MergeCopyTaskContributorsParams) (int64, error)
 	// Admin "merge user": additively grants the target everything the source has.
 	// The source user is never modified and activity_log is never touched.
-	MergeCopyTaskContributors(ctx context.Context, arg MergeCopyTaskContributorsParams) (int64, error)
 	MergeCopyWorkspaceMembers(ctx context.Context, arg MergeCopyWorkspaceMembersParams) (int64, error)
 	// The target starts watching every task the source created, watched or
 	// commented on, so the merged account keeps receiving those updates.
@@ -405,8 +412,8 @@ type Querier interface {
 	RemoveTaskAssignee(ctx context.Context, arg RemoveTaskAssigneeParams) error
 	// Removes the link between two tasks in whichever direction it exists.
 	RemoveTaskBlockerLink(ctx context.Context, arg RemoveTaskBlockerLinkParams) ([]RemoveTaskBlockerLinkRow, error)
-	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskContributor(ctx context.Context, arg RemoveTaskContributorParams) error
+	RemoveTaskFromCycle(ctx context.Context, arg RemoveTaskFromCycleParams) error
 	RemoveTaskLabel(ctx context.Context, arg RemoveTaskLabelParams) error
 	RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error
 	RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error

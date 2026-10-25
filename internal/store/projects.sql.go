@@ -3155,6 +3155,7 @@ func (q *Queries) ListTaskComments(ctx context.Context, taskID uuid.UUID) ([]Lis
 }
 
 const listTaskContributors = `-- name: ListTaskContributors :many
+
 SELECT tc.id, tc.task_id, tc.user_id, tc.added_at, tc.added_by, tc.source,
        u.username, u.email, u.first_name, u.last_name, u.avatar_url
 FROM task_contributors tc
@@ -3177,6 +3178,11 @@ type ListTaskContributorsRow struct {
 	AvatarUrl pgtype.Text        `json:"avatar_url"`
 }
 
+// ==================== TASK CONTRIBUTORS ====================
+// The people who did the work on a task, independent of who is assigned right
+// now. Mirrors task watchers; rows accrue automatically when an assignee is
+// removed while the task sits in a started-type state (the hand-over moment in
+// a build-then-verify workflow) and can be edited by hand.
 func (q *Queries) ListTaskContributors(ctx context.Context, taskID uuid.UUID) ([]ListTaskContributorsRow, error) {
 	rows, err := q.db.Query(ctx, listTaskContributors, taskID)
 	if err != nil {
