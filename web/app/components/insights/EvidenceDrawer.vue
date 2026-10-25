@@ -49,11 +49,15 @@ const scopeLine = computed(() => {
   return parts.filter(Boolean).join(" · ");
 });
 
+// The header always tells the complexity story: the sum of the assessed
+// items, how many were never rated, or "not assessed" when none were —
+// silence would look like a bug, not like honesty.
 const cxLine = computed(() => {
   const cx = props.evidence?.cx;
-  if (!cx || cx.of === 0 || cx.assessed === 0) return "";
+  if (!cx || cx.of === 0) return "";
+  if (cx.assessed === 0) return "not assessed";
   let line = `complexity ${cx.sum}`;
-  if (cx.not_assessed > 0) line += ` (${cx.not_assessed} not assessed)`;
+  if (cx.not_assessed > 0) line += ` · ${cx.not_assessed} not assessed`;
   return line;
 });
 </script>
@@ -71,9 +75,9 @@ const cxLine = computed(() => {
               <p class="text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">Evidence</p>
               <SheetTitle class="mt-0.5 text-base">
                 {{ evidence.title }} · {{ evidence.count }} items
-                <span v-if="cxLine" class="font-normal text-muted-foreground"> · {{ cxLine }}</span>
               </SheetTitle>
               <SheetDescription class="mt-0.5 text-xs">{{ scopeLine }}</SheetDescription>
+              <p v-if="cxLine" class="mt-0.5 text-xs text-muted-foreground">complexity · {{ cxLine }}</p>
             </div>
           </div>
         </SheetHeader>

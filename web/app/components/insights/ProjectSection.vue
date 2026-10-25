@@ -147,9 +147,10 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
     <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_280px]">
       <div>
         <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Scope vs completed · daily, reconstructed from the activity log
+          {{ cycle ? "Scope vs completed" : "Completed over the window" }} · daily, reconstructed from the activity log
         </h3>
-        <ScopeChart class="mt-2" :days="days" caption="click a marked day for its events" @day="emit('day', $event)" />
+
+        <ScopeChart class="mt-2" :days="days" :mode="cycle ? 'cycle' : 'range'" @day="emit('day', $event)" />
       </div>
       <div>
         <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Delivered by complexity band</h3>
@@ -164,9 +165,12 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
             <span class="text-xs tabular-nums">{{ b.count }}</span>
           </div>
         </div>
-        <p class="mt-2 text-[11px] text-muted-foreground">
-          Complexity = difficulty x effort, as set on each task. Items with either value unset are "not assessed", never dropped.
-        </p>
+        <ul class="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+          <li>Complexity = difficulty x effort, rated on each task (1-5 each).</li>
+          <li>The bands group the finished tasks by that score: higher band, bigger task.</li>
+          <li><strong class="font-medium text-foreground">Not assessed</strong> — finished tasks that were never rated.</li>
+          <li>They get their own row instead of being counted as zero work.</li>
+        </ul>
       </div>
     </div>
   </section>
