@@ -353,6 +353,20 @@ type CycleTask struct {
 	AddedBy uuid.UUID          `json:"added_by"`
 }
 
+type FeatureGate struct {
+	Feature   string             `json:"feature"`
+	Mode      string             `json:"mode"`
+	UpdatedBy pgtype.UUID        `json:"updated_by"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FeatureGrant struct {
+	Feature   string             `json:"feature"`
+	UserID    uuid.UUID          `json:"user_id"`
+	GrantedBy pgtype.UUID        `json:"granted_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Feedback struct {
 	ID           uuid.UUID          `json:"id"`
 	Message      string             `json:"message"`

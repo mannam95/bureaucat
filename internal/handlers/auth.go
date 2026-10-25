@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"bereaucat/internal/auth"
+	"bereaucat/internal/features"
 	"bereaucat/internal/store"
 )
 
@@ -55,6 +56,10 @@ type UserResponse struct {
 	// its delete/demote/reset controls. Only set on admin listings; omitted
 	// (false) everywhere else.
 	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
+	// Features lists the gated features this user can use (feature gates are
+	// super-admin managed). Only set on /me — the UI reads it to decide which
+	// gated surfaces to show; the API routes enforce the gates regardless.
+	Features []string `json:"features,omitempty"`
 	// IsDeactivated is true when an admin has disabled the account. Only set on
 	// admin listings; omitted (false = active) everywhere else. Expressed as the
 	// negative so active accounts serialize nothing.
@@ -325,6 +330,13 @@ func (h *AuthHandler) Me(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
+	// Effective gated features; on error the list is empty rather than failing
+	// /me — the gated routes enforce access themselves.
+	enabled, err := features.EnabledFor(ctx, h.store, user.ID, user.UserType)
+	if err != nil {
+		enabled = nil
+	}
+
 	return c.JSON(http.StatusOK, UserResponse{
 		ID:           user.ID,
 		Username:     user.Username,
@@ -335,6 +347,7 @@ func (h *AuthHandler) Me(c *echo.Context) error {
 		AvatarURL:    textToStringPtr(user.AvatarUrl),
 		CreatedAt:    user.CreatedAt.Time,
 		IsSuperAdmin: h.isSuperAdmin(user.Email),
+		Features:     enabled,
 	})
 }
 

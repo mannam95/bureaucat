@@ -31,8 +31,9 @@ var testEmailEvents = map[string]notifier.EventType{
 }
 
 // requireSuperAdmin resolves the calling user and rejects anyone who is not
-// the configured break-glass account. With SUPERADMIN_EMAIL unset there is no
-// super admin, so the endpoints are refused for everyone.
+// the configured break-glass account (used by the test-email and feature-gate
+// endpoints). With SUPERADMIN_EMAIL unset there is no super admin, so the
+// endpoints are refused for everyone.
 func (h *AdminHandler) requireSuperAdmin(c *echo.Context) (store.GetUserByIDRow, error) {
 	userID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
 	if err != nil {
@@ -43,7 +44,7 @@ func (h *AdminHandler) requireSuperAdmin(c *echo.Context) (store.GetUserByIDRow,
 		return store.GetUserByIDRow{}, echo.NewHTTPError(http.StatusUnauthorized, "user not found")
 	}
 	if !h.isSuperAdmin(user.Email) {
-		return store.GetUserByIDRow{}, echo.NewHTTPError(http.StatusForbidden, "only the super admin can manage test emails")
+		return store.GetUserByIDRow{}, echo.NewHTTPError(http.StatusForbidden, "super admin access required")
 	}
 	return user, nil
 }

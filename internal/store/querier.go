@@ -15,6 +15,7 @@ type Querier interface {
 	// All activity_log events except comment lifecycle events (state changes,
 	// assignee/label edits, task lifecycle, etc.).
 	ActivityCreatedPerDay(ctx context.Context, arg ActivityCreatedPerDayParams) ([]ActivityCreatedPerDayRow, error)
+	AddFeatureGrant(ctx context.Context, arg AddFeatureGrantParams) error
 	// ==================== MODULE MEMBERS ====================
 	AddModuleMember(ctx context.Context, arg AddModuleMemberParams) error
 	AddModuleMembersBulk(ctx context.Context, arg AddModuleMembersBulkParams) error
@@ -170,6 +171,9 @@ type Querier interface {
 	// The level new tasks fall back to: the lowest-ranked active one.
 	GetDefaultProjectPriority(ctx context.Context, projectID uuid.UUID) (ProjectPriority, error)
 	GetDefaultProjectState(ctx context.Context, projectID uuid.UUID) (ProjectState, error)
+	// The gate check on the request path: a missing row reads as disabled (grants
+	// cannot exist without the gate row, so the caller can stop there).
+	GetFeatureGateMode(ctx context.Context, feature string) (string, error)
 	// A single global preference row for one user, or no rows when unset (the
 	// caller then applies the registry default). Used off the request path, e.g.
 	// the notifier checking whether a recipient wants email.
@@ -233,6 +237,7 @@ type Querier interface {
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
 	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)
+	HasFeatureGrant(ctx context.Context, arg HasFeatureGrantParams) (bool, error)
 	HasTaskLabel(ctx context.Context, arg HasTaskLabelParams) (bool, error)
 	IsProjectMember(ctx context.Context, arg IsProjectMemberParams) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
@@ -264,6 +269,9 @@ type Querier interface {
 	ListCycleAssignees(ctx context.Context, cycleID uuid.UUID) ([]ListCycleAssigneesRow, error)
 	ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) ([]ListCycleTasksRow, error)
 	ListDeletedProjects(ctx context.Context, arg ListDeletedProjectsParams) ([]ListDeletedProjectsRow, error)
+	ListFeatureGates(ctx context.Context) ([]ListFeatureGatesRow, error)
+	ListFeatureGrants(ctx context.Context, feature string) ([]ListFeatureGrantsRow, error)
+	ListFeatureGrantsForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	// ==================== USER PREFERENCES ====================
 	//
 	// Rows hold only user overrides; a missing row means "use the registry
@@ -423,6 +431,7 @@ type Querier interface {
 	ProjectViewSlugExists(ctx context.Context, arg ProjectViewSlugExistsParams) (bool, error)
 	ProjectsPerWorkspace(ctx context.Context) ([]ProjectsPerWorkspaceRow, error)
 	ReactivateUser(ctx context.Context, id uuid.UUID) error
+	RemoveFeatureGrant(ctx context.Context, arg RemoveFeatureGrantParams) error
 	RemoveModuleMember(ctx context.Context, arg RemoveModuleMemberParams) error
 	RemoveModuleTask(ctx context.Context, arg RemoveModuleTaskParams) error
 	RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error
@@ -467,6 +476,9 @@ type Querier interface {
 	// Marks exactly one state as default for the project, clearing any previous
 	// default. Atomic in a single statement (no transaction needed).
 	SetDefaultProjectState(ctx context.Context, arg SetDefaultProjectStateParams) error
+	// Upsert so a feature registered in code before its migration row exists
+	// self-heals on the first save.
+	SetFeatureGateMode(ctx context.Context, arg SetFeatureGateModeParams) error
 	// Points the project's single default at one view: sets the flag there and
 	// clears it everywhere else in one statement.
 	SetProjectDefaultView(ctx context.Context, arg SetProjectDefaultViewParams) error

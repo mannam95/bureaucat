@@ -9,6 +9,7 @@ import (
 
 	"bereaucat/internal/auth"
 	"bereaucat/internal/buildinfo"
+	"bereaucat/internal/features"
 )
 
 // feedbackCORS opens the feedback endpoints to any origin so users on
@@ -154,9 +155,11 @@ func (s *Server) registerRoutes() {
 		// Insights: delivery reporting reconstructed from the activity log.
 		// The portfolio and the cross-project person report sum only the
 		// viewer's projects; the per-project routes live under the project
-		// middleware below.
-		protected.GET("/insights/portfolio", s.insightsHandler.Portfolio)
-		protected.GET("/insights/person/:userId", s.insightsHandler.WorkspacePerson)
+		// middleware below. Every insights route sits behind the super-admin
+		// managed feature gate.
+		insightsGate := features.Require(s.store, features.Insights)
+		protected.GET("/insights/portfolio", s.insightsHandler.Portfolio, insightsGate)
+		protected.GET("/insights/person/:userId", s.insightsHandler.WorkspacePerson, insightsGate)
 
 		// File uploads (authenticated)
 		if s.uploadHandler != nil {
@@ -358,10 +361,10 @@ func (s *Server) registerRoutes() {
 				projectGroup.POST("/tasks/:taskNum/contributors", s.taskHandler.AddContributor, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/contributors/:userId", s.taskHandler.RemoveContributor, auth.ProjectRoleMiddleware("member"))
 
-				// Insights (project-scoped)
-				projectGroup.GET("/insights", s.insightsHandler.ProjectReport)
-				projectGroup.GET("/insights/person/:userId", s.insightsHandler.PersonReport)
-				projectGroup.GET("/insights/evidence", s.insightsHandler.Evidence)
+				// Insights (project-scoped; behind the same feature gate)
+				projectGroup.GET("/insights", s.insightsHandler.ProjectReport, insightsGate)
+				projectGroup.GET("/insights/person/:userId", s.insightsHandler.PersonReport, insightsGate)
+				projectGroup.GET("/insights/evidence", s.insightsHandler.Evidence, insightsGate)
 
 				// Task labels
 				// Task areas
@@ -407,6 +410,12 @@ func (s *Server) registerRoutes() {
 		admin.PUT("/users/:id/password", s.adminHandler.ResetUserPassword)
 		admin.PUT("/users/:id/active", s.adminHandler.SetUserActive)
 		admin.POST("/users/:id/merge", s.adminHandler.MergeUser)
+
+		// Feature gates (super admin only): who can use gated features.
+		admin.GET("/features", s.adminHandler.ListFeatureGates)
+		admin.PUT("/features/:feature", s.adminHandler.SetFeatureGate)
+		admin.POST("/features/:feature/grants", s.adminHandler.AddFeatureGrant)
+		admin.DELETE("/features/:feature/grants/:userId", s.adminHandler.RemoveFeatureGrant)
 
 		// Test emails (super admin only; SMTP stays env-configured)
 		admin.GET("/email", s.adminHandler.EmailStatus)
