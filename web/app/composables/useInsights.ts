@@ -4,6 +4,7 @@ import type {
   InsightsPortfolio,
   PersonInsights,
   ProjectInsights,
+  WorkspacePersonInsights,
 } from "~/types";
 
 // InsightsWindow narrows every call to a cycle or a date range; empty fields
@@ -54,6 +55,12 @@ export function useInsights() {
     return get<PersonInsights>(`/api/v1/projects/${projectKey}/insights/person/${userId}?${p}`);
   }
 
+  function fetchWorkspacePerson(userId: string, w: InsightsWindow, workspaceId?: string) {
+    const p = windowParams(w);
+    if (workspaceId) p.set("workspace_id", workspaceId);
+    return get<WorkspacePersonInsights>(`/api/v1/insights/person/${userId}?${p}`);
+  }
+
   function evidenceParams(w: InsightsWindow, q: EvidenceQuery): URLSearchParams {
     const p = windowParams(w);
     p.set("metric", q.metric);
@@ -92,5 +99,5 @@ export function useInsights() {
     }
   }
 
-  return { fetchPortfolio, fetchProject, fetchPerson, fetchEvidence, downloadEvidenceCSV };
+  return { fetchPortfolio, fetchProject, fetchPerson, fetchWorkspacePerson, fetchEvidence, downloadEvidenceCSV };
 }

@@ -152,9 +152,11 @@ func (s *Server) registerRoutes() {
 		protected.GET("/graph/filters", s.adminHandler.GetMyTaskGraphFilters)
 
 		// Insights: delivery reporting reconstructed from the activity log.
-		// The portfolio sums only the viewer's projects; the per-project
-		// routes live under the project middleware below.
+		// The portfolio and the cross-project person report sum only the
+		// viewer's projects; the per-project routes live under the project
+		// middleware below.
 		protected.GET("/insights/portfolio", s.insightsHandler.Portfolio)
+		protected.GET("/insights/person/:userId", s.insightsHandler.WorkspacePerson)
 
 		// File uploads (authenticated)
 		if s.uploadHandler != nil {

@@ -134,6 +134,61 @@ func (h *InsightsHandler) Portfolio(c *echo.Context) error {
 	return c.JSON(http.StatusOK, portfolio)
 }
 
+// WorkspacePerson answers "what did this person deliver across projects". The
+// sums run over the viewer's memberships only: a viewer with different project
+// access sees different totals, by design.
+//
+//	@Summary		Insights person across projects
+//	@Description	One person's delivered work and load across the projects the viewer may see.
+//	@Tags			Insights
+//	@Produce		json
+//	@Param			userId			path		string	true	"User ID"
+//	@Param			from			query		string	false	"Window start (YYYY-MM-DD)"
+//	@Param			to				query		string	false	"Window end (YYYY-MM-DD)"
+//	@Param			workspace_id	query		string	false	"Limit to one workspace; absent means all the viewer's workspaces"
+//	@Success		200				{object}	insights.WorkspacePersonReport
+//	@Security		BearerAuth
+//	@Router			/insights/person/{userId} [get]
+func (h *InsightsHandler) WorkspacePerson(c *echo.Context) error {
+	viewerID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderUserID))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user ID")
+	}
+	userID, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+	from, to, err := h.parseRange(c)
+	if err != nil {
+		return err
+	}
+	workspaceID, err := parseWorkspaceID(c)
+	if err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+
+	rows, err := h.store.ListUserProjectsFiltered(ctx, store.ListUserProjectsFilteredParams{
+		UserID: viewerID, Limit: 100, Offset: 0, WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list projects")
+	}
+	projects := make([]store.Project, 0, len(rows))
+	for _, r := range rows {
+		projects = append(projects, store.Project{
+			ID: r.ID, ProjectKey: r.ProjectKey, Name: r.Name,
+			CreatedAt: r.CreatedAt, WorkspaceID: r.WorkspaceID,
+		})
+	}
+
+	rep, err := h.engine.PersonAcrossProjects(ctx, projects, userID, from, to)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to compute person report")
+	}
+	return c.JSON(http.StatusOK, rep)
+}
+
 // ProjectReport answers questions 1-3 for one project.
 //
 //	@Summary		Insights project report

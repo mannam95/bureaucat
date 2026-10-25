@@ -231,6 +231,32 @@ export interface PersonInsights {
   credit_rule: string;
 }
 
+export interface PersonProjectRow {
+  project_key: string;
+  project_name: string;
+  delivered: number;
+  cx?: ComplexitySum;
+  top_rank_handled: number;
+  open_now: number;
+  comments: number;
+  created: number;
+}
+
+export interface WorkspacePersonInsights {
+  scope: InsightsScope;
+  user: InsightsUser;
+  delivered: MetricTile;
+  top_rank_handled: number;
+  open_now: number;
+  comments: number;
+  created: number;
+  projects: PersonProjectRow[];
+  weekly: WeekPoint[];
+  worked_with: UserCount[];
+  credit_rule: string;
+  projects_considered: number;
+}
+
 export interface EvidenceRow {
   key: string;
   title: string;

@@ -8,6 +8,7 @@ import type {
   PersonInsights,
   ProjectInsights,
   Project,
+  WorkspacePersonInsights,
 } from "~/types";
 
 // The insights report: a narrative answer with a question rail, where every
@@ -18,7 +19,8 @@ useSeoMeta({ title: "Insights" });
 
 const route = useRoute();
 const router = useRouter();
-const { fetchPortfolio, fetchProject, fetchPerson, fetchEvidence, downloadEvidenceCSV } = useInsights();
+const { fetchPortfolio, fetchProject, fetchPerson, fetchWorkspacePerson, fetchEvidence, downloadEvidenceCSV } =
+  useInsights();
 const { listProjects } = useProjects();
 const { currentWorkspace } = useWorkspaces();
 
@@ -26,6 +28,7 @@ const projects = ref<Project[]>([]);
 const portfolio = ref<InsightsPortfolio | null>(null);
 const report = ref<ProjectInsights | null>(null);
 const person = ref<PersonInsights | null>(null);
+const wsPerson = ref<WorkspacePersonInsights | null>(null);
 const evidence = ref<InsightsEvidence | null>(null);
 const loading = ref(false);
 const evidenceLoading = ref(false);
@@ -142,11 +145,20 @@ async function loadMain() {
     if (!q.value.project) {
       person.value = null;
       report.value = null;
+      // A person without a project is the cross-project person view.
+      if (q.value.person) {
+        const res = await fetchWorkspacePerson(q.value.person, win.value, currentWorkspace.value?.id);
+        if (!res.success) error.value = res.error || "Failed to load";
+        else wsPerson.value = res.data!;
+        return;
+      }
+      wsPerson.value = null;
       const res = await fetchPortfolio(win.value, currentWorkspace.value?.id);
       if (!res.success) error.value = res.error || "Failed to load";
       else portfolio.value = res.data!;
       return;
     }
+    wsPerson.value = null;
     const repRes = await fetchProject(q.value.project, win.value);
     if (!repRes.success) {
       error.value = repRes.error || "Failed to load";
@@ -212,7 +224,9 @@ async function exportCSV() {
   else toast.success("CSV exported — exactly the drawer's rows");
 }
 
-const scope = computed(() => person.value?.scope ?? report.value?.scope ?? portfolio.value?.scope ?? null);
+const scope = computed(
+  () => person.value?.scope ?? report.value?.scope ?? wsPerson.value?.scope ?? portfolio.value?.scope ?? null
+);
 
 function fmtDate(iso?: string): string {
   if (!iso) return "";
@@ -220,7 +234,13 @@ function fmtDate(iso?: string): string {
 }
 
 const questions = computed(() => {
-  if (!q.value.project) return [{ id: "q0", label: "0 · Which projects need attention?" }];
+  if (!q.value.project) {
+    const list = [{ id: "q0", label: "0 · Which projects need attention?" }];
+    if (q.value.person && wsPerson.value) {
+      list.push({ id: "qw", label: `What did ${wsPerson.value.user.first_name} deliver across projects?` });
+    }
+    return list;
+  }
   const list = [
     { id: "q1", label: "1 · How did it land?" },
     { id: "q2", label: "2 · What did each person deliver?" },
@@ -235,7 +255,7 @@ const questions = computed(() => {
 function jumpTo(id: string) {
   // The project questions are not on screen while a person view is open:
   // leave it first, then scroll once the sections exist.
-  if (q.value.person && id !== "q4") {
+  if (q.value.person && id !== "q4" && id !== "qw") {
     setQuery({ person: undefined });
     nextTick(() => {
       setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
@@ -252,7 +272,7 @@ function jumpTo(id: string) {
 const activeQ = ref("");
 function updateActiveQ() {
   if (!q.value.project) {
-    activeQ.value = "q0";
+    activeQ.value = q.value.person ? "qw" : "q0";
     return;
   }
   if (q.value.person) {
@@ -268,7 +288,7 @@ function updateActiveQ() {
 }
 onMounted(() => window.addEventListener("scroll", updateActiveQ, { passive: true }));
 onBeforeUnmount(() => window.removeEventListener("scroll", updateActiveQ));
-watch([() => q.value.project, () => q.value.person, report, portfolio, person], () => nextTick(updateActiveQ), {
+watch([() => q.value.project, () => q.value.person, report, portfolio, person, wsPerson], () => nextTick(updateActiveQ), {
   immediate: true,
 });
 </script>
@@ -380,11 +400,33 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person], 
       <!-- The report body -->
       <main class="min-w-0 flex-1 px-6 py-6 lg:px-10">
         <div v-if="error" class="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">{{ error }}</div>
-        <div v-else-if="loading && !report && !portfolio" class="space-y-4">
+        <div v-else-if="loading && !report && !portfolio && !wsPerson" class="space-y-4">
           <Skeleton class="h-8 w-72" />
           <Skeleton class="h-40 w-full" />
           <Skeleton class="h-64 w-full" />
         </div>
+
+        <!-- Person across projects -->
+        <template v-else-if="!q.project && q.person && wsPerson">
+          <div class="mb-6">
+            <button
+              class="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              @click="setQuery({ person: undefined })"
+            >
+              <ArrowLeft class="size-3" /> All projects
+            </button>
+            <h1 class="text-2xl font-semibold">
+              {{ wsPerson.user.first_name }} {{ wsPerson.user.last_name }} · across projects
+            </h1>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {{ fmtDate(wsPerson.scope.from) }} – {{ fmtDate(wsPerson.scope.to) }} · {{ wsPerson.scope.timezone }}
+              · {{ wsPerson.scope.counting_rule }}
+            </p>
+          </div>
+          <div id="qw" class="scroll-mt-16">
+            <WorkspacePersonSection :person="wsPerson" @project="(key) => setQuery({ project: key })" />
+          </div>
+        </template>
 
         <!-- Portfolio (question 0) -->
         <template v-else-if="!q.project && portfolio">
@@ -420,9 +462,18 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person], 
 
           <template v-if="q.person && person">
             <div id="q4" class="scroll-mt-16">
-              <button class="mb-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" @click="setQuery({ person: undefined })">
-                <ArrowLeft class="size-3" /> Back to the project report
-              </button>
+              <div class="mb-2 flex items-center gap-4">
+                <button class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" @click="setQuery({ person: undefined })">
+                  <ArrowLeft class="size-3" /> Back to the project report
+                </button>
+                <button
+                  class="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  title="The same person, summed over every project you can see"
+                  @click="setQuery({ project: undefined, cycle_id: undefined, open: undefined, user_id: undefined })"
+                >
+                  This person across all projects →
+                </button>
+              </div>
               <PersonSection :person="person" :project-key="q.project" :win="win" @open="(m, uid) => openEvidence(m, { user_id: uid })" />
             </div>
           </template>

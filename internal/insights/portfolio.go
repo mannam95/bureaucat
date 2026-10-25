@@ -258,6 +258,115 @@ func sortedUserCounts(peers map[uuid.UUID]int, refs map[uuid.UUID]UserRef) []Use
 	return out
 }
 
+// PersonAcrossProjects aggregates one person over the given projects (the
+// handler passes the viewer's memberships — the person's own reach is resolved
+// here). A project contributes a row when the person is a member there or the
+// window holds any of their activity, so departed members keep their history.
+func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Project, userID uuid.UUID, from, to time.Time) (*WorkspacePersonReport, error) {
+	now := e.now()
+	if from.IsZero() || to.IsZero() {
+		today := time.Date(now.In(e.tz).Year(), now.In(e.tz).Month(), now.In(e.tz).Day(), 0, 0, 0, 0, e.tz)
+		to = today
+		from = today.AddDate(0, 0, -29)
+	}
+	w := window{start: from, endEx: to.AddDate(0, 0, 1), cutoff: to.AddDate(0, 0, 1)}
+	if now.Before(w.cutoff) {
+		w.cutoff = now
+	}
+
+	rep := &WorkspacePersonReport{
+		Scope: Scope{
+			From: w.start, To: w.endEx.AddDate(0, 0, -1), Cutoff: w.cutoff,
+			Timezone: e.tz.String(), GeneratedAt: now, CountingRule: countingRule,
+		},
+		User:       UserRef{ID: userID, Username: "unknown"},
+		Delivered:  Tile{Metric: "person_delivered", Cx: &ComplexitySum{}},
+		Projects:   []PersonProjectRow{},
+		Weekly:     []WeekPoint{},
+		WorkedWith: []UserCount{},
+		CreditRule: creditRule,
+	}
+
+	weekIdx := map[string]int{}
+	for ws := e.weekStart(w.start); ws.Before(w.cutoff); ws = ws.AddDate(0, 0, 7) {
+		weekIdx[e.dayKey(ws)] = len(rep.Weekly)
+		rep.Weekly = append(rep.Weekly, WeekPoint{WeekStart: e.dayKey(ws)})
+	}
+
+	peers, refs := map[uuid.UUID]int{}, map[uuid.UUID]UserRef{}
+	haveUser := false
+	for _, p := range projects {
+		d, err := e.load(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("project %s: %w", p.ProjectKey, err)
+		}
+		rep.ProjectsConsidered++
+
+		isMember := false
+		for _, m := range d.members {
+			if m.ID == userID {
+				isMember = true
+				break
+			}
+		}
+		s := e.personSliceOf(d, w, nil, userID)
+		if !isMember && len(s.mine) == 0 && s.openNow == 0 && s.comments == 0 && s.created == 0 {
+			continue
+		}
+		if u, ok := d.users[userID]; ok && !haveUser {
+			rep.User = u
+			haveUser = true
+		}
+
+		cx := cxOver(s.mine)
+		rep.Projects = append(rep.Projects, PersonProjectRow{
+			ProjectKey: d.key, ProjectName: d.name,
+			Delivered: len(s.mine), Cx: cx, TopRank: s.topRank,
+			OpenNow: s.openNow, Comments: s.comments, Created: s.created,
+		})
+		rep.Delivered.Count += len(s.mine)
+		rep.Delivered.Cx.Sum += cx.Sum
+		rep.Delivered.Cx.Assessed += cx.Assessed
+		rep.Delivered.Cx.Of += cx.Of
+		rep.Delivered.Cx.NotAssessed += cx.NotAssessed
+		rep.TopRank += s.topRank
+		rep.OpenNow += s.openNow
+		rep.Comments += s.comments
+		rep.Created += s.created
+
+		for _, t := range s.mine {
+			if i, ok := weekIdx[e.dayKey(e.weekStart(s.completedOf[t.id].at))]; ok {
+				rep.Weekly[i].Completed++
+			}
+		}
+		workedWith(d, s, userID, peers, refs)
+	}
+	rep.WorkedWith = sortedUserCounts(peers, refs)
+
+	// A person the viewer shares no project with still resolves to a name when
+	// the store knows them; the numbers stay zero.
+	if !haveUser {
+		if users, err := e.store.ListUsersByIDs(ctx, []uuid.UUID{userID}); err == nil && len(users) == 1 {
+			u := users[0]
+			ref := UserRef{ID: u.ID, Username: u.Username, FirstName: u.FirstName, LastName: u.LastName}
+			if u.AvatarUrl.Valid {
+				v := u.AvatarUrl.String
+				ref.AvatarURL = &v
+			}
+			rep.User = ref
+		}
+	}
+
+	sort.Slice(rep.Projects, func(i, j int) bool {
+		a, b := rep.Projects[i], rep.Projects[j]
+		if a.Delivered != b.Delivered {
+			return a.Delivered > b.Delivered
+		}
+		return a.ProjectKey < b.ProjectKey
+	})
+	return rep, nil
+}
+
 // PersonReport computes one member's slice of one project.
 func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID uuid.UUID, opts ReportOptions) (*PersonReport, error) {
 	d, err := e.load(ctx, project)

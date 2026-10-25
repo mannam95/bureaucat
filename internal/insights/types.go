@@ -305,6 +305,40 @@ type CycleCount struct {
 	Count int      `json:"count"`
 }
 
+// PersonProjectRow is one project's share of a workspace person report.
+type PersonProjectRow struct {
+	ProjectKey  string         `json:"project_key"`
+	ProjectName string         `json:"project_name"`
+	Delivered   int            `json:"delivered"`
+	Cx          *ComplexitySum `json:"cx,omitempty"`
+	TopRank     int            `json:"top_rank_handled"`
+	OpenNow     int            `json:"open_now"`
+	Comments    int            `json:"comments"`
+	Created     int            `json:"created"`
+}
+
+// WorkspacePersonReport aggregates one person across the projects the viewer
+// may see. The scope is the intersection of viewer and person: a viewer with
+// different project access sees different totals, and the report says so.
+type WorkspacePersonReport struct {
+	Scope     Scope   `json:"scope"`
+	User      UserRef `json:"user"`
+	Delivered Tile    `json:"delivered"`
+	TopRank   int     `json:"top_rank_handled"`
+	OpenNow   int     `json:"open_now"`
+	Comments  int     `json:"comments"`
+	Created   int     `json:"created"`
+	// Projects holds one row per project that contributed anything (membership
+	// or windowed activity), most delivered first.
+	Projects   []PersonProjectRow `json:"projects"`
+	Weekly     []WeekPoint        `json:"weekly"`
+	WorkedWith []UserCount        `json:"worked_with"`
+	CreditRule string             `json:"credit_rule"`
+	// ProjectsConsidered counts the viewer's projects the sums ran over, so the
+	// scope line can be honest about coverage.
+	ProjectsConsidered int `json:"projects_considered"`
+}
+
 // EvidenceRow is one leaf item inside an evidence population. Optional fields
 // render only where they apply.
 type EvidenceRow struct {
