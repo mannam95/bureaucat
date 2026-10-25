@@ -446,6 +446,47 @@ const showCreateSubtask = ref(false);
 // A subtask cannot itself have subtasks (one level of nesting).
 const isSubtask = computed(() => currentTask.value?.parent_task_id != null);
 
+// Checklist rollup over the children. Done, open and cancelled are strictly
+// separated: cancelled never raises the fraction and is excluded from its
+// denominator, so the fraction can honestly reach n/n.
+const subRollup = computed(() => {
+  const total = subtasks.value.length;
+  const done = subtasks.value.filter((s) => s.state_type === "completed").length;
+  const cancelled = subtasks.value.filter((s) => s.state_type === "cancelled").length;
+  const countable = total - cancelled;
+  return { total, done, cancelled, countable, open: countable - done };
+});
+
+function subPct(n: number): string {
+  return subRollup.value.total > 0 ? `${(n / subRollup.value.total) * 100}%` : "0%";
+}
+
+const subRollupLabel = computed(() => {
+  const r = subRollup.value;
+  if (r.countable === 0) return `${r.cancelled} subtask${r.cancelled === 1 ? "" : "s"} cancelled`;
+  let s = `${r.done}/${r.countable} subtask${r.countable === 1 ? "" : "s"} done`;
+  if (r.cancelled > 0) s += ` · ${r.cancelled} cancelled`;
+  return s;
+});
+
+const subRollupTooltip = computed(() => {
+  const r = subRollup.value;
+  let s = `${r.done} done · ${r.open} open · ${r.cancelled} cancelled`;
+  if (r.cancelled > 0) s += " — a cancelled subtask never counts as done";
+  return s;
+});
+
+// Checklist order: open work first, done after it, cancelled last of all.
+// Stable sort keeps task-number order inside each group.
+function subtaskGroup(s: import("~/types").Subtask): number {
+  if (s.state_type === "cancelled") return 2;
+  if (s.state_type === "completed") return 1;
+  return 0;
+}
+const orderedSubtasks = computed(() =>
+  [...subtasks.value].sort((a, b) => subtaskGroup(a) - subtaskGroup(b))
+);
+
 async function loadSubtasks() {
   subtasksLoading.value = true;
   const result = await listSubtasks(projectKey.value, taskNum.value);
@@ -1066,9 +1107,24 @@ onMounted(() => {
                     Add subtask
                   </Button>
                 </div>
+                <!-- Checklist rollup: the done fraction with cancelled strictly
+                     separated — a cancelled child never raises it. -->
+                <div
+                  v-if="subtasks.length"
+                  class="flex items-center gap-3"
+                  :title="subRollupTooltip"
+                >
+                  <span class="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                    {{ subRollupLabel }}
+                  </span>
+                  <span class="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                    <span class="bg-emerald-500" :style="{ width: subPct(subRollup.done) }" />
+                    <span class="ml-auto bg-muted-foreground/30" :style="{ width: subPct(subRollup.cancelled) }" />
+                  </span>
+                </div>
                 <SubtaskList
                   v-if="subtasks.length"
-                  :subtasks="subtasks"
+                  :subtasks="orderedSubtasks"
                   :project-key="projectKey"
                   :states="states"
                   :members="members"
@@ -1076,11 +1132,37 @@ onMounted(() => {
                   :is-member="isMember"
                   :removable="isMember"
                   :removing-id="detachingSubtaskId"
+                  dim-cancelled
                   @updated="loadSubtasks"
                   @remove="handleDetachSubtask"
                 />
                 <p v-else-if="!subtasksLoading" class="text-sm italic text-muted-foreground">
                   No subtasks yet.
+                </p>
+                <!-- Bridge to Insights: a parent with subtasks is counted
+                     through them, never as an extra unit of its own. -->
+                <p v-if="subtasks.length" class="text-xs text-muted-foreground">
+                  In Insights this task counts through its
+                  {{ subtasks.length }} subtask{{ subtasks.length === 1 ? "" : "s" }},
+                  not as a unit of its own.
+                  <Popover>
+                    <PopoverTrigger as-child>
+                      <button
+                        type="button"
+                        class="underline underline-offset-2 transition-colors hover:text-foreground"
+                      >
+                        Why?
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" class="w-80 text-xs leading-relaxed">
+                      Insights counts leaf items — the smallest pieces of work. If this
+                      task also counted as a unit, the same work would count twice, so
+                      its contribution is exactly its subtasks' outcomes: a completed
+                      subtask is one delivered unit, a cancelled subtask is never
+                      delivery, and this task's own state adds no unit on top. Subtasks
+                      also follow this task's cycle in those counts.
+                    </PopoverContent>
+                  </Popover>
                 </p>
               </div>
 
@@ -1266,6 +1348,7 @@ onMounted(() => {
                     :cycle-id="currentTask.cycle_id"
                     :cycle-title="currentTask.cycle_title"
                     :can-edit="isMember && !isSubtask"
+                    :inherited="isSubtask"
                     @refresh="refreshTask"
                   />
                 </div>
@@ -1277,6 +1360,7 @@ onMounted(() => {
                     :task-id="currentTask.id"
                     :modules="currentTask.modules || []"
                     :can-edit="isMember && !isSubtask"
+                    :inherited="isSubtask"
                     @refresh="refreshTask"
                   />
                 </div>

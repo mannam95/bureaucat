@@ -10,8 +10,10 @@ const props = withDefaults(
     modules: TaskModule[];
     canEdit: boolean;
     dense?: boolean;
+    // The shown modules are the parent's (subtasks follow their parent).
+    inherited?: boolean;
   }>(),
-  { dense: false }
+  { dense: false, inherited: false }
 );
 
 const emit = defineEmits<{
@@ -149,4 +151,7 @@ async function toggleModule(module: Module) {
       </span>
     </div>
   </div>
+  <p v-if="inherited && modules.length" class="mt-0.5 text-right text-[10px] text-muted-foreground">
+    inherited from parent
+  </p>
 </template>

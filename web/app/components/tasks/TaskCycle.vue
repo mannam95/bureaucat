@@ -11,8 +11,11 @@ const props = withDefaults(
     cycleTitle?: string;
     canEdit: boolean;
     dense?: boolean;
+    // The shown cycle is the parent's (subtasks follow their parent's cycle,
+    // which is also the cycle Insights counts them in) — label it as such.
+    inherited?: boolean;
   }>(),
-  { dense: false }
+  { dense: false, inherited: false }
 );
 
 const emit = defineEmits<{
@@ -176,4 +179,7 @@ function formatRange(cycle: CycleSibling): string {
       <span v-else class="text-muted-foreground" :class="dense ? 'text-xs' : 'text-sm'">None</span>
     </div>
   </div>
+  <p v-if="inherited && cycleId" class="mt-0.5 text-right text-[10px] text-muted-foreground">
+    inherited from parent
+  </p>
 </template>
