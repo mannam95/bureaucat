@@ -237,6 +237,41 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			}
 		}
 
+	case "person_open":
+		if p.UserID == nil {
+			return nil, fmt.Errorf("metric %q needs a user", p.Metric)
+		}
+		u := d.userRef(*p.UserID)
+		now := e.now()
+		ev.Title = "Open now, assigned to " + u.Username
+		ev.HowComputed = "Open leaf items currently assigned to this person — a snapshot at generation time, independent of the selected window."
+		ev.SourceEvents = "current assignees (snapshot)"
+		ev.Chips = []string{"assignee = " + u.Username, "snapshot " + e.dayKey(now)}
+		for _, t := range units {
+			if !isOpenType(d.states[t.stateID].Type) {
+				continue
+			}
+			for _, au := range t.assigneesNow {
+				if au != *p.UserID {
+					continue
+				}
+				row := e.row(d, t)
+				last := t.createdAt
+				for _, evn := range t.events {
+					if evn.typ == "state_changed" {
+						last = evn.at
+					}
+				}
+				row.AgeDays = int(now.Sub(last).Hours() / 24)
+				if !t.dueDate.IsZero() {
+					due := t.dueDate
+					row.Due = &due
+				}
+				ev.Rows = append(ev.Rows, row)
+				break
+			}
+		}
+
 	case "open_state", "priority_rank", "aging", "overdue", "due_soon", "blocked":
 		e.snapshotMetric(d, ev, p, units)
 

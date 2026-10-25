@@ -275,18 +275,28 @@ type Portfolio struct {
 	Delivered PortfolioDelivered `json:"delivered"`
 }
 
+// UserCount pairs a person with one count.
+type UserCount struct {
+	User  UserRef `json:"user"`
+	Count int     `json:"count"`
+}
+
 // PersonReport is one member's slice of one project.
 type PersonReport struct {
-	Scope      Scope        `json:"scope"`
-	User       UserRef      `json:"user"`
-	Delivered  Tile         `json:"delivered"`
-	TopRank    int          `json:"top_rank_handled"`
-	OpenNow    int          `json:"open_now"`
-	Comments   int          `json:"comments"`
-	Created    int          `json:"created"`
-	Weekly     []WeekPoint  `json:"weekly"`
-	ByCycle    []CycleCount `json:"by_cycle"`
-	CreditRule string       `json:"credit_rule"`
+	Scope     Scope        `json:"scope"`
+	User      UserRef      `json:"user"`
+	Delivered Tile         `json:"delivered"`
+	TopRank   int          `json:"top_rank_handled"`
+	OpenNow   int          `json:"open_now"`
+	Comments  int          `json:"comments"`
+	Created   int          `json:"created"`
+	Weekly    []WeekPoint  `json:"weekly"`
+	ByCycle   []CycleCount `json:"by_cycle"`
+	Bands     []BandCount  `json:"bands"`
+	// WorkedWith lists the people who shared credit on this person's delivered
+	// items over the window.
+	WorkedWith []UserCount `json:"worked_with"`
+	CreditRule string      `json:"credit_rule"`
 }
 
 // CycleCount pairs a cycle with one count.

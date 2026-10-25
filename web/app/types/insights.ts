@@ -211,6 +211,11 @@ export interface InsightsPortfolio {
   };
 }
 
+export interface UserCount {
+  user: InsightsUser;
+  count: number;
+}
+
 export interface PersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
@@ -221,6 +226,8 @@ export interface PersonInsights {
   created: number;
   weekly: WeekPoint[];
   by_cycle: { cycle: InsightsCycle; count: number }[];
+  bands: BandCount[];
+  worked_with: UserCount[];
   credit_rule: string;
 }
 

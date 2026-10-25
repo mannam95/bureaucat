@@ -423,7 +423,7 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person], 
               <button class="mb-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" @click="setQuery({ person: undefined })">
                 <ArrowLeft class="size-3" /> Back to the project report
               </button>
-              <PersonSection :person="person" @open="(m, uid) => openEvidence(m, { user_id: uid })" />
+              <PersonSection :person="person" :project-key="q.project" :win="win" @open="(m, uid) => openEvidence(m, { user_id: uid })" />
             </div>
           </template>
           <template v-else>
