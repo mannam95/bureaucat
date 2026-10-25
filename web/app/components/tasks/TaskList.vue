@@ -22,6 +22,9 @@ const props = withDefaults(
     // column, resolved per task via its project_key.
     showWorkspace?: boolean;
     workspaceByProject?: Record<string, string>;
+    // Multi-project flat lists: per-project identity chip rendered beside the
+    // task key (icon, or initial on a stable color), full name as tooltip.
+    projectChipByKey?: Record<string, { name: string; iconUrl?: string | null; seed: string }>;
     // Allow expanding a parent task's sub-tasks inline in the list.
     expandable?: boolean;
     // Current sort, for the read-only ▲/▼ indicator on the matching header.
@@ -145,6 +148,7 @@ function subtaskAsTask(sub: Subtask): Task {
         :selected="selected?.has(task.task_number) ?? false"
         :show-workspace="showWorkspace"
         :workspace-name="workspaceFor(task)"
+        :project-chip="projectChipByKey?.[task.project_key]"
         :expandable="expandable"
         :expanded="expanded.has(task.task_number)"
         @updated="emit('updated')"

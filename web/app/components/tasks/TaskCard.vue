@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
 import { complexityBand } from "~/utils/complexity";
+import { getAvatarColor } from "~/utils/avatarColor";
 import type { Task, ProjectState } from "~/types";
 
 const props = withDefaults(
@@ -27,6 +28,14 @@ const props = withDefaults(
     // Renders this row as a nested sub-task: light background, indented ID with a
     // corner marker, and no expand chevron.
     indented?: boolean;
+    // One-line parent identity under the title ("WEB-39 · Payment flow") for a
+    // subtask row whose parent is not in the same list.
+    parentCrumb?: string;
+    // Project identity chip in the ID column for cross-project flat lists: the
+    // icon, or the initial on a stable color derived from the seed (the project
+    // key), with the full name as the tooltip. Never color alone — the key text
+    // stays beside it.
+    projectChip?: { name: string; iconUrl?: string | null; seed: string };
   }>(),
   {
     states: () => [],
@@ -147,8 +156,17 @@ const assignedTo = computed<Person[]>(() =>
         :class="{ 'pl-5': indented }"
       >
         <CornerDownRight v-if="indented" class="size-3.5 shrink-0 text-muted-foreground/50" />
+        <span
+          v-if="projectChip"
+          class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded text-[9px] font-semibold"
+          :class="!projectChip.iconUrl && getAvatarColor(projectChip.seed)"
+          :title="projectChip.name"
+        >
+          <img v-if="projectChip.iconUrl" :src="projectChip.iconUrl" class="size-full object-cover" :alt="projectChip.name" />
+          <template v-else>{{ projectChip.name[0] }}</template>
+        </span>
         <button
-          v-else-if="expandable && (task.subtask_count ?? 0) > 0"
+          v-if="!indented && expandable && (task.subtask_count ?? 0) > 0"
           type="button"
           class="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           :aria-label="expanded ? 'Collapse sub-tasks' : 'Expand sub-tasks'"
@@ -159,7 +177,8 @@ const assignedTo = computed<Person[]>(() =>
         <span class="truncate">{{ task.task_id }}</span>
       </span>
 
-      <!-- Col 2: Title (+ up to two area chips) -->
+      <!-- Col 2: Title (+ up to two area chips, + a parent crumb for orphan subtask rows) -->
+      <span class="flex min-w-0 flex-col justify-center">
       <span class="flex min-w-0 items-center gap-1.5">
         <span class="truncate text-sm font-medium min-w-0">{{ task.title }}</span>
         <template v-if="task.areas?.length">
@@ -180,6 +199,8 @@ const assignedTo = computed<Person[]>(() =>
             +{{ task.areas.length - 2 }}
           </span>
         </template>
+      </span>
+      <span v-if="parentCrumb" class="truncate text-[11px] text-muted-foreground">↳ {{ parentCrumb }}</span>
       </span>
 
       <!-- Col 3: State badge (editable for members) -->

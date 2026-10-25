@@ -619,16 +619,18 @@ ORDER BY pl.name ASC;
 -- name: ListTasksByAssignee :many
 SELECT t.id, t.project_id, t.task_number, t.title, t.state_id,
        t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank,
-       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color
+       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color,
+       t.parent_task_id, parent.task_number as parent_task_number, parent.title as parent_title
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN task_assignees ta ON t.id = ta.task_id
+LEFT JOIN tasks parent ON t.parent_task_id = parent.id
 WHERE ta.user_id = $1 AND t.deleted_at IS NULL AND p.deleted_at IS NULL
   AND ps.state_type NOT IN ('completed', 'cancelled')
   AND (sqlc.narg('workspace_id')::uuid IS NULL OR p.workspace_id = sqlc.narg('workspace_id'))
-ORDER BY t.updated_at DESC
+ORDER BY p.name ASC, p.project_key ASC, t.updated_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountTasksByAssignee :one

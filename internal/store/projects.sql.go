@@ -3453,16 +3453,18 @@ func (q *Queries) ListTaskWatchers(ctx context.Context, taskID uuid.UUID) ([]Lis
 const listTasksByAssignee = `-- name: ListTasksByAssignee :many
 SELECT t.id, t.project_id, t.task_number, t.title, t.state_id,
        t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank,
-       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color
+       p.project_key, ps.name as state_name, ps.state_type, ps.color as state_color,
+       t.parent_task_id, parent.task_number as parent_task_number, parent.title as parent_title
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN task_assignees ta ON t.id = ta.task_id
+LEFT JOIN tasks parent ON t.parent_task_id = parent.id
 WHERE ta.user_id = $1 AND t.deleted_at IS NULL AND p.deleted_at IS NULL
   AND ps.state_type NOT IN ('completed', 'cancelled')
   AND ($4::uuid IS NULL OR p.workspace_id = $4)
-ORDER BY t.updated_at DESC
+ORDER BY p.name ASC, p.project_key ASC, t.updated_at DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -3474,19 +3476,22 @@ type ListTasksByAssigneeParams struct {
 }
 
 type ListTasksByAssigneeRow struct {
-	ID            uuid.UUID   `json:"id"`
-	ProjectID     uuid.UUID   `json:"project_id"`
-	TaskNumber    int32       `json:"task_number"`
-	Title         string      `json:"title"`
-	StateID       uuid.UUID   `json:"state_id"`
-	PriorityID    uuid.UUID   `json:"priority_id"`
-	PriorityName  string      `json:"priority_name"`
-	PriorityColor pgtype.Text `json:"priority_color"`
-	PriorityRank  int32       `json:"priority_rank"`
-	ProjectKey    string      `json:"project_key"`
-	StateName     string      `json:"state_name"`
-	StateType     string      `json:"state_type"`
-	StateColor    pgtype.Text `json:"state_color"`
+	ID               uuid.UUID   `json:"id"`
+	ProjectID        uuid.UUID   `json:"project_id"`
+	TaskNumber       int32       `json:"task_number"`
+	Title            string      `json:"title"`
+	StateID          uuid.UUID   `json:"state_id"`
+	PriorityID       uuid.UUID   `json:"priority_id"`
+	PriorityName     string      `json:"priority_name"`
+	PriorityColor    pgtype.Text `json:"priority_color"`
+	PriorityRank     int32       `json:"priority_rank"`
+	ProjectKey       string      `json:"project_key"`
+	StateName        string      `json:"state_name"`
+	StateType        string      `json:"state_type"`
+	StateColor       pgtype.Text `json:"state_color"`
+	ParentTaskID     pgtype.UUID `json:"parent_task_id"`
+	ParentTaskNumber pgtype.Int4 `json:"parent_task_number"`
+	ParentTitle      pgtype.Text `json:"parent_title"`
 }
 
 func (q *Queries) ListTasksByAssignee(ctx context.Context, arg ListTasksByAssigneeParams) ([]ListTasksByAssigneeRow, error) {
@@ -3517,6 +3522,9 @@ func (q *Queries) ListTasksByAssignee(ctx context.Context, arg ListTasksByAssign
 			&i.StateName,
 			&i.StateType,
 			&i.StateColor,
+			&i.ParentTaskID,
+			&i.ParentTaskNumber,
+			&i.ParentTitle,
 		); err != nil {
 			return nil, err
 		}

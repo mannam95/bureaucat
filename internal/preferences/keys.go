@@ -195,6 +195,12 @@ func init() {
 		Validate: boolValue,
 	})
 	register(Definition{
+		Key: "dashboard.tasks_view", Scope: ScopeGlobal, ValueVersion: 1, MaxBytes: scalarMax,
+		// "Assigned to You" layout: grouped by project (the default) or flat.
+		Default:  json.RawMessage(`"grouped"`),
+		Validate: stringOneOf("grouped", "flat"),
+	})
+	register(Definition{
 		Key: "notifications.email_enabled", Scope: ScopeGlobal, ValueVersion: 1, MaxBytes: scalarMax,
 		// Defaults to true: users receive email notifications unless they opt out
 		// in Settings. In-app notifications are unaffected by this preference.

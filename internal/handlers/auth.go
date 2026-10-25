@@ -482,6 +482,11 @@ type MyTaskItem struct {
 	PriorityRank  int32            `json:"priority_rank"`
 	Assignees     []MyTaskAssignee `json:"assignees"`
 	CommentCount  int              `json:"comment_count"`
+	// Parent identity for subtask rows: grouped views nest a child under its
+	// parent when the parent is also assigned, and show a crumb otherwise.
+	ParentTaskID  *uuid.UUID `json:"parent_task_id,omitempty"`
+	ParentTaskKey string     `json:"parent_task_key,omitempty"`
+	ParentTitle   string     `json:"parent_title,omitempty"`
 }
 
 // MyTasksResponse represents the paginated response for user's assigned tasks.
@@ -583,6 +588,14 @@ func (h *AuthHandler) MyTasks(c *echo.Context) error {
 			PriorityRank:  t.PriorityRank,
 			Assignees:     assignees,
 			CommentCount:  int(commentCount),
+		}
+		if t.ParentTaskID.Valid {
+			pid := uuid.UUID(t.ParentTaskID.Bytes)
+			items[i].ParentTaskID = &pid
+			if t.ParentTaskNumber.Valid {
+				items[i].ParentTaskKey = t.ProjectKey + "-" + strconv.Itoa(int(t.ParentTaskNumber.Int32))
+			}
+			items[i].ParentTitle = t.ParentTitle.String
 		}
 	}
 

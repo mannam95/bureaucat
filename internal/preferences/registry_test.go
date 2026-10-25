@@ -87,6 +87,7 @@ func TestCheckValidValues(t *testing.T) {
 		{"tasks.detail.activity_sort", ScopeGlobal, `"oldest"`},
 		{"tasks.list.page_size", ScopeGlobal, `50`},
 		{"dashboard.show_all_workspaces", ScopeGlobal, `true`},
+		{"dashboard.tasks_view", ScopeGlobal, `"flat"`},
 		{"notifications.email_enabled", ScopeGlobal, `false`},
 		{"notifications.email_events", ScopeGlobal, `{"assigned":false,"activity":true}`},
 		{"navigation.last_workspace_id", ScopeGlobal, `""`},
@@ -118,6 +119,7 @@ func TestCheckInvalidValues(t *testing.T) {
 		{"tasks.list.page_size", ScopeGlobal, `"50"`},          // string, not int
 		{"navigation.last_workspace_id", ScopeGlobal, `"not-a-uuid"`},
 		{"dashboard.show_all_workspaces", ScopeGlobal, `1`}, // number, not bool
+		{"dashboard.tasks_view", ScopeGlobal, `"board"`},    // not grouped/flat
 		{"tasks.list.view_state", ScopeProject, `[]`},       // array, not object
 		{"tasks.list.view_state", ScopeProject, `"x"`},      // string, not object
 	}

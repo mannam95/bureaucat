@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-vue-next";
-import type { Project, Task, ProjectState } from "~/types";
+import type { Project, Task, ProjectState, Cycle } from "~/types";
 
 definePageMeta({
   middleware: ["auth"],
@@ -103,6 +103,9 @@ interface MyTask {
   priority_rank: number;
   assignees: MyTaskAssignee[];
   comment_count: number;
+  parent_task_id?: string;
+  parent_task_key?: string;
+  parent_title?: string;
 }
 
 interface MyTasksResponse {
@@ -118,6 +121,14 @@ const myTasksTotal = ref(0);
 const myTasksLoading = ref(false);
 const myTasksPage = ref(1);
 const myTasksTotalPages = ref(0);
+
+// "By project" (grouped, the default) vs "Flat" for cross-project sorting.
+// Durable preference, like the all-workspaces toggle.
+const tasksView = usePreferences().globalRef<"grouped" | "flat">("dashboard.tasks_view", "grouped");
+
+// Grouped mode loads one large page so groups and their counts are whole;
+// flat mode keeps the classic pagination. 100 is the API's per_page cap.
+const GROUPED_PAGE_SIZE = 100;
 
 // Adapt the dashboard's lightweight MyTask shape to the full Task shape so we
 // can render the shared TaskList/TaskCard component. Fields the dashboard API
@@ -160,7 +171,9 @@ const myTasksAsTask = computed<Task[]>(() =>
 async function fetchMyTasks() {
   myTasksLoading.value = true;
   try {
-    let url = `/api/v1/me/tasks?per_page=20&page=${myTasksPage.value}`;
+    const perPage = tasksView.value === "grouped" ? GROUPED_PAGE_SIZE : 20;
+    const page = tasksView.value === "grouped" ? 1 : myTasksPage.value;
+    let url = `/api/v1/me/tasks?per_page=${perPage}&page=${page}`;
     // Scope to the active workspace unless the user opted into all workspaces.
     if (!showAllWorkspaces.value && currentWorkspace.value) {
       url += `&workspace_id=${currentWorkspace.value.id}`;
@@ -192,6 +205,62 @@ watch([currentWorkspace, showAllWorkspaces], () => {
   myTasksPage.value = 1;
   fetchMyTasks();
 });
+
+// Switching between grouped and flat changes the page size, so refetch.
+watch(tasksView, () => {
+  myTasksPage.value = 1;
+  fetchMyTasks();
+});
+
+// Parent identity maps for the grouped view: nest a child under its assigned
+// parent, or carry the parent as a crumb when the parent is not in the list.
+const parentIdByTask = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {};
+  for (const t of myTasks.value) {
+    if (t.parent_task_id) map[t.id] = t.parent_task_id;
+  }
+  return map;
+});
+const parentCrumbByTask = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {};
+  for (const t of myTasks.value) {
+    if (t.parent_task_key) map[t.id] = `${t.parent_task_key} · ${t.parent_title ?? ""}`.trim();
+  }
+  return map;
+});
+
+// Project identity (name + icon) for group headers and flat-mode chips,
+// resolved from the full project list.
+const projectMeta = computed<Record<string, { name: string; iconUrl?: string | null }>>(() => {
+  const map: Record<string, { name: string; iconUrl?: string | null }> = {};
+  for (const p of allProjects.value) {
+    map[p.project_key] = { name: p.name, iconUrl: p.icon_url };
+  }
+  return map;
+});
+const projectChipByKey = computed<Record<string, { name: string; iconUrl?: string | null; seed: string }>>(() => {
+  const map: Record<string, { name: string; iconUrl?: string | null; seed: string }> = {};
+  for (const [key, meta] of Object.entries(projectMeta.value)) {
+    map[key] = { ...meta, seed: key };
+  }
+  return map;
+});
+
+// Active cycles across the user's projects, for the group headers'
+// "Sprint 2 · day 10 of 14" chip.
+const { listActiveCycles } = useCycles();
+const activeCycleByKey = ref<Record<string, Cycle>>({});
+
+async function fetchActiveCycles() {
+  const res = await listActiveCycles();
+  if (res.success && res.data) {
+    const map: Record<string, Cycle> = {};
+    for (const c of res.data) {
+      if (c.project_key) map[c.project_key] = c;
+    }
+    activeCycleByKey.value = map;
+  }
+}
 
 function goToMyTasksPage(p: number) {
   myTasksPage.value = p;
@@ -288,6 +357,7 @@ onMounted(async () => {
   fetchProjects();
   fetchAllProjects();
   fetchMyTasks();
+  fetchActiveCycles();
 
   window.addEventListener("resize", onResize);
   nextTick(syncCardWidths);
@@ -348,6 +418,26 @@ onBeforeUnmount(() => {
               </span>
             </h2>
             <div class="flex items-center gap-4">
+              <!-- By project (grouped, default) vs Flat for cross-project sorting. -->
+              <div class="flex items-center rounded-md border p-0.5" role="group" aria-label="Task list layout">
+                <button
+                  type="button"
+                  class="rounded px-2 py-1 text-xs transition-colors"
+                  :class="tasksView === 'grouped' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'"
+                  @click="tasksView = 'grouped'"
+                >
+                  By project
+                </button>
+                <button
+                  type="button"
+                  class="rounded px-2 py-1 text-xs transition-colors"
+                  :class="tasksView === 'flat' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'"
+                  title="One sortable list across projects; the icon chip and the task key carry the project identity"
+                  @click="tasksView = 'flat'"
+                >
+                  Flat
+                </button>
+              </div>
               <div class="flex items-center gap-2">
                 <Switch
                   id="all-workspaces"
@@ -377,6 +467,25 @@ onBeforeUnmount(() => {
             No tasks assigned to you
           </div>
 
+          <template v-else-if="tasksView === 'grouped'">
+            <DashboardTaskGroups
+              :tasks="myTasksAsTask"
+              :parent-id-by-task="parentIdByTask"
+              :parent-crumb-by-task="parentCrumbByTask"
+              :project-meta="projectMeta"
+              :active-cycle-by-key="activeCycleByKey"
+              :states-by-project="statesByProject"
+              :is-member-by-project="isMemberByProject"
+              :show-workspace="showAllWorkspaces"
+              :workspace-by-project="workspaceByProject"
+              @updated="fetchMyTasks"
+            />
+            <p v-if="myTasksTotal > GROUPED_PAGE_SIZE" class="mt-3 text-xs text-muted-foreground">
+              Showing the {{ GROUPED_PAGE_SIZE }} most recently updated of {{ myTasksTotal }} tasks — switch to Flat
+              for the full paginated list.
+            </p>
+          </template>
+
           <TaskList
             v-else
             :tasks="myTasksAsTask"
@@ -384,11 +493,12 @@ onBeforeUnmount(() => {
             :is-member-by-project="isMemberByProject"
             :show-workspace="showAllWorkspaces"
             :workspace-by-project="workspaceByProject"
+            :project-chip-by-key="projectChipByKey"
             @updated="fetchMyTasks"
           />
 
           <div
-            v-if="myTasksTotalPages > 1"
+            v-if="tasksView === 'flat' && myTasksTotalPages > 1"
             class="mt-4 flex items-center justify-end gap-2"
           >
             <Button
