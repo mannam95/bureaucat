@@ -275,6 +275,23 @@ type Querier interface {
 	ListGraphProjectOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphProjectOptionsRow, error)
 	ListGraphUserOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphUserOptionsRow, error)
 	ListGraphWorkspaceOptions(ctx context.Context, viewerID pgtype.UUID) ([]ListGraphWorkspaceOptionsRow, error)
+	// Only the event types the reconstruction needs, oldest first so the engine
+	// can replay them without re-sorting.
+	ListInsightsActivity(ctx context.Context, arg ListInsightsActivityParams) ([]ListInsightsActivityRow, error)
+	ListInsightsAssignees(ctx context.Context, projectID uuid.UUID) ([]ListInsightsAssigneesRow, error)
+	// Tasks blocked by at least one blocker that is itself still open. Blocked is
+	// a relationship, not a state name, so it works in every project vocabulary.
+	ListInsightsBlockedTasks(ctx context.Context, projectID uuid.UUID) ([]uuid.UUID, error)
+	ListInsightsContributors(ctx context.Context, projectID uuid.UUID) ([]ListInsightsContributorsRow, error)
+	// Current cycle membership with its own timestamp: the replay's anchor when a
+	// membership predates activity logging (imports, direct store writes).
+	ListInsightsCycleTasks(ctx context.Context, projectID uuid.UUID) ([]ListInsightsCycleTasksRow, error)
+	ListInsightsCycles(ctx context.Context, projectID uuid.UUID) ([]ListInsightsCyclesRow, error)
+	// ==================== INSIGHTS ====================
+	// Bulk reads for the insights engine, which reconstructs delivery reporting
+	// from the activity log. Each query loads one dimension of a whole project in
+	// a single round trip; the engine joins them in memory.
+	ListInsightsTasks(ctx context.Context, projectID uuid.UUID) ([]ListInsightsTasksRow, error)
 	ListLabelsForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListLabelsForTasksRow, error)
 	ListModuleMembers(ctx context.Context, moduleID uuid.UUID) ([]ListModuleMembersRow, error)
 	// Used for hydrating the list view with member avatars. Returns up to 4 members
@@ -371,6 +388,7 @@ type Querier interface {
 	ListUserProjectsFiltered(ctx context.Context, arg ListUserProjectsFilteredParams) ([]ListUserProjectsFilteredRow, error)
 	ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]Workspace, error)
 	ListUserWorkspacesFiltered(ctx context.Context, arg ListUserWorkspacesFilteredParams) ([]Workspace, error)
+	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]ListUsersByIDsRow, error)
 	// One page of users in the selected state, filtered by an optional search.
 	// Actor names for who deactivated/deleted are folded in via LEFT JOINs and
 	// COALESCEd to non-null strings ('' when unknown).

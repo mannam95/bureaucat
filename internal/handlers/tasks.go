@@ -2128,11 +2128,20 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		}
 	}
 	if cycleID != nil {
-		_ = h.store.AddTasksToCycle(ctx, store.AddTasksToCycleParams{
+		if err := h.store.AddTasksToCycle(ctx, store.AddTasksToCycleParams{
 			CycleID: *cycleID,
 			AddedBy: userID,
 			TaskIds: []uuid.UUID{copyTask.ID},
-		})
+		}); err == nil {
+			// Logged like AddCycleTasks does, so cycle membership stays
+			// reconstructable from the activity log for copies too.
+			h.activityService.LogActivity(ctx, activity.LogActivityParams{
+				TaskID:       copyTask.ID,
+				ActivityType: activity.CycleAdded,
+				ActorID:      userID,
+				NewValue:     map[string]interface{}{"cycle_id": cycleID.String()},
+			})
+		}
 	}
 
 	// Sub-tasks come along, starting in the chosen state.

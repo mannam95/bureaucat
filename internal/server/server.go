@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
@@ -19,6 +20,7 @@ import (
 	"bereaucat/internal/activity"
 	"bereaucat/internal/auth"
 	"bereaucat/internal/handlers"
+	"bereaucat/internal/insights"
 	"bereaucat/internal/notifications"
 	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
@@ -61,6 +63,7 @@ type Server struct {
 	feedbackHandler      *handlers.FeedbackHandler
 	searchHandler        *handlers.SearchHandler
 	releasesHandler      *handlers.ReleasesHandler
+	insightsHandler      *handlers.InsightsHandler
 	activityService      *activity.Service
 	notificationService  *notifier.Service
 	notificationsService *notifications.Service
@@ -129,6 +132,19 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 
 		srv.authHandler = handlers.NewAuthHandler(srv.store, srv.authManager, devMode, superAdminEmail)
 		srv.adminHandler = handlers.NewAdminHandler(srv.store, srv.pool, srv.authManager, devMode, superAdminEmail, smtpCfg)
+
+		// Insights reports in one instance-wide timezone so two people in a
+		// meeting see identical numbers; the viewer's browser timezone is
+		// never used. Unset or invalid REPORT_TIMEZONE means UTC.
+		reportTZ := time.UTC
+		if name := strings.TrimSpace(os.Getenv("REPORT_TIMEZONE")); name != "" {
+			if loc, err := time.LoadLocation(name); err == nil {
+				reportTZ = loc
+			} else {
+				log.Printf("insights: invalid REPORT_TIMEZONE %q, using UTC: %v", name, err)
+			}
+		}
+		srv.insightsHandler = handlers.NewInsightsHandler(srv.store, insights.New(srv.store, reportTZ), reportTZ)
 
 		// Initialize upload service (S3-backed)
 		maxUploadSize := int64(10 * 1024 * 1024) // 10MB default

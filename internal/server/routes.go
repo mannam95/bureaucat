@@ -151,6 +151,11 @@ func (s *Server) registerRoutes() {
 		protected.GET("/graph", s.adminHandler.GetMyTaskGraph)
 		protected.GET("/graph/filters", s.adminHandler.GetMyTaskGraphFilters)
 
+		// Insights: delivery reporting reconstructed from the activity log.
+		// The portfolio sums only the viewer's projects; the per-project
+		// routes live under the project middleware below.
+		protected.GET("/insights/portfolio", s.insightsHandler.Portfolio)
+
 		// File uploads (authenticated)
 		if s.uploadHandler != nil {
 			protected.POST("/uploads", s.uploadHandler.Upload)
@@ -350,6 +355,11 @@ func (s *Server) registerRoutes() {
 				// Task contributors
 				projectGroup.POST("/tasks/:taskNum/contributors", s.taskHandler.AddContributor, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/contributors/:userId", s.taskHandler.RemoveContributor, auth.ProjectRoleMiddleware("member"))
+
+				// Insights (project-scoped)
+				projectGroup.GET("/insights", s.insightsHandler.ProjectReport)
+				projectGroup.GET("/insights/person/:userId", s.insightsHandler.PersonReport)
+				projectGroup.GET("/insights/evidence", s.insightsHandler.Evidence)
 
 				// Task labels
 				// Task areas
