@@ -47,6 +47,12 @@ export interface Task {
   parent_task_number?: number;
   parent_task_title?: string;
   subtask_count?: number;
+  /** Tree-mode list annotations (subtasks=expandable with an active filter):
+   *  the parent is only context for a matching subtask, N children are hidden
+   *  by the filter, and the matching children ride along one level deep. */
+  context_only?: boolean;
+  hidden_subtasks?: number;
+  subtasks?: Task[];
   cycle_id?: string;
   cycle_title?: string;
   modules?: TaskModule[];
@@ -107,6 +113,8 @@ export interface PaginatedTasksResponse {
   page: number;
   per_page: number;
   total_pages: number;
+  /** Subtasks matching the filter (subtasks modes only): "71 tasks + 11 subtasks". */
+  subtask_total?: number;
 }
 
 export interface MoveTaskResult {

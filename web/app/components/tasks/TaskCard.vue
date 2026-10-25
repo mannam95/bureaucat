@@ -31,6 +31,9 @@ const props = withDefaults(
     // One-line parent identity under the title ("WEB-39 · Payment flow") for a
     // subtask row whose parent is not in the same list.
     parentCrumb?: string;
+    // Dims a row kept only as context — a parent shown because one of its
+    // subtasks matches the active filter, not because it matches itself.
+    muted?: boolean;
     // Project identity chip in the ID column for cross-project flat lists: the
     // icon, or the initial on a stable color derived from the seed (the project
     // key), with the full name as the tooltip. Never color alone — the key text
@@ -131,7 +134,7 @@ const assignedTo = computed<Person[]>(() =>
   <NuxtLink :to="`/projects/${resolvedKey}/tasks/${task.task_number}`" class="block">
     <div
       class="task-row group grid items-center bg-background/50 px-3 py-2.5 transition-colors hover:bg-muted/50"
-      :class="{ selectable, 'has-workspace': showWorkspace, 'bg-accent/40': selectable && selected, 'bg-muted/40 hover:bg-muted/60': indented }"
+      :class="{ selectable, 'has-workspace': showWorkspace, 'bg-accent/40': selectable && selected, 'bg-muted/40 hover:bg-muted/60': indented, 'opacity-70': muted }"
     >
       <!-- Col 0: Selection checkbox (column reserved but empty for nested sub-tasks) -->
       <div v-if="selectable" class="justify-self-center" @click.stop.prevent>

@@ -148,14 +148,20 @@ type TaskResponse struct {
 	ParentTaskNumber *int                  `json:"parent_task_number,omitempty"`
 	ParentTaskTitle  *string               `json:"parent_task_title,omitempty"`
 	SubtaskCount     int                   `json:"subtask_count"`
-	CycleID          *uuid.UUID            `json:"cycle_id,omitempty"`
-	CycleTitle       *string               `json:"cycle_title,omitempty"`
-	Modules          []TaskModuleInfo      `json:"modules,omitempty"`
-	FigmaLink        *string               `json:"figma_link,omitempty"`
-	Branch           *string               `json:"branch,omitempty"`
-	PullRequest      *string               `json:"pull_request,omitempty"`
-	CreatedAt        time.Time             `json:"created_at"`
-	UpdatedAt        time.Time             `json:"updated_at"`
+	// Tree-mode list annotations: a parent kept only because a subtask matched
+	// the filter, how many of its children the filter hides, and the matching
+	// children embedded one level deep.
+	ContextOnly    bool             `json:"context_only,omitempty"`
+	HiddenSubtasks int              `json:"hidden_subtasks,omitempty"`
+	Subtasks       []TaskResponse   `json:"subtasks,omitempty"`
+	CycleID        *uuid.UUID       `json:"cycle_id,omitempty"`
+	CycleTitle     *string          `json:"cycle_title,omitempty"`
+	Modules        []TaskModuleInfo `json:"modules,omitempty"`
+	FigmaLink      *string          `json:"figma_link,omitempty"`
+	Branch         *string          `json:"branch,omitempty"`
+	PullRequest    *string          `json:"pull_request,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 // AssigneeResponse represents a task assignee.
@@ -367,6 +373,9 @@ type PaginatedTasksResponse struct {
 	Page       int            `json:"page"`
 	PerPage    int            `json:"per_page"`
 	TotalPages int            `json:"total_pages"`
+	// SubtaskTotal counts the subtasks matching the filter (subtasks modes
+	// only) — the honest "+ N subtasks" next to the task total.
+	SubtaskTotal int64 `json:"subtask_total,omitempty"`
 }
 
 // ListTasks returns paginated list of tasks.
@@ -382,6 +391,7 @@ type PaginatedTasksResponse struct {
 //	@Param			view		query		string	false	"Saved view slug; used when f is omitted"
 //	@Param			sort_by		query		string	false	"One of: created_at, updated_at, priority, priority_rating, due_date, start_date, title, state"
 //	@Param			sort_dir	query		string	false	"asc or desc"
+//	@Param			subtasks	query		string	false	"Subtask handling: expandable (a matching subtask brings its parent; matching children embedded) or flat (subtasks are ordinary rows). Absent: parents only."
 //	@Success		200			{object}	PaginatedTasksResponse
 //	@Failure		400			{object}	ErrorResponse
 //	@Failure		500			{object}	ErrorResponse
@@ -421,6 +431,17 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 	sortBy := c.QueryParam("sort_by")
 	sortDir := c.QueryParam("sort_dir")
 
+	// Subtask handling (Brief B): "expandable" filters one level deep and keeps
+	// context parents; "flat" makes subtasks ordinary rows. Absent keeps the
+	// legacy parents-only behavior the board and exports rely on.
+	mode := store.FilterModeParents
+	switch c.QueryParam("subtasks") {
+	case "expandable":
+		mode = store.FilterModeTree
+	case "flat":
+		mode = store.FilterModeFlat
+	}
+
 	params := store.FilterListParams{
 		ProjectID: projectID,
 		CallerID:  callerID,
@@ -429,6 +450,7 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 		SortDir:   sortDir,
 		Limit:     int32(perPage),
 		Offset:    int32(offset),
+		Mode:      mode,
 	}
 
 	tasks, err := h.filterRunner.ListTasks(ctx, params)
@@ -441,57 +463,78 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tasks")
 	}
 
-	// Batch-decorate assignees and labels in two queries total.
-	assigneesByTask, labelsByTask, areasByTask, err := h.decorateTasks(ctx, tasks)
+	var subtaskTotal int64
+	if mode != store.FilterModeParents {
+		subtaskTotal, err = h.filterRunner.CountSubtasks(ctx, params)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count subtasks")
+		}
+	}
+
+	// Tree mode with an active filter embeds each parent's matching children:
+	// a matching subtask is visible without expanding anything.
+	filtered := len(tree.Children) > 0
+	var childRows []store.FilteredTaskRow
+	if mode == store.FilterModeTree && filtered {
+		parentIDs := make([]uuid.UUID, 0, len(tasks))
+		for _, t := range tasks {
+			if t.MatchedSubtaskCount > 0 {
+				parentIDs = append(parentIDs, t.ID)
+			}
+		}
+		if len(parentIDs) > 0 {
+			childRows, err = h.filterRunner.ListMatchedSubtasks(ctx, params, parentIDs)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to list matching subtasks")
+			}
+		}
+	}
+
+	// Batch-decorate assignees and labels in two queries total (children ride
+	// along in the same batch).
+	all := make([]store.FilteredTaskRow, 0, len(tasks)+len(childRows))
+	all = append(all, tasks...)
+	all = append(all, childRows...)
+	assigneesByTask, labelsByTask, areasByTask, err := h.decorateTasks(ctx, all)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task associations")
 	}
 
+	toResponse := func(t store.FilteredTaskRow) TaskResponse {
+		r := filteredRowToResponse(t)
+		r.Assignees = assigneesByTask[t.ID]
+		r.Labels = labelsByTask[t.ID]
+		r.Areas = areasByTask[t.ID]
+		if r.Assignees == nil {
+			r.Assignees = []AssigneeResponse{}
+		}
+		if r.Labels == nil {
+			r.Labels = []TaskLabelInfo{}
+		}
+		if r.Areas == nil {
+			r.Areas = []TaskAreaInfo{}
+		}
+		return r
+	}
+
+	childByParent := map[uuid.UUID][]TaskResponse{}
+	for _, ct := range childRows {
+		if !ct.ParentTaskID.Valid {
+			continue
+		}
+		pid := uuid.UUID(ct.ParentTaskID.Bytes)
+		childByParent[pid] = append(childByParent[pid], toResponse(ct))
+	}
+
 	taskResponses := make([]TaskResponse, len(tasks))
 	for i, t := range tasks {
-		taskResponses[i] = TaskResponse{
-			ID:               t.ID,
-			ProjectKey:       t.ProjectKey,
-			TaskNumber:       int(t.TaskNumber),
-			TaskID:           t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
-			Title:            t.Title,
-			Description:      textToStringPtr(t.Description),
-			StateID:          t.StateID,
-			StateName:        t.StateName,
-			StateType:        t.StateType,
-			StateColor:       textToString(t.StateColor, "#6B7280"),
-			PriorityID:       t.PriorityID,
-			PriorityName:     t.PriorityName,
-			PriorityColor:    textToString(t.PriorityColor, "#6B7280"),
-			PriorityRank:     int(t.PriorityRank),
-			PriorityRating:   int(t.PriorityRating),
-			Difficulty:       int(t.Difficulty),
-			Effort:           int(t.Effort),
-			ComplexityScore:  complexityScore(t.Difficulty, t.Effort),
-			StartDate:        timestamptzToTimePtr(t.StartDate),
-			DueDate:          timestamptzToTimePtr(t.DueDate),
-			CreatedBy:        t.CreatedBy,
-			CreatorUsername:  t.CreatorUsername,
-			CreatorFirstName: t.CreatorFirstName,
-			CreatorLastName:  t.CreatorLastName,
-			CreatorAvatarURL: textToStringPtr(t.CreatorAvatarUrl),
-			Assignees:        assigneesByTask[t.ID],
-			Labels:           labelsByTask[t.ID],
-			Areas:            areasByTask[t.ID],
-			CommentCount:     int(t.CommentCount),
-			SubtaskCount:     int(t.SubtaskCount),
-			CreatedAt:        t.CreatedAt.Time,
-			UpdatedAt:        t.UpdatedAt.Time,
+		r := toResponse(t)
+		if mode == store.FilterModeTree && filtered {
+			r.ContextOnly = !t.SelfMatched
+			r.HiddenSubtasks = int(t.SubtaskCount - t.MatchedSubtaskCount)
+			r.Subtasks = childByParent[t.ID]
 		}
-		if taskResponses[i].Assignees == nil {
-			taskResponses[i].Assignees = []AssigneeResponse{}
-		}
-		if taskResponses[i].Labels == nil {
-			taskResponses[i].Labels = []TaskLabelInfo{}
-		}
-		if taskResponses[i].Areas == nil {
-			taskResponses[i].Areas = []TaskAreaInfo{}
-		}
+		taskResponses[i] = r
 	}
 
 	totalPages := int(total) / perPage
@@ -500,12 +543,62 @@ func (h *TaskHandler) ListTasks(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, PaginatedTasksResponse{
-		Tasks:      taskResponses,
-		Total:      total,
-		Page:       page,
-		PerPage:    perPage,
-		TotalPages: totalPages,
+		Tasks:        taskResponses,
+		Total:        total,
+		Page:         page,
+		PerPage:      perPage,
+		TotalPages:   totalPages,
+		SubtaskTotal: subtaskTotal,
 	})
+}
+
+// filteredRowToResponse maps a filter-runner row into the response shape; the
+// caller attaches the batch-decorated associations.
+func filteredRowToResponse(t store.FilteredTaskRow) TaskResponse {
+	r := TaskResponse{
+		ID:               t.ID,
+		ProjectKey:       t.ProjectKey,
+		TaskNumber:       int(t.TaskNumber),
+		TaskID:           t.ProjectKey + "-" + strconv.Itoa(int(t.TaskNumber)),
+		Title:            t.Title,
+		Description:      textToStringPtr(t.Description),
+		StateID:          t.StateID,
+		StateName:        t.StateName,
+		StateType:        t.StateType,
+		StateColor:       textToString(t.StateColor, "#6B7280"),
+		PriorityID:       t.PriorityID,
+		PriorityName:     t.PriorityName,
+		PriorityColor:    textToString(t.PriorityColor, "#6B7280"),
+		PriorityRank:     int(t.PriorityRank),
+		PriorityRating:   int(t.PriorityRating),
+		Difficulty:       int(t.Difficulty),
+		Effort:           int(t.Effort),
+		ComplexityScore:  complexityScore(t.Difficulty, t.Effort),
+		StartDate:        timestamptzToTimePtr(t.StartDate),
+		DueDate:          timestamptzToTimePtr(t.DueDate),
+		CreatedBy:        t.CreatedBy,
+		CreatorUsername:  t.CreatorUsername,
+		CreatorFirstName: t.CreatorFirstName,
+		CreatorLastName:  t.CreatorLastName,
+		CreatorAvatarURL: textToStringPtr(t.CreatorAvatarUrl),
+		CommentCount:     int(t.CommentCount),
+		SubtaskCount:     int(t.SubtaskCount),
+		CreatedAt:        t.CreatedAt.Time,
+		UpdatedAt:        t.UpdatedAt.Time,
+	}
+	if t.ParentTaskID.Valid {
+		pid := uuid.UUID(t.ParentTaskID.Bytes)
+		r.ParentTaskID = &pid
+	}
+	if t.ParentTaskNumber.Valid {
+		n := int(t.ParentTaskNumber.Int32)
+		r.ParentTaskNumber = &n
+	}
+	if t.ParentTitle.Valid {
+		v := t.ParentTitle.String
+		r.ParentTaskTitle = &v
+	}
+	return r
 }
 
 // resolveListFilter picks the filter tree for a list request. Precedence:

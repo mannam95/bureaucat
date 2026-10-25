@@ -272,3 +272,38 @@ func TestCompileRejectsEmptyFilterNode(t *testing.T) {
 		t.Fatalf("want predicate-required error, got %v", err)
 	}
 }
+
+func TestRewriteForChildRemapsOnlyBaseAliases(t *testing.T) {
+	// Covers every base alias (t, ps, pp, p) plus a correlated EXISTS whose
+	// own aliases (ta.) and correlation (t.id → cst.id) must survive the remap.
+	in := "(t.difficulty * t.effort) >= $2 AND ps.state_type::text = ANY($3::text[]) AND pp.rank >= 2 AND p.project_key = $4 AND EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = ANY($5::uuid[]))"
+	got := rewriteForChild(in)
+	want := "(cst.difficulty * cst.effort) >= $2 AND csps.state_type::text = ANY($3::text[]) AND cspp.rank >= 2 AND csp.project_key = $4 AND EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = cst.id AND ta.user_id = ANY($5::uuid[]))"
+	if got != want {
+		t.Fatalf("rewriteForChild mismatch:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildModeWhere(t *testing.T) {
+	conds := "t.title ILIKE $2"
+	// Legacy: parents only, filter on parents.
+	if got := buildModeWhere(FilterModeParents, conds); !strings.Contains(got, "t.parent_task_id IS NULL") || !strings.Contains(got, conds) {
+		t.Fatalf("parents mode: %q", got)
+	}
+	// Tree: a matching subtask brings its parent along.
+	tree := buildModeWhere(FilterModeTree, conds)
+	if !strings.Contains(tree, "t.parent_task_id IS NULL") ||
+		!strings.Contains(tree, "OR EXISTS") ||
+		!strings.Contains(tree, "cst.title ILIKE $2") {
+		t.Fatalf("tree mode: %q", tree)
+	}
+	// Tree without a filter stays plain parents.
+	if got := buildModeWhere(FilterModeTree, ""); got != " AND t.parent_task_id IS NULL" {
+		t.Fatalf("tree mode unfiltered: %q", got)
+	}
+	// Flat: no parent constraint at all.
+	flat := buildModeWhere(FilterModeFlat, conds)
+	if strings.Contains(flat, "parent_task_id") || !strings.Contains(flat, conds) {
+		t.Fatalf("flat mode: %q", flat)
+	}
+}

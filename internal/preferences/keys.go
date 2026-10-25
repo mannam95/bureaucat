@@ -178,6 +178,12 @@ func init() {
 		Validate: intOneOf(20, 50, 100),
 	})
 	register(Definition{
+		Key: "tasks.list.subtasks", Scope: ScopeGlobal, ValueVersion: 1, MaxBytes: scalarMax,
+		// Task list subtask handling: expandable tree (the default) or flat rows.
+		Default:  json.RawMessage(`"expandable"`),
+		Validate: stringOneOf("expandable", "flat"),
+	})
+	register(Definition{
 		Key: "app.theme", Scope: ScopeGlobal, ValueVersion: 1, MaxBytes: scalarMax,
 		Default:  json.RawMessage(`"light"`),
 		Validate: stringOneOf("light", "dark", "system"),

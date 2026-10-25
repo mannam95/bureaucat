@@ -86,6 +86,7 @@ func TestCheckValidValues(t *testing.T) {
 		{"cycles.detail.panel_visible", ScopeGlobal, `false`},
 		{"tasks.detail.activity_sort", ScopeGlobal, `"oldest"`},
 		{"tasks.list.page_size", ScopeGlobal, `50`},
+		{"tasks.list.subtasks", ScopeGlobal, `"flat"`},
 		{"dashboard.show_all_workspaces", ScopeGlobal, `true`},
 		{"dashboard.tasks_view", ScopeGlobal, `"flat"`},
 		{"notifications.email_enabled", ScopeGlobal, `false`},
@@ -117,6 +118,7 @@ func TestCheckInvalidValues(t *testing.T) {
 		{"cycles.detail.panel_visible", ScopeGlobal, `"true"`}, // string, not bool
 		{"tasks.list.page_size", ScopeGlobal, `7`},             // not 20/50/100
 		{"tasks.list.page_size", ScopeGlobal, `"50"`},          // string, not int
+		{"tasks.list.subtasks", ScopeGlobal, `"tree"`},         // not expandable/flat
 		{"navigation.last_workspace_id", ScopeGlobal, `"not-a-uuid"`},
 		{"dashboard.show_all_workspaces", ScopeGlobal, `1`}, // number, not bool
 		{"dashboard.tasks_view", ScopeGlobal, `"board"`},    // not grouped/flat

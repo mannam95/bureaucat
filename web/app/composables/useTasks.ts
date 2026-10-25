@@ -19,6 +19,7 @@ interface TasksState {
   currentTask: Task | null;
   loading: boolean;
   total: number;
+  subtaskTotal: number;
   page: number;
   perPage: number;
   totalPages: number;
@@ -29,6 +30,7 @@ const state = reactive<TasksState>({
   currentTask: null,
   loading: false,
   total: 0,
+  subtaskTotal: 0,
   page: 1,
   perPage: 20,
   totalPages: 0,
@@ -50,6 +52,12 @@ export interface ListTasksOptions {
    * `tree` is empty. Safe to set alongside a tree for informational purposes.
    */
   viewSlug?: string | null;
+  /**
+   * Subtask handling: "expandable" (one-level tree; a matching subtask brings
+   * its parent along) or "flat" (subtasks as ordinary rows). Absent keeps the
+   * parents-only behavior the board and exports rely on.
+   */
+  subtasksMode?: "expandable" | "flat";
 }
 
 export function useTasks() {
@@ -69,6 +77,7 @@ export function useTasks() {
     if (opts.sortBy) params.set("sort_by", opts.sortBy);
     if (opts.sortDir) params.set("sort_dir", opts.sortDir);
     if (opts.viewSlug) params.set("view", opts.viewSlug);
+    if (opts.subtasksMode) params.set("subtasks", opts.subtasksMode);
     return params.toString();
   }
 
@@ -94,6 +103,7 @@ export function useTasks() {
       const data: PaginatedTasksResponse = await response.json();
       state.tasks = data.tasks || [];
       state.total = data.total;
+      state.subtaskTotal = data.subtask_total ?? 0;
       state.page = data.page;
       state.perPage = data.per_page;
       state.totalPages = data.total_pages;
@@ -919,6 +929,7 @@ export function useTasks() {
     currentTask: computed(() => state.currentTask),
     loading: computed(() => state.loading),
     total: computed(() => state.total),
+    subtaskTotal: computed(() => state.subtaskTotal),
     page: computed(() => state.page),
     perPage: computed(() => state.perPage),
     totalPages: computed(() => state.totalPages),

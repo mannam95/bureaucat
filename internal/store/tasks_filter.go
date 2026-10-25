@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -910,7 +911,30 @@ type FilteredTaskRow struct {
 	CreatorAvatarUrl pgtype.Text
 	CommentCount     int64
 	SubtaskCount     int64
+	ParentTaskID     pgtype.UUID
+	ParentTaskNumber pgtype.Int4
+	ParentTitle      pgtype.Text
+	// Tree-mode annotations: whether the row matched the filter itself (false =
+	// kept as context for a matching subtask) and how many of its children
+	// match. Outside tree mode SelfMatched is TRUE and MatchedSubtaskCount
+	// mirrors SubtaskCount.
+	SelfMatched         bool
+	MatchedSubtaskCount int64
 }
+
+// Filter list modes. The zero value keeps the legacy behavior (parents only,
+// filters on parents), which the board and exports rely on.
+const (
+	// FilterModeParents lists top-level tasks and filters them directly.
+	FilterModeParents = ""
+	// FilterModeTree lists top-level tasks but applies Brief B's rules: a
+	// subtask matching the filter brings its parent along as context, and each
+	// parent reports how many of its children the filter hides.
+	FilterModeTree = "tree"
+	// FilterModeFlat lists every task — subtasks become ordinary rows that
+	// filter and sort for themselves (a child may sort above its parent).
+	FilterModeFlat = "flat"
+)
 
 // FilterListParams describes a paginated task list request.
 type FilterListParams struct {
@@ -921,6 +945,7 @@ type FilterListParams struct {
 	SortDir   string
 	Limit     int32
 	Offset    int32
+	Mode      string    // FilterModeParents, FilterModeTree or FilterModeFlat
 	Now       time.Time // override for tests; zero means time.Now().UTC()
 }
 
@@ -934,20 +959,23 @@ func NewFilterRunner(pool *pgxpool.Pool) *FilterRunner {
 	return &FilterRunner{pool: pool}
 }
 
-const filterSelectBase = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, t.priority_rating, t.difficulty, t.effort, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
+const filterSelectCols = `SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, t.priority_rating, t.difficulty, t.effort, t.created_by, t.start_date, t.due_date, t.created_at, t.updated_at, t.deleted_at,
        p.project_key,
        ps.name as state_name, ps.state_type, ps.color as state_color,
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL)::bigint as comment_count,
-       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count
+       (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
+       t.parent_task_id, pt.task_number as parent_task_number, pt.title as parent_title`
+
+const filterFromBase = `
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
 JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
+LEFT JOIN tasks pt ON t.parent_task_id = pt.id AND pt.deleted_at IS NULL
 WHERE t.project_id = $1
-  AND t.deleted_at IS NULL
-  AND t.parent_task_id IS NULL`
+  AND t.deleted_at IS NULL`
 
 const filterCountBase = `SELECT COUNT(*)
 FROM tasks t
@@ -956,8 +984,96 @@ JOIN project_states ps ON t.state_id = ps.id
 JOIN project_priorities pp ON t.priority_id = pp.id
 JOIN users u ON t.created_by = u.id
 WHERE t.project_id = $1
-  AND t.deleted_at IS NULL
-  AND t.parent_task_id IS NULL`
+  AND t.deleted_at IS NULL`
+
+// childFilterBody is the subtask side of the tree-mode rules. Its aliases are
+// what rewriteForChild rewrites the compiled fragment to, so the same
+// predicates (and the same positional args) run against the children.
+const childFilterBody = `
+FROM tasks cst
+JOIN projects csp ON cst.project_id = csp.id
+JOIN project_states csps ON cst.state_id = csps.id
+JOIN project_priorities cspp ON cst.priority_id = cspp.id
+WHERE cst.parent_task_id = t.id AND cst.deleted_at IS NULL AND `
+
+// childAliasRewrites maps the compiled fragment's aliases onto childFilterBody's.
+// The boundary group keeps composite aliases (ta., ct., tar., …) untouched;
+// pp/ps run before t/p so no rewrite can see another's output.
+var childAliasRewrites = []struct {
+	re   *regexp.Regexp
+	repl string
+}{
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_])pp\.`), "${1}cspp."},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_])ps\.`), "${1}csps."},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_])t\.`), "${1}cst."},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_])p\.`), "${1}csp."},
+}
+
+func rewriteForChild(conds string) string {
+	for _, r := range childAliasRewrites {
+		conds = r.re.ReplaceAllString(conds, r.repl)
+	}
+	return conds
+}
+
+// buildModeWhere renders the mode's WHERE additions. conds is the compiled
+// filter without its leading " AND " (empty when unfiltered).
+func buildModeWhere(mode, conds string) string {
+	switch mode {
+	case FilterModeFlat:
+		if conds == "" {
+			return ""
+		}
+		return " AND " + conds
+	case FilterModeTree:
+		w := " AND t.parent_task_id IS NULL"
+		if conds != "" {
+			// Rule: a matching subtask brings its parent along as context.
+			w += " AND ((" + conds + ") OR EXISTS (SELECT 1" + childFilterBody + "(" + rewriteForChild(conds) + ")))"
+		}
+		return w
+	default:
+		w := " AND t.parent_task_id IS NULL"
+		if conds != "" {
+			w += " AND " + conds
+		}
+		return w
+	}
+}
+
+// extraSelectCols renders the tree-mode annotation columns; outside tree mode
+// (or without a filter) they resolve to their honest defaults.
+func extraSelectCols(mode, conds string) string {
+	selfMatched := "TRUE"
+	matchedSub := "(SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint"
+	if mode == FilterModeTree && conds != "" {
+		selfMatched = "(" + conds + ")"
+		matchedSub = "(SELECT COUNT(*)" + childFilterBody + "(" + rewriteForChild(conds) + "))::bigint"
+	}
+	return ",\n       " + selfMatched + " as self_matched, " + matchedSub + " as matched_subtask_count"
+}
+
+func scanFilteredRows(rows pgx.Rows) ([]FilteredTaskRow, error) {
+	defer rows.Close()
+	out := make([]FilteredTaskRow, 0)
+	for rows.Next() {
+		var i FilteredTaskRow
+		if err := rows.Scan(
+			&i.ID, &i.ProjectID, &i.TaskNumber, &i.Title, &i.Description,
+			&i.StateID, &i.PriorityID, &i.PriorityName, &i.PriorityColor, &i.PriorityRank, &i.PriorityRating, &i.Difficulty, &i.Effort, &i.CreatedBy, &i.StartDate, &i.DueDate,
+			&i.CreatedAt, &i.UpdatedAt, &i.DeletedAt, &i.ProjectKey,
+			&i.StateName, &i.StateType, &i.StateColor,
+			&i.CreatorUsername, &i.CreatorFirstName, &i.CreatorLastName, &i.CreatorAvatarUrl,
+			&i.CommentCount, &i.SubtaskCount,
+			&i.ParentTaskID, &i.ParentTaskNumber, &i.ParentTitle,
+			&i.SelfMatched, &i.MatchedSubtaskCount,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, i)
+	}
+	return out, rows.Err()
+}
 
 // ListTasks compiles the filter tree, runs the dynamic query, and returns rows.
 func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]FilteredTaskRow, error) {
@@ -970,6 +1086,7 @@ func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]Fil
 	if err != nil {
 		return nil, err
 	}
+	conds := strings.TrimPrefix(compiled.WhereSQL, " AND ")
 
 	sortCol, ok := validSortKeys[p.SortBy]
 	if !ok {
@@ -989,7 +1106,7 @@ func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]Fil
 	offsetPH := "$" + strconv.Itoa(nextArg+2)
 
 	// Stable tiebreaker by task_id to keep pagination deterministic.
-	sqlStr := filterSelectBase + compiled.WhereSQL +
+	sqlStr := filterSelectCols + extraSelectCols(p.Mode, conds) + filterFromBase + buildModeWhere(p.Mode, conds) +
 		" ORDER BY " + sortCol + " " + sortDir + nullsClause + ", t.id ASC" +
 		" LIMIT " + limitPH + " OFFSET " + offsetPH
 
@@ -1002,27 +1119,38 @@ func (r *FilterRunner) ListTasks(ctx context.Context, p FilterListParams) ([]Fil
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	out := make([]FilteredTaskRow, 0)
-	for rows.Next() {
-		var i FilteredTaskRow
-		if err := rows.Scan(
-			&i.ID, &i.ProjectID, &i.TaskNumber, &i.Title, &i.Description,
-			&i.StateID, &i.PriorityID, &i.PriorityName, &i.PriorityColor, &i.PriorityRank, &i.PriorityRating, &i.Difficulty, &i.Effort, &i.CreatedBy, &i.StartDate, &i.DueDate,
-			&i.CreatedAt, &i.UpdatedAt, &i.DeletedAt, &i.ProjectKey,
-			&i.StateName, &i.StateType, &i.StateColor,
-			&i.CreatorUsername, &i.CreatorFirstName, &i.CreatorLastName, &i.CreatorAvatarUrl,
-			&i.CommentCount, &i.SubtaskCount,
-		); err != nil {
-			return nil, err
-		}
-		out = append(out, i)
-	}
-	return out, rows.Err()
+	return scanFilteredRows(rows)
 }
 
-// CountTasks runs the filter tree as a COUNT(*) query.
+// ListMatchedSubtasks returns the children of the given parents that match the
+// filter, in task-number order — the rows tree mode embeds under their parents.
+func (r *FilterRunner) ListMatchedSubtasks(ctx context.Context, p FilterListParams, parentIDs []uuid.UUID) ([]FilteredTaskRow, error) {
+	now := p.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	// $1 project_id, $2 parent ids; compiled args start at $3.
+	compiled, err := Compile(p.Tree, p.CallerID, now, 2)
+	if err != nil {
+		return nil, err
+	}
+	sqlStr := filterSelectCols + extraSelectCols(FilterModeParents, "") + filterFromBase +
+		" AND t.parent_task_id = ANY($2::uuid[])" + compiled.WhereSQL +
+		" ORDER BY t.task_number ASC"
+
+	args := make([]any, 0, 2+len(compiled.Args))
+	args = append(args, p.ProjectID, parentIDs)
+	args = append(args, compiled.Args...)
+
+	rows, err := r.pool.Query(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanFilteredRows(rows)
+}
+
+// CountTasks runs the filter tree as a COUNT(*) query over the mode's row set
+// (the pagination basis: parents in tree mode, every row in flat mode).
 func (r *FilterRunner) CountTasks(ctx context.Context, p FilterListParams) (int64, error) {
 	now := p.Now
 	if now.IsZero() {
@@ -1032,7 +1160,30 @@ func (r *FilterRunner) CountTasks(ctx context.Context, p FilterListParams) (int6
 	if err != nil {
 		return 0, err
 	}
-	sqlStr := filterCountBase + compiled.WhereSQL
+	conds := strings.TrimPrefix(compiled.WhereSQL, " AND ")
+	sqlStr := filterCountBase + buildModeWhere(p.Mode, conds)
+	args := make([]any, 0, 1+len(compiled.Args))
+	args = append(args, p.ProjectID)
+	args = append(args, compiled.Args...)
+	var total int64
+	if err := r.pool.QueryRow(ctx, sqlStr, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+// CountSubtasks counts the subtasks that match the filter — the honest "+ N
+// subtasks" figure next to the task total.
+func (r *FilterRunner) CountSubtasks(ctx context.Context, p FilterListParams) (int64, error) {
+	now := p.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	compiled, err := Compile(p.Tree, p.CallerID, now, 1)
+	if err != nil {
+		return 0, err
+	}
+	sqlStr := filterCountBase + " AND t.parent_task_id IS NOT NULL" + compiled.WhereSQL
 	args := make([]any, 0, 1+len(compiled.Args))
 	args = append(args, p.ProjectID)
 	args = append(args, compiled.Args...)

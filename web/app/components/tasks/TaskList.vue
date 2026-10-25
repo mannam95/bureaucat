@@ -107,6 +107,45 @@ function isMemberFor(task: Task): boolean {
 function subtaskAsTask(sub: Subtask): Task {
   return { ...sub, comment_count: 0, subtask_count: 0 } as unknown as Task;
 }
+
+// --- Filtered tree mode (subtasks=expandable with an active filter) ---
+// The server embeds each parent's MATCHING children and says how many the
+// filter hides; those parents render their children without the chevron.
+function filteredTreeView(task: Task): boolean {
+  return task.subtasks !== undefined || (task.hidden_subtasks ?? 0) > 0;
+}
+
+// Parents whose filter-hidden children were revealed via the note row.
+const revealed = ref<Set<number>>(new Set());
+
+function visibleChildren(task: Task): Task[] {
+  if (revealed.value.has(task.task_number)) {
+    return (subtasksByTask[task.task_number] ?? []).map(subtaskAsTask);
+  }
+  return task.subtasks ?? [];
+}
+
+async function toggleReveal(task: Task) {
+  if (revealed.value.has(task.task_number)) {
+    revealed.value.delete(task.task_number);
+  } else {
+    if (!(task.task_number in subtasksByTask)) await loadSubtasks(task);
+    revealed.value.add(task.task_number);
+  }
+  revealed.value = new Set(revealed.value);
+}
+
+function hiddenNote(task: Task): string {
+  if (revealed.value.has(task.task_number)) return "Hide the subtasks the filter hides";
+  const n = task.hidden_subtasks ?? 0;
+  return `${n} subtask${n === 1 ? "" : "s"} hidden by the filter — show`;
+}
+
+// Flat mode: a subtask is an ordinary row carrying its parent as a crumb.
+function crumbFor(task: Task): string | undefined {
+  if (task.parent_task_number == null) return undefined;
+  return `${keyFor(task)}-${task.parent_task_number} · ${task.parent_task_title ?? ""}`.trim();
+}
 </script>
 
 <template>
@@ -149,15 +188,43 @@ function subtaskAsTask(sub: Subtask): Task {
         :show-workspace="showWorkspace"
         :workspace-name="workspaceFor(task)"
         :project-chip="projectChipByKey?.[task.project_key]"
-        :expandable="expandable"
+        :parent-crumb="crumbFor(task)"
+        :muted="task.context_only"
+        :expandable="expandable && !filteredTreeView(task)"
         :expanded="expanded.has(task.task_number)"
         @updated="emit('updated')"
         @toggle-select="emit('toggleSelect', task.task_number)"
         @toggle-expand="toggleExpand(task)"
       />
 
+      <!-- Filtered tree: the matching children are visible without expanding;
+           a note row owns the ones the filter hides. -->
+      <template v-if="filteredTreeView(task)">
+        <TaskCard
+          v-for="sub in visibleChildren(task)"
+          :key="sub.id"
+          :task="sub"
+          :project-key="projectKey ?? task.project_key"
+          :states="statesFor(task)"
+          :is-member="isMemberFor(task)"
+          :selectable="selectable"
+          :show-workspace="showWorkspace"
+          :workspace-name="workspaceFor(task)"
+          indented
+          @updated="emit('updated')"
+        />
+        <button
+          v-if="(task.hidden_subtasks ?? 0) > 0"
+          type="button"
+          class="block w-full bg-muted/40 py-1.5 pl-12 pr-3 text-left text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          @click="toggleReveal(task)"
+        >
+          {{ hiddenNote(task) }}
+        </button>
+      </template>
+
       <!-- Inline sub-task rows: same list, same columns, lightly highlighted -->
-      <template v-if="expanded.has(task.task_number)">
+      <template v-if="expanded.has(task.task_number) && !filteredTreeView(task)">
         <p
           v-if="loadingSubtasks.has(task.task_number)"
           class="bg-muted/40 py-2 pl-12 pr-3 text-xs text-muted-foreground"

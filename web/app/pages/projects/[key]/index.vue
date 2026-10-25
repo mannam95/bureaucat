@@ -97,6 +97,7 @@ const {
   tasks,
   loading: tasksLoading,
   total: totalTasks,
+  subtaskTotal,
   page: tasksPage,
   totalPages: tasksTotalPages,
   listTasks,
@@ -140,6 +141,28 @@ const isMissing = computed(() => /not found/i.test(error.value || ""));
 // it follows the user across projects and devices.
 const PER_PAGE_OPTIONS = [20, 50, 100] as const;
 const perPage = usePreferences().globalRef<number>("tasks.list.page_size", 20);
+
+// Subtask handling (Brief B): "expandable" is the one-level tree — a subtask
+// matching the filter brings its parent along, and a parent says when the
+// filter hides children. "Flat" makes subtasks ordinary sortable rows with a
+// parent crumb (a child may sort above its parent — that is correct).
+const subtasksMode = usePreferences().globalRef<"expandable" | "flat">("tasks.list.subtasks", "expandable");
+
+watch(subtasksMode, () => {
+  clearSelection();
+  setPageInUrl(1);
+  loadTasks(1);
+});
+
+// Row-count honesty: "71 tasks + 11 subtasks", never a merged number.
+const taskCountLabel = computed(() => {
+  const st = subtaskTotal.value;
+  if (subtasksMode.value === "flat") {
+    const parents = Math.max(0, totalTasks.value - st);
+    return `${parents} tasks + ${st} subtasks`;
+  }
+  return st > 0 ? `${totalTasks.value} tasks + ${st} subtasks` : `${totalTasks.value} tasks`;
+});
 
 function handlePerPageChange(value: unknown) {
   const next = parseInt(String(value), 10);
@@ -487,6 +510,7 @@ async function loadTasks(page = 1) {
     sortBy: sortBy.value,
     sortDir: sortDir.value,
     viewSlug: hasFilter ? activeViewSlug.value ?? undefined : undefined,
+    subtasksMode: subtasksMode.value,
   });
 }
 
@@ -996,6 +1020,29 @@ onMounted(async () => {
                     <span v-if="selectedTasks.size > 0" class="text-sm font-medium">
                       {{ selectedTasks.size }} selected
                     </span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-muted-foreground">Subtasks:</span>
+                      <div class="flex items-center rounded-md border p-0.5" role="group" aria-label="Subtask handling">
+                        <button
+                          type="button"
+                          class="rounded px-2 py-1 text-xs transition-colors"
+                          :class="subtasksMode === 'expandable' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'"
+                          title="Parents expand one level; a subtask matching the filter brings its parent along"
+                          @click="subtasksMode = 'expandable'"
+                        >
+                          Expandable
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded px-2 py-1 text-xs transition-colors"
+                          :class="subtasksMode === 'flat' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'"
+                          title="Subtasks become ordinary sortable rows with a parent crumb; a child may sort above its parent"
+                          @click="subtasksMode = 'flat'"
+                        >
+                          Flat
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div class="flex items-center gap-2">
                     <template v-if="selectedTasks.size > 0">
@@ -1040,6 +1087,7 @@ onMounted(async () => {
                   :selected="selectedTasks"
                   :sort-by="sortBy"
                   :sort-dir="sortDir"
+                  :expandable="subtasksMode === 'expandable'"
                   @updated="() => loadTasks(tasksPage)"
                   @toggle-select="toggleTaskSelection"
                 />
@@ -1066,7 +1114,7 @@ onMounted(async () => {
                     </SelectContent>
                   </Select>
                   <p class="text-sm text-muted-foreground sm:flex-1 sm:text-center">
-                    Showing {{ tasks.length }} of {{ totalTasks }} tasks
+                    Showing {{ tasks.length }} of {{ taskCountLabel }}
                   </p>
                   <div v-if="tasksTotalPages > 1" class="flex items-center gap-2">
                     <Button
