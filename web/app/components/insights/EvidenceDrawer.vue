@@ -49,6 +49,26 @@ const scopeLine = computed(() => {
   return parts.filter(Boolean).join(" · ");
 });
 
+// The rows arrive banded by state (the server sorts them in board order), so
+// a tally in the same order is the shape of the population at a glance and an
+// implicit legend for the bands below. One state only would be noise.
+const stateTally = computed(() => {
+  const rows = props.evidence?.rows ?? [];
+  const tally: Array<{ id: string; name: string; color: string; count: number }> = [];
+  const byId = new Map<string, { count: number }>();
+  for (const row of rows) {
+    const seen = byId.get(row.state.id);
+    if (seen) {
+      seen.count++;
+    } else {
+      const entry = { id: row.state.id, name: row.state.name, color: row.state.color, count: 1 };
+      byId.set(row.state.id, entry);
+      tally.push(entry);
+    }
+  }
+  return tally.length > 1 ? tally : [];
+});
+
 // The header always tells the complexity story: the sum of the assessed
 // items, how many were never rated, or "not assessed" when none were —
 // silence would look like a bug, not like honesty.
@@ -91,6 +111,13 @@ const cxLine = computed(() => {
           <div class="mt-3 flex flex-wrap gap-1.5">
             <span v-for="chip in evidence.chips" :key="chip" class="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
               {{ chip }}
+            </span>
+          </div>
+
+          <div v-if="stateTally.length" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span v-for="s in stateTally" :key="s.id" class="flex items-center gap-1">
+              <span class="size-2 rounded-full" :style="{ backgroundColor: s.color }" />
+              {{ s.name }} <span class="tabular-nums">{{ s.count }}</span>
             </span>
           </div>
 

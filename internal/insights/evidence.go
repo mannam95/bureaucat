@@ -307,14 +307,44 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 		}
 	}
 	ev.Cx = cx
+	// One ordering serves both views (drawer and CSV). Delivered lists are a
+	// timeline: newest completion first. The aging list ranks by its own
+	// number. Every other population follows the board — lifecycle type, then
+	// the project's own column order — so same-state rows band together with
+	// no group headers; inside a band the urgent items surface first.
 	sort.Slice(ev.Rows, func(i, j int) bool {
 		a, b := ev.Rows[i], ev.Rows[j]
 		if (a.CompletedAt != nil) && (b.CompletedAt != nil) && !a.CompletedAt.Equal(*b.CompletedAt) {
 			return a.CompletedAt.After(*b.CompletedAt)
 		}
+		if p.Metric == "aging" && a.AgeDays != b.AgeDays {
+			return a.AgeDays > b.AgeDays
+		}
+		sa, sb := d.states[a.State.ID], d.states[b.State.ID]
+		if typeOrder[sa.Type] != typeOrder[sb.Type] {
+			return typeOrder[sa.Type] < typeOrder[sb.Type]
+		}
+		if sa.Position != sb.Position {
+			return sa.Position < sb.Position
+		}
+		if sa.Name != sb.Name {
+			return sa.Name < sb.Name
+		}
+		if ra, rb := prioRank(a), prioRank(b); ra != rb {
+			return ra > rb
+		}
 		return a.Key > b.Key
 	})
 	return ev, nil
+}
+
+// prioRank orders rows inside a state band: higher rank = more urgent, and
+// rank 0 is the explicit unranked bucket, which sorts last by construction.
+func prioRank(r EvidenceRow) int {
+	if r.Priority == nil {
+		return 0
+	}
+	return r.Priority.Rank
 }
 
 // snapshotMetric covers the now-based health populations; these are
@@ -391,9 +421,6 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 			}
 			ev.Rows = append(ev.Rows, row)
 		}
-	}
-	if p.Metric == "aging" {
-		sort.Slice(ev.Rows, func(i, j int) bool { return ev.Rows[i].AgeDays > ev.Rows[j].AgeDays })
 	}
 }
 
