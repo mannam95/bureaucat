@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, Mail, Send, UserPlus, BarChart3, Trash2, Network } from "lucide-vue-next";
+import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, Mail, Send, UserPlus, BarChart3, Trash2, Network, Lock, X } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { SSOSettings, MattermostSettings } from "~/composables/useSettings";
+import type { FeatureGate } from "~/composables/useAdmin";
 
 definePageMeta({
   middleware: ["admin"],
@@ -252,7 +253,7 @@ async function loadEmailStatus() {
   if (result.success && result.data) emailStatus.value = result.data;
 }
 
-const { listUsers } = useAdmin();
+const { listUsers, listFeatureGates, setFeatureGateMode, addFeatureGrant, removeFeatureGrant } = useAdmin();
 
 const showTestEmailDialog = ref(false);
 const testEmailUserId = ref("");
@@ -295,11 +296,91 @@ async function handleSendTestEmail() {
   }
 }
 
+// Feature gates (super admin only): who can use gated features. This card
+// only sets the rules — the API routes enforce the gates on every request.
+const featureGates = ref<FeatureGate[]>([]);
+const gateBusy = ref<Record<string, boolean>>({});
+const grantPick = ref<Record<string, string>>({});
+const gateUsers = ref<
+  Array<{ id: string; username: string; email: string; first_name: string; last_name: string }>
+>([]);
+
+const FEATURE_MODES = [
+  { value: "disabled", label: "Disabled" },
+  { value: "admins", label: "Admins only" },
+  { value: "everyone", label: "Everyone" },
+] as const;
+
+async function loadFeatureGates() {
+  if (!user.value?.is_super_admin) return;
+  const result = await listFeatureGates();
+  if (result.success && result.data) featureGates.value = result.data;
+  const users = await listUsers(1, 100);
+  if (users.success && users.data) gateUsers.value = users.data.users;
+}
+
+function featureTitle(feature: string): string {
+  return feature.charAt(0).toUpperCase() + feature.slice(1);
+}
+
+// Users not yet granted on this gate, offered by the add-person picker.
+function grantCandidates(gate: FeatureGate) {
+  const granted = new Set(gate.grants.map((g) => g.user_id));
+  return gateUsers.value.filter((u) => !granted.has(u.id));
+}
+
+function swapGate(updated: FeatureGate) {
+  featureGates.value = featureGates.value.map((g) => (g.feature === updated.feature ? updated : g));
+}
+
+async function handleSetGateMode(gate: FeatureGate, mode: unknown) {
+  if (typeof mode !== "string" || mode === gate.mode) return;
+  gateBusy.value[gate.feature] = true;
+  const result = await setFeatureGateMode(gate.feature, mode as FeatureGate["mode"]);
+  gateBusy.value[gate.feature] = false;
+  if (result.success && result.data) {
+    const updated = result.data;
+    swapGate(updated);
+    const label = FEATURE_MODES.find((m) => m.value === updated.mode)?.label || updated.mode;
+    toast.success(`${featureTitle(updated.feature)} is now: ${label}`);
+  } else {
+    toast.error(result.error || "Failed to update feature gate");
+  }
+}
+
+async function handleAddGrant(gate: FeatureGate) {
+  const userId = grantPick.value[gate.feature];
+  if (!userId) return;
+  gateBusy.value[gate.feature] = true;
+  const result = await addFeatureGrant(gate.feature, userId);
+  gateBusy.value[gate.feature] = false;
+  if (result.success && result.data) {
+    swapGate(result.data);
+    grantPick.value[gate.feature] = "";
+    toast.success("Access granted");
+  } else {
+    toast.error(result.error || "Failed to add feature grant");
+  }
+}
+
+async function handleRemoveGrant(gate: FeatureGate, userId: string) {
+  gateBusy.value[gate.feature] = true;
+  const result = await removeFeatureGrant(gate.feature, userId);
+  gateBusy.value[gate.feature] = false;
+  if (result.success && result.data) {
+    swapGate(result.data);
+    toast.success("Access revoked");
+  } else {
+    toast.error(result.error || "Failed to remove feature grant");
+  }
+}
+
 onMounted(() => {
   fetchSignupSettings();
   loadSSOSettings();
   loadMattermostSettings();
   loadEmailStatus();
+  loadFeatureGates();
 });
 
 const adminModels = [
@@ -880,6 +961,106 @@ const adminModels = [
             </form>
           </DialogContent>
         </Dialog>
+
+        <!-- Feature access - super admin only: gates on optional features -->
+        <div v-if="user?.is_super_admin" class="mt-12">
+          <div class="mb-4">
+            <h2 class="text-xl font-semibold">Feature access</h2>
+            <p class="text-sm text-muted-foreground">
+              Gated features stay off until you enable them — for everyone, for
+              admins only, or for specific people. Enforced on the API, not just
+              hidden in the UI.
+            </p>
+          </div>
+
+          <Card v-for="gate in featureGates" :key="gate.feature" class="mb-4">
+            <CardContent class="space-y-5 pt-6">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex items-start gap-3">
+                  <Lock class="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p class="font-medium">{{ featureTitle(gate.feature) }}</p>
+                    <p class="max-w-xl text-sm text-muted-foreground">{{ gate.description }}</p>
+                  </div>
+                </div>
+                <Select
+                  :model-value="gate.mode"
+                  :disabled="gateBusy[gate.feature]"
+                  @update:model-value="handleSetGateMode(gate, $event)"
+                >
+                  <SelectTrigger class="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="m in FEATURE_MODES" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div class="space-y-2">
+                <div>
+                  <p class="text-sm font-medium">Specific people</p>
+                  <p class="text-sm text-muted-foreground">
+                    Always have access, whatever the mode above says.
+                  </p>
+                </div>
+                <ul v-if="gate.grants.length" class="space-y-1.5">
+                  <li
+                    v-for="grant in gate.grants"
+                    :key="grant.user_id"
+                    class="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
+                  >
+                    <Avatar class="size-6">
+                      <AvatarImage
+                        v-if="grant.avatar_url"
+                        :src="grant.avatar_url"
+                        :alt="`${grant.first_name} ${grant.last_name}`"
+                      />
+                      <AvatarFallback class="text-[10px]" :seed="grant.user_id">
+                        {{ grant.first_name?.[0] || "" }}{{ grant.last_name?.[0] || "" }}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span>{{ `${grant.first_name} ${grant.last_name}`.trim() || grant.username }}</span>
+                    <span class="text-muted-foreground">{{ grant.email }}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="ml-auto size-7"
+                      :disabled="gateBusy[gate.feature]"
+                      title="Revoke access"
+                      @click="handleRemoveGrant(gate, grant.user_id)"
+                    >
+                      <X class="size-4" />
+                    </Button>
+                  </li>
+                </ul>
+                <div class="flex items-center gap-2">
+                  <Select v-model="grantPick[gate.feature]" :disabled="gateBusy[gate.feature]">
+                    <SelectTrigger class="w-72">
+                      <SelectValue placeholder="Pick a user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="u in grantCandidates(gate)" :key="u.id" :value="u.id">
+                        {{ `${u.first_name} ${u.last_name}`.trim() || u.username }} · {{ u.email }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    :disabled="gateBusy[gate.feature] || !grantPick[gate.feature]"
+                    @click="handleAddGrant(gate)"
+                  >
+                    <UserPlus class="mr-1.5 size-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <!-- Feedback panel (links to the dedicated management page) -->
         <div class="mt-12">

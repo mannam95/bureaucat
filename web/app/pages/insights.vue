@@ -14,7 +14,7 @@ import type {
 // The insights report: a narrative answer with a question rail, where every
 // number opens its exact evidence. The whole view state lives in the URL, so
 // a copied link reproduces it for anyone with access.
-definePageMeta({ middleware: ["auth"] });
+definePageMeta({ middleware: ["auth", "insights"] });
 useSeoMeta({ title: "Insights" });
 
 const route = useRoute();

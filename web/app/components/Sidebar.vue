@@ -128,7 +128,9 @@ onMounted(() => {
         <Network class="size-4.5" />
       </NuxtLink>
 
+      <!-- Insights is feature-gated: the super admin decides who sees it. -->
       <NuxtLink
+        v-if="user?.features?.includes('insights')"
         to="/insights"
         title="Insights"
         class="flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"

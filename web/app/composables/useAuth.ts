@@ -9,6 +9,11 @@ interface User {
   created_at: string;
   /** True only for the break-glass account (SUPERADMIN_EMAIL). */
   is_super_admin?: boolean;
+  /**
+   * Gated features this user can use (super-admin managed). The UI hides
+   * gated surfaces without them; the API enforces the gates regardless.
+   */
+  features?: string[];
 }
 
 interface AuthResponse {

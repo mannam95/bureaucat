@@ -146,6 +146,23 @@ interface PaginatedDeletedProjectsResponse {
   total_pages: number;
 }
 
+export interface FeatureGrant {
+  user_id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url?: string;
+  created_at: string;
+}
+
+export interface FeatureGate {
+  feature: string;
+  description: string;
+  mode: "disabled" | "admins" | "everyone";
+  grants: FeatureGrant[];
+}
+
 export function useAdmin() {
   const { getAuthHeader } = useAuth();
 
@@ -524,6 +541,116 @@ export function useAdmin() {
     }
   }
 
+  // Feature gates (super admin only): who can use a gated feature. Every
+  // mutation returns the refreshed gate so the UI can swap it in place.
+  async function listFeatureGates(): Promise<{
+    success: boolean;
+    data?: FeatureGate[];
+    error?: string;
+  }> {
+    try {
+      const response = await fetch("/api/v1/admin/features", {
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to fetch feature gates" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function setFeatureGateMode(
+    feature: string,
+    mode: FeatureGate["mode"]
+  ): Promise<{
+    success: boolean;
+    data?: FeatureGate;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/features/${feature}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ mode }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to update feature gate" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function addFeatureGrant(
+    feature: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    data?: FeatureGate;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/features/${feature}/grants`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to add feature grant" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function removeFeatureGrant(
+    feature: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    data?: FeatureGate;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/features/${feature}/grants/${userId}`, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to remove feature grant" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   return {
     getStats,
     listUsers,
@@ -540,5 +667,9 @@ export function useAdmin() {
     cleanupExpiredTokens,
     listDeletedProjects,
     restoreProject,
+    listFeatureGates,
+    setFeatureGateMode,
+    addFeatureGrant,
+    removeFeatureGrant,
   };
 }

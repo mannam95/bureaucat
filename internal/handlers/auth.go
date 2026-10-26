@@ -57,8 +57,10 @@ type UserResponse struct {
 	// (false) everywhere else.
 	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
 	// Features lists the gated features this user can use (feature gates are
-	// super-admin managed). Only set on /me — the UI reads it to decide which
-	// gated surfaces to show; the API routes enforce the gates regardless.
+	// super-admin managed). Set on /me and on every auth response (signin,
+	// signup, SSO, token refresh), so a gate change reaches live sessions on
+	// their next refresh. The UI reads it to decide which gated surfaces to
+	// show; the API routes enforce the gates regardless.
 	Features []string `json:"features,omitempty"`
 	// IsDeactivated is true when an admin has disabled the account. Only set on
 	// admin listings; omitted (false = active) everywhere else. Expressed as the
@@ -723,6 +725,13 @@ func (h *AuthHandler) GenerateTokensAndSetCookies(c *echo.Context, ctx context.C
 	// Set access token as httpOnly cookie (backup for page reload)
 	h.setAccessTokenCookie(c, accessToken, expiresAt)
 
+	// Effective gated features; on error the list is empty rather than failing
+	// the auth — the gated routes enforce access themselves.
+	enabled, err := features.EnabledFor(ctx, h.store, userID, userType)
+	if err != nil {
+		enabled = nil
+	}
+
 	return &AuthResponse{
 		User: UserResponse{
 			ID:           user.ID,
@@ -734,6 +743,7 @@ func (h *AuthHandler) GenerateTokensAndSetCookies(c *echo.Context, ctx context.C
 			AvatarURL:    user.AvatarURL,
 			CreatedAt:    user.CreatedAt,
 			IsSuperAdmin: h.isSuperAdmin(user.Email),
+			Features:     enabled,
 		},
 		AccessToken: accessToken,
 		ExpiresAt:   expiresAt.Unix(),
