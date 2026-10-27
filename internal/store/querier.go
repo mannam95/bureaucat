@@ -338,6 +338,9 @@ type Querier interface {
 	// task_count lets the settings UI warn what an edit or delete touches.
 	ListProjectPriorities(ctx context.Context, projectID uuid.UUID) ([]ListProjectPrioritiesRow, error)
 	// task_count lets the settings UI warn how many tasks a state edit touches.
+	// Ordered by lifecycle type first (the enum declares the types in lifecycle
+	// order), then the project's own position, so a state reassigned to another
+	// type bands with its new group everywhere this list is displayed.
 	ListProjectStates(ctx context.Context, projectID uuid.UUID) ([]ListProjectStatesRow, error)
 	ListProjectTaskIDsIn(ctx context.Context, arg ListProjectTaskIDsInParams) ([]uuid.UUID, error)
 	ListProjectTasks(ctx context.Context, arg ListProjectTasksParams) ([]ListProjectTasksRow, error)

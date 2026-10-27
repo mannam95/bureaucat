@@ -242,11 +242,14 @@ WHERE project_id = sqlc.arg('project_id');
 
 -- name: ListProjectStates :many
 -- task_count lets the settings UI warn how many tasks a state edit touches.
+-- Ordered by lifecycle type first (the enum declares the types in lifecycle
+-- order), then the project's own position, so a state reassigned to another
+-- type bands with its new group everywhere this list is displayed.
 SELECT ps.id, ps.project_id, ps.state_type, ps.name, ps.color, ps.position, ps.is_default, ps.created_at, ps.description,
        (SELECT COUNT(*) FROM tasks t WHERE t.state_id = ps.id AND t.deleted_at IS NULL)::int AS task_count
 FROM project_states ps
 WHERE ps.project_id = $1
-ORDER BY ps.position ASC, ps.created_at ASC;
+ORDER BY ps.state_type ASC, ps.position ASC, ps.created_at ASC;
 
 -- name: GetDefaultProjectState :one
 SELECT id, project_id, state_type, name, color, position, is_default, created_at, description

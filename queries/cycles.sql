@@ -125,7 +125,7 @@ WHERE ct.cycle_id = $1
       SELECT 1 FROM task_assignees ta
       WHERE ta.task_id = t.id AND ta.user_id = sqlc.narg('assignee_id')::uuid
   ))
-ORDER BY ps.position ASC, t.created_at DESC;
+ORDER BY ps.state_type ASC, ps.position ASC, t.created_at DESC;
 
 -- name: ListUnassignedProjectTasks :many
 SELECT t.id, t.project_id, t.task_number, t.title, t.state_id, t.priority, t.priority_rating,
@@ -170,7 +170,7 @@ JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id 
 JOIN project_states ps ON t.state_id = ps.id
 WHERE ct.cycle_id = $1
 GROUP BY ps.id, ps.name, ps.color, ps.state_type, ps.position
-ORDER BY ps.position ASC;
+ORDER BY ps.state_type ASC, ps.position ASC;
 
 -- name: ListCycleAssignees :many
 SELECT u.id AS user_id, u.username, u.first_name, u.last_name, u.avatar_url,

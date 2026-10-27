@@ -231,7 +231,7 @@ JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id 
 JOIN project_states ps ON t.state_id = ps.id
 WHERE ct.cycle_id = $1
 GROUP BY ps.id, ps.name, ps.color, ps.state_type, ps.position
-ORDER BY ps.position ASC
+ORDER BY ps.state_type ASC, ps.position ASC
 `
 
 type GetCycleStateBreakdownRow struct {
@@ -419,7 +419,7 @@ WHERE ct.cycle_id = $1
       SELECT 1 FROM task_assignees ta
       WHERE ta.task_id = t.id AND ta.user_id = $2::uuid
   ))
-ORDER BY ps.position ASC, t.created_at DESC
+ORDER BY ps.state_type ASC, ps.position ASC, t.created_at DESC
 `
 
 type ListCycleTasksParams struct {
