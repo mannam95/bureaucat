@@ -169,6 +169,8 @@ export interface TaskTemplate {
   name: string;
   title: string;
   description: string;
+  /** The project's one mandatory template pre-fills the create dialog. */
+  is_mandatory: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -184,4 +186,6 @@ export interface UpdateTemplateRequest {
   name?: string;
   title?: string;
   description?: string;
+  /** True demotes any previously mandatory template of the project. */
+  is_mandatory?: boolean;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Trash2, Pencil, Loader2, Check, X } from "lucide-vue-next";
+import { Plus, Trash2, Pencil, Loader2, Check, X, Pin, PinOff } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { TaskTemplate } from "~/types";
 import { mdToHtml } from "~/utils/markdown";
@@ -84,6 +84,29 @@ async function handleUpdate() {
   if (result.success) {
     toast.success("Template updated");
     cancelEdit();
+    emit("refresh");
+  } else {
+    toast.error(result.error || "Failed to update template");
+  }
+}
+
+// At most one template is mandatory per project; promoting one demotes the
+// previous holder server-side. The create dialog opens pre-filled with it.
+const togglingId = ref<string | null>(null);
+
+async function toggleMandatory(template: TaskTemplate) {
+  togglingId.value = template.id;
+  const result = await updateTemplate(props.projectKey, template.id, {
+    is_mandatory: !template.is_mandatory,
+  });
+  togglingId.value = null;
+
+  if (result.success) {
+    toast.success(
+      template.is_mandatory
+        ? "Template is optional again"
+        : `"${template.name}" now pre-fills every new task`
+    );
     emit("refresh");
   } else {
     toast.error(result.error || "Failed to update template");
@@ -240,6 +263,24 @@ async function handleDelete(template: TaskTemplate) {
                 {{ template.title }}
               </p>
             </div>
+            <Badge v-if="template.is_mandatory" variant="outline" class="gap-1 text-xs" title="Pre-fills every new task in this project">
+              <Pin class="size-3" />
+              Mandatory
+            </Badge>
+            <Button
+              v-if="isAdmin"
+              variant="ghost"
+              size="icon"
+              :aria-label="template.is_mandatory ? 'Make optional' : 'Make mandatory'"
+              :title="template.is_mandatory ? 'Stop pre-filling new tasks with this template' : 'Pre-fill every new task with this template'"
+              class="size-8 text-muted-foreground"
+              :disabled="togglingId === template.id"
+              @click="toggleMandatory(template)"
+            >
+              <Loader2 v-if="togglingId === template.id" class="size-4 animate-spin" />
+              <PinOff v-else-if="template.is_mandatory" class="size-4" />
+              <Pin v-else class="size-4" />
+            </Button>
             <Button
               v-if="isAdmin"
               variant="ghost"

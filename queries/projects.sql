@@ -1037,9 +1037,17 @@ UPDATE task_templates
 SET name = COALESCE(sqlc.narg('name'), name),
     title = COALESCE(sqlc.narg('title'), title),
     description = COALESCE(sqlc.narg('description'), description),
+    is_mandatory = COALESCE(sqlc.narg('is_mandatory'), is_mandatory),
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: ClearMandatoryTaskTemplate :exec
+-- Unsets the project's mandatory template so another can take over (at most
+-- one per project, enforced by a partial unique index).
+UPDATE task_templates
+SET is_mandatory = FALSE, updated_at = NOW()
+WHERE project_id = $1 AND is_mandatory AND id <> $2;
 
 -- name: DeleteTaskTemplate :exec
 DELETE FROM task_templates WHERE id = $1;

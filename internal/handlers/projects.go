@@ -2022,6 +2022,9 @@ type TemplateResponse struct {
 	Name        string    `json:"name"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
+	// IsMandatory marks the project's one mandatory template: the create-task
+	// dialog opens pre-filled with it. A guide, not a lock.
+	IsMandatory bool      `json:"is_mandatory"`
 	CreatedBy   uuid.UUID `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -2039,6 +2042,8 @@ type UpdateTemplateRequest struct {
 	Name        *string `json:"name"`
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
+	// Setting true demotes any previously mandatory template of the project.
+	IsMandatory *bool `json:"is_mandatory"`
 }
 
 // ListTemplates returns project task templates.
@@ -2073,6 +2078,7 @@ func (h *ProjectHandler) ListTemplates(c *echo.Context) error {
 			Name:        t.Name,
 			Title:       t.Title,
 			Description: t.Description,
+			IsMandatory: t.IsMandatory,
 			CreatedBy:   t.CreatedBy,
 			CreatedAt:   t.CreatedAt.Time,
 			UpdatedAt:   t.UpdatedAt.Time,
@@ -2136,6 +2142,7 @@ func (h *ProjectHandler) CreateTemplate(c *echo.Context) error {
 		Name:        template.Name,
 		Title:       template.Title,
 		Description: template.Description,
+		IsMandatory: template.IsMandatory,
 		CreatedBy:   template.CreatedBy,
 		CreatedAt:   template.CreatedAt.Time,
 		UpdatedAt:   template.UpdatedAt.Time,
@@ -2171,11 +2178,32 @@ func (h *ProjectHandler) UpdateTemplate(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
+	// Mandatory is exclusive per project (partial unique index), so promoting
+	// one template first demotes whichever held it.
+	if req.IsMandatory != nil && *req.IsMandatory {
+		projectIDStr := c.Request().Header.Get(auth.HeaderProjectID)
+		projectID, err := uuid.Parse(projectIDStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
+		}
+		if err := h.store.ClearMandatoryTaskTemplate(ctx, store.ClearMandatoryTaskTemplateParams{
+			ProjectID: projectID,
+			ID:        templateID,
+		}); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update template")
+		}
+	}
+
+	mandatory := pgtype.Bool{}
+	if req.IsMandatory != nil {
+		mandatory = pgtype.Bool{Bool: *req.IsMandatory, Valid: true}
+	}
 	template, err := h.store.UpdateTaskTemplate(ctx, store.UpdateTaskTemplateParams{
 		ID:          templateID,
 		Name:        stringToPgtypeText(req.Name),
 		Title:       stringToPgtypeText(req.Title),
 		Description: stringToPgtypeText(req.Description),
+		IsMandatory: mandatory,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update template")
@@ -2186,6 +2214,7 @@ func (h *ProjectHandler) UpdateTemplate(c *echo.Context) error {
 		Name:        template.Name,
 		Title:       template.Title,
 		Description: template.Description,
+		IsMandatory: template.IsMandatory,
 		CreatedBy:   template.CreatedBy,
 		CreatedAt:   template.CreatedAt.Time,
 		UpdatedAt:   template.UpdatedAt.Time,

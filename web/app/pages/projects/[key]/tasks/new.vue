@@ -113,6 +113,13 @@ async function loadProjectData() {
   }
   form.value.priority_id = defaultPriorityId.value;
 
+  // The project's mandatory template pre-fills the empty form — a guide, not a
+  // lock: the text stays editable, and a restored draft is never overwritten.
+  const mandatory = templates.value.find((t) => t.is_mandatory);
+  if (mandatory && !selectedTemplateId.value && !form.value.title && !form.value.description) {
+    selectedTemplateId.value = mandatory.id;
+  }
+
   // New tickets default to the running sprint (latest start if several
   // overlap), or the most recently finished one when nothing is active.
   const cyclesRes = await listAllCycles(projectKey.value);
@@ -341,7 +348,7 @@ onMounted(() => {
                 <SelectContent>
                   <SelectItem :value="NO_TEMPLATE">No template</SelectItem>
                   <SelectItem v-for="tmpl in templates" :key="tmpl.id" :value="tmpl.id">
-                    {{ tmpl.name }}
+                    {{ tmpl.name }}<template v-if="tmpl.is_mandatory"> · mandatory</template>
                   </SelectItem>
                 </SelectContent>
               </Select>

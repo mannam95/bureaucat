@@ -623,6 +623,7 @@ type TaskTemplate struct {
 	CreatedBy   uuid.UUID          `json:"created_by"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	IsMandatory bool               `json:"is_mandatory"`
 }
 
 type TaskWatcher struct {

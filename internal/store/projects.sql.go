@@ -261,6 +261,24 @@ func (q *Queries) CascadeSoftDeleteSubtasks(ctx context.Context, parentID uuid.U
 	return err
 }
 
+const clearMandatoryTaskTemplate = `-- name: ClearMandatoryTaskTemplate :exec
+UPDATE task_templates
+SET is_mandatory = FALSE, updated_at = NOW()
+WHERE project_id = $1 AND is_mandatory AND id <> $2
+`
+
+type ClearMandatoryTaskTemplateParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// Unsets the project's mandatory template so another can take over (at most
+// one per project, enforced by a partial unique index).
+func (q *Queries) ClearMandatoryTaskTemplate(ctx context.Context, arg ClearMandatoryTaskTemplateParams) error {
+	_, err := q.db.Exec(ctx, clearMandatoryTaskTemplate, arg.ProjectID, arg.ID)
+	return err
+}
+
 const countActiveProjectPriorities = `-- name: CountActiveProjectPriorities :one
 SELECT COUNT(*) FROM project_priorities WHERE project_id = $1 AND active
 `
@@ -825,7 +843,7 @@ const createTaskTemplate = `-- name: CreateTaskTemplate :one
 
 INSERT INTO task_templates (project_id, name, title, description, created_by)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, project_id, name, title, description, created_by, created_at, updated_at
+RETURNING id, project_id, name, title, description, created_by, created_at, updated_at, is_mandatory
 `
 
 type CreateTaskTemplateParams struct {
@@ -855,6 +873,7 @@ func (q *Queries) CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplate
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsMandatory,
 	)
 	return i, err
 }
@@ -1638,7 +1657,7 @@ func (q *Queries) GetTaskByProjectAndNumber(ctx context.Context, arg GetTaskByPr
 }
 
 const getTaskTemplateByID = `-- name: GetTaskTemplateByID :one
-SELECT id, project_id, name, title, description, created_by, created_at, updated_at FROM task_templates WHERE id = $1
+SELECT id, project_id, name, title, description, created_by, created_at, updated_at, is_mandatory FROM task_templates WHERE id = $1
 `
 
 func (q *Queries) GetTaskTemplateByID(ctx context.Context, id uuid.UUID) (TaskTemplate, error) {
@@ -1653,6 +1672,7 @@ func (q *Queries) GetTaskTemplateByID(ctx context.Context, id uuid.UUID) (TaskTe
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsMandatory,
 	)
 	return i, err
 }
@@ -3365,7 +3385,7 @@ func (q *Queries) ListTaskParticipants(ctx context.Context, taskID uuid.UUID) ([
 }
 
 const listTaskTemplates = `-- name: ListTaskTemplates :many
-SELECT id, project_id, name, title, description, created_by, created_at, updated_at FROM task_templates WHERE project_id = $1 ORDER BY name ASC
+SELECT id, project_id, name, title, description, created_by, created_at, updated_at, is_mandatory FROM task_templates WHERE project_id = $1 ORDER BY name ASC
 `
 
 func (q *Queries) ListTaskTemplates(ctx context.Context, projectID uuid.UUID) ([]TaskTemplate, error) {
@@ -3386,6 +3406,7 @@ func (q *Queries) ListTaskTemplates(ctx context.Context, projectID uuid.UUID) ([
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.IsMandatory,
 		); err != nil {
 			return nil, err
 		}
@@ -4894,9 +4915,10 @@ UPDATE task_templates
 SET name = COALESCE($2, name),
     title = COALESCE($3, title),
     description = COALESCE($4, description),
+    is_mandatory = COALESCE($5, is_mandatory),
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, project_id, name, title, description, created_by, created_at, updated_at
+RETURNING id, project_id, name, title, description, created_by, created_at, updated_at, is_mandatory
 `
 
 type UpdateTaskTemplateParams struct {
@@ -4904,6 +4926,7 @@ type UpdateTaskTemplateParams struct {
 	Name        pgtype.Text `json:"name"`
 	Title       pgtype.Text `json:"title"`
 	Description pgtype.Text `json:"description"`
+	IsMandatory pgtype.Bool `json:"is_mandatory"`
 }
 
 func (q *Queries) UpdateTaskTemplate(ctx context.Context, arg UpdateTaskTemplateParams) (TaskTemplate, error) {
@@ -4912,6 +4935,7 @@ func (q *Queries) UpdateTaskTemplate(ctx context.Context, arg UpdateTaskTemplate
 		arg.Name,
 		arg.Title,
 		arg.Description,
+		arg.IsMandatory,
 	)
 	var i TaskTemplate
 	err := row.Scan(
@@ -4923,6 +4947,7 @@ func (q *Queries) UpdateTaskTemplate(ctx context.Context, arg UpdateTaskTemplate
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsMandatory,
 	)
 	return i, err
 }

@@ -49,6 +49,9 @@ type Querier interface {
 	// Soft-delete all children of a task (cascade-together on parent delete).
 	CascadeSoftDeleteSubtasks(ctx context.Context, parentID uuid.UUID) error
 	CheckCycleOverlap(ctx context.Context, arg CheckCycleOverlapParams) (int32, error)
+	// Unsets the project's mandatory template so another can take over (at most
+	// one per project, enforced by a partial unique index).
+	ClearMandatoryTaskTemplate(ctx context.Context, arg ClearMandatoryTaskTemplateParams) error
 	ClearProjectDefaultView(ctx context.Context, projectID uuid.UUID) error
 	// Merge a new activity into an existing open notification: bump the count,
 	// update the latest actor/type/comment, and re-surface as unread.
