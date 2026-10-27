@@ -293,6 +293,7 @@ SELECT
     COUNT(*)::int                                                         AS total,
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
+    COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int          AS in_verification,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
     COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
     COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived
@@ -303,12 +304,13 @@ WHERE mt.module_id = $1
 `
 
 type GetModuleMetricsRow struct {
-	Total      int32 `json:"total"`
-	Completed  int32 `json:"completed"`
-	InProgress int32 `json:"in_progress"`
-	Todo       int32 `json:"todo"`
-	Cancelled  int32 `json:"cancelled"`
-	Archived   int32 `json:"archived"`
+	Total          int32 `json:"total"`
+	Completed      int32 `json:"completed"`
+	InProgress     int32 `json:"in_progress"`
+	InVerification int32 `json:"in_verification"`
+	Todo           int32 `json:"todo"`
+	Cancelled      int32 `json:"cancelled"`
+	Archived       int32 `json:"archived"`
 }
 
 func (q *Queries) GetModuleMetrics(ctx context.Context, moduleID uuid.UUID) (GetModuleMetricsRow, error) {
@@ -318,6 +320,7 @@ func (q *Queries) GetModuleMetrics(ctx context.Context, moduleID uuid.UUID) (Get
 		&i.Total,
 		&i.Completed,
 		&i.InProgress,
+		&i.InVerification,
 		&i.Todo,
 		&i.Cancelled,
 		&i.Archived,

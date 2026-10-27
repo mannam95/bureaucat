@@ -174,12 +174,13 @@ func (ns NullProjectRole) Value() (driver.Value, error) {
 type StateType string
 
 const (
-	StateTypeBacklog   StateType = "backlog"
-	StateTypeUnstarted StateType = "unstarted"
-	StateTypeStarted   StateType = "started"
-	StateTypeCompleted StateType = "completed"
-	StateTypeCancelled StateType = "cancelled"
-	StateTypeArchived  StateType = "archived"
+	StateTypeBacklog      StateType = "backlog"
+	StateTypeUnstarted    StateType = "unstarted"
+	StateTypeStarted      StateType = "started"
+	StateTypeVerification StateType = "verification"
+	StateTypeCompleted    StateType = "completed"
+	StateTypeCancelled    StateType = "cancelled"
+	StateTypeArchived     StateType = "archived"
 )
 
 func (e *StateType) Scan(src interface{}) error {

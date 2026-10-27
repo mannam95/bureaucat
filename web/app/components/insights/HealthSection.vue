@@ -18,6 +18,7 @@ const emit = defineEmits<{
 const narrative = computed(() => {
   const h = props.health;
   let s = `${h.open} open items, ${h.in_started} in a started state`;
+  if (h.in_verification > 0) s += `, ${h.in_verification} in verification`;
   if (h.blocked > 0) s += `, ${h.blocked} blocked`;
   if (h.overdue > 0) s += `, ${h.overdue} overdue`;
   const oldest = h.aging[0];
@@ -89,7 +90,7 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
       <div class="rounded-lg border p-4">
         <div class="flex items-baseline justify-between">
           <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Aging · longest unchanged in a started state
+            Aging · longest unchanged in flight
           </h3>
           <button class="text-[11px] text-muted-foreground underline-offset-2 hover:underline" @click="emit('open', 'aging')">
             all
@@ -106,7 +107,7 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
               {{ a.days }} d
             </span>
           </div>
-          <p v-if="health.aging.length === 0" class="text-xs text-muted-foreground">Nothing is sitting in a started state.</p>
+          <p v-if="health.aging.length === 0" class="text-xs text-muted-foreground">Nothing is sitting in a started or verification state.</p>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Archive, ChevronDown } from "lucide-vue-next";
+import { Circle, CircleDot, CircleDotDashed, CheckCircle2, XCircle, Clock, Archive, ChevronDown } from "lucide-vue-next";
 import type { ProjectState } from "~/types";
 
 const props = withDefaults(
@@ -27,6 +27,8 @@ function getStateIcon(stateType: string) {
       return Circle;
     case "started":
       return CircleDot;
+    case "verification":
+      return CircleDotDashed;
     case "completed":
       return CheckCircle2;
     case "cancelled":

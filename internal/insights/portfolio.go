@@ -102,7 +102,7 @@ func (e *Engine) portfolioRow(d *projectData, p store.Project, w window) Portfol
 			if !t.dueDate.IsZero() && now.After(t.dueDate) {
 				row.Overdue++
 			}
-			if st.Type == "started" {
+			if isWorkingType(st.Type) {
 				last := t.createdAt
 				for _, ev := range t.events {
 					if ev.typ == "state_changed" {

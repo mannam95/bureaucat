@@ -93,6 +93,7 @@ export interface ModuleMetrics {
   total: number;
   completed: number;
   in_progress: number;
+  in_verification: number;
   todo: number;
   cancelled: number;
   archived: number;

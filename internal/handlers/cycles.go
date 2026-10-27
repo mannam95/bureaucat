@@ -98,6 +98,7 @@ type CycleMetricsResponse struct {
 	Total          int                    `json:"total"`
 	Completed      int                    `json:"completed"`
 	InProgress     int                    `json:"in_progress"`
+	InVerification int                    `json:"in_verification"`
 	Todo           int                    `json:"todo"`
 	Cancelled      int                    `json:"cancelled"`
 	Archived       int                    `json:"archived"`
@@ -671,6 +672,7 @@ func (h *CycleHandler) GetCycleMetrics(c *echo.Context) error {
 		Total:          int(m.Total),
 		Completed:      int(m.Completed),
 		InProgress:     int(m.InProgress),
+		InVerification: int(m.InVerification),
 		Todo:           int(m.Todo),
 		Cancelled:      int(m.Cancelled),
 		Archived:       int(m.Archived),

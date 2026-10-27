@@ -177,13 +177,13 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 		}
 		fallthrough
 
-	case "carried", "archived":
+	case "carried", "archived", "verification":
 		if cycle == nil {
 			return nil, fmt.Errorf("metric %q needs a cycle", p.Metric)
 		}
-		wantType := map[string]string{"carried": "", "cancelled": "cancelled", "archived": "archived"}[p.Metric]
-		ev.Title = map[string]string{"carried": "Carried over", "cancelled": "Cancelled", "archived": "Archived"}[p.Metric]
-		ev.HowComputed = "Leaf items in the cycle at the cutoff whose state type at that moment matches this outcome. Outcomes are exclusive: completed, open, cancelled and archived partition the scope at close."
+		wantType := map[string]string{"carried": "", "cancelled": "cancelled", "archived": "archived", "verification": "verification"}[p.Metric]
+		ev.Title = map[string]string{"carried": "Carried over", "cancelled": "Cancelled", "archived": "Archived", "verification": "In verification"}[p.Metric]
+		ev.HowComputed = "Leaf items in the cycle at the cutoff whose state type at that moment matches this outcome. Outcomes are exclusive: completed, in verification, open, cancelled and archived partition the scope at close."
 		ev.SourceEvents = "state_changed, cycle_added, cycle_removed"
 		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "in cycle at close")
 		for _, t := range units {
@@ -193,7 +193,8 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			typ := d.typeAt(t, w.cutoff)
 			match := false
 			if p.Metric == "carried" {
-				match = isOpenType(typ)
+				// Verification is open but reported as its own band.
+				match = isOpenType(typ) && typ != "verification"
 			} else {
 				match = typ == wantType
 			}
@@ -368,8 +369,8 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 			ev.Chips = []string{fmt.Sprintf("rank = %d", *p.Rank), "snapshot " + e.dayKey(now)}
 		}
 	case "aging":
-		ev.Title = "Longest unchanged in a started state"
-		ev.HowComputed = "Open leaf items in a started-type state, aged by their last state change. The state name travels with each row: parked states read as parked."
+		ev.Title = "Longest unchanged in flight"
+		ev.HowComputed = "Open leaf items in a started- or verification-type state, aged by their last state change. The state name travels with each row: parked states read as parked."
 		ev.SourceEvents = "state_changed"
 	case "overdue":
 		ev.Title = "Overdue"
@@ -397,7 +398,7 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 		case "priority_rank":
 			match = p.Rank != nil && d.priorities[t.priorityID].Rank == *p.Rank
 		case "aging":
-			if st.Type == "started" {
+			if isWorkingType(st.Type) {
 				match = true
 				last := t.createdAt
 				for _, evn := range t.events {

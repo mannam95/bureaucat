@@ -273,6 +273,8 @@ export function stateTypeLabel(kind: string): string {
       return "Unstarted";
     case "started":
       return "Started";
+    case "verification":
+      return "Verification";
     case "completed":
       return "Completed";
     case "cancelled":
@@ -288,6 +290,7 @@ export const STATE_TYPE_OPTIONS = [
   { id: "backlog", label: "Backlog" },
   { id: "unstarted", label: "Unstarted" },
   { id: "started", label: "Started" },
+  { id: "verification", label: "Verification" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
   { id: "archived", label: "Archived" },

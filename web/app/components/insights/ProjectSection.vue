@@ -35,6 +35,7 @@ const narrative = computed(() => {
     if (c.added.count > 0) s += `, ${c.added.count} were added`;
     if (c.removed.count > 0) s += ` and ${c.removed.count} removed`;
     s += `. ${c.carried_over.count} carried over`;
+    if (c.in_verification && c.in_verification.count > 0) s += `, ${c.in_verification.count} in verification`;
     if (c.cancelled && c.cancelled.count > 0) s += `, ${c.cancelled.count} cancelled`;
     if (c.archived && c.archived.count > 0) s += `, ${c.archived.count} archived`;
     return s + ".";
@@ -95,6 +96,15 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
       />
       <MetricTile label="Added" :count="cycle.added.count" metric="added" sign="plus" @open="emit('open', $event)" />
       <MetricTile label="Descoped" :count="cycle.removed.count" metric="descoped" sign="minus" @open="emit('open', $event)" />
+      <MetricTile
+        v-if="cycle.in_verification"
+        label="In verification"
+        :count="cycle.in_verification.count"
+        metric="verification"
+        :cx="cycle.in_verification.cx"
+        sub="built, being validated"
+        @open="emit('open', $event)"
+      />
       <MetricTile
         label="Carried over"
         :count="cycle.carried_over.count"

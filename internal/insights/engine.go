@@ -129,13 +129,20 @@ type ListCycle struct {
 
 // typeOrder fixes the lifecycle display order.
 var typeOrder = map[string]int{
-	"backlog": 0, "unstarted": 1, "started": 2,
-	"completed": 3, "cancelled": 4, "archived": 5,
+	"backlog": 0, "unstarted": 1, "started": 2, "verification": 3,
+	"completed": 4, "cancelled": 5, "archived": 6,
 }
 
-// openTypes are the state types that count as open work.
+// openTypes are the state types that count as open work. Verification is open:
+// built but still being validated is not delivered.
 func isOpenType(t string) bool {
-	return t == "backlog" || t == "unstarted" || t == "started"
+	return t == "backlog" || t == "unstarted" || t == "started" || t == "verification"
+}
+
+// isWorkingType marks the types where an item is actively in flight (started
+// or verification) — the population the aging panels watch.
+func isWorkingType(t string) bool {
+	return t == "started" || t == "verification"
 }
 
 func jsonMap(b []byte) map[string]any {

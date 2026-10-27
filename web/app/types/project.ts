@@ -86,7 +86,7 @@ export interface ProjectState {
   task_count: number;
 }
 
-export type StateType = "backlog" | "unstarted" | "started" | "completed" | "cancelled" | "archived";
+export type StateType = "backlog" | "unstarted" | "started" | "verification" | "completed" | "cancelled" | "archived";
 
 export interface ProjectLabel {
   id: string;

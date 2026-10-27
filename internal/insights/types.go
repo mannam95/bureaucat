@@ -4,8 +4,9 @@
 // states, labels, areas and priorities are defined per project, so names and
 // colors are presentation that rides along with each number. Counting follows
 // the consolidated direction: leaf items (a parent with subtasks counts
-// through its subtasks), cancelled is never delivery, archived is its own
-// bucket, unknown estimates are never zero, and a completed item credits its
+// through its subtasks), cancelled is never delivery, verification is open
+// work being validated (never delivery either), archived is its own bucket,
+// unknown estimates are never zero, and a completed item credits its
 // Contributors, falling back to its assignees at completion time.
 package insights
 
@@ -115,8 +116,9 @@ type PersonTable struct {
 	CreditRule     string         `json:"credit_rule"`
 }
 
-// AgingRow is one long-unchanged started-type item; the state name travels
-// with it so "41 d in On hold" reads as parked, not stuck.
+// AgingRow is one long-unchanged in-flight item (started- or
+// verification-type); the state name travels with it so "41 d in On hold"
+// reads as parked, not stuck.
 type AgingRow struct {
 	Key      string   `json:"key"`
 	Title    string   `json:"title"`
@@ -158,15 +160,16 @@ type WeekPoint struct {
 // Health is "is the project healthy right now" — a snapshot at generation
 // time, independent of the selected window.
 type Health struct {
-	Open        int          `json:"open"`
-	InStarted   int          `json:"in_started"`
-	Blocked     int          `json:"blocked"`
-	Overdue     int          `json:"overdue"`
-	OpenByState []StateCount `json:"open_by_state"`
-	PriorityMix []RankCount  `json:"priority_mix"`
-	Aging       []AgingRow   `json:"aging"`
-	Due         []DueRow     `json:"due"`
-	Weekly      []WeekPoint  `json:"weekly"`
+	Open           int          `json:"open"`
+	InStarted      int          `json:"in_started"`
+	InVerification int          `json:"in_verification"`
+	Blocked        int          `json:"blocked"`
+	Overdue        int          `json:"overdue"`
+	OpenByState    []StateCount `json:"open_by_state"`
+	PriorityMix    []RankCount  `json:"priority_mix"`
+	Aging          []AgingRow   `json:"aging"`
+	Due            []DueRow     `json:"due"`
+	Weekly         []WeekPoint  `json:"weekly"`
 }
 
 // CycleSection is question 1 when the report is cycle-scoped.
@@ -177,13 +180,14 @@ type CycleSection struct {
 	Added          Tile `json:"added"`
 	Removed        Tile `json:"removed"`
 	CarriedOver    Tile `json:"carried_over"`
-	// Cancelled/Archived are nil when the project defines no state of that
-	// type — the tile is absent, not zero.
-	Cancelled *Tile `json:"cancelled,omitempty"`
-	Archived  *Tile `json:"archived,omitempty"`
-	AtClose   int   `json:"at_close"`
+	// InVerification/Cancelled/Archived are nil when the project defines no
+	// state of that type — the tile is absent, not zero.
+	InVerification *Tile `json:"in_verification,omitempty"`
+	Cancelled      *Tile `json:"cancelled,omitempty"`
+	Archived       *Tile `json:"archived,omitempty"`
+	AtClose        int   `json:"at_close"`
 	// Identity is the reconciliation line: planned + added - removed = at
-	// close = completed + open + cancelled + archived.
+	// close = completed + in verification + open + cancelled + archived.
 	Identity string      `json:"identity"`
 	Days     []DayPoint  `json:"days"`
 	Bands    []BandCount `json:"bands"`

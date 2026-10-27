@@ -32,6 +32,7 @@ const stateTypes: { value: StateType; label: string }[] = [
   { value: "backlog", label: "Backlog" },
   { value: "unstarted", label: "Unstarted" },
   { value: "started", label: "Started" },
+  { value: "verification", label: "Verification" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
   { value: "archived", label: "Archived" },

@@ -183,7 +183,7 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 	}
 
 	var planned, added, removed, atClose, deliveredList, originalPlan []*task
-	var cancelled, archived, carried []*task
+	var cancelled, archived, verification, carried []*task
 	for _, t := range units {
 		spans := spansOf[t.id]
 		inAtStart := memberAt(spans, w.start)
@@ -217,6 +217,8 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 				cancelled = append(cancelled, t)
 			case "archived":
 				archived = append(archived, t)
+			case "verification":
+				verification = append(verification, t)
 			case "completed":
 				// counted via deliveredList
 			default:
@@ -225,6 +227,12 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		}
 	}
 
+	// Without verification states the bucket is empty by construction; folding
+	// it into carried keeps the identity honest either way.
+	if !d.hasType("verification") {
+		carried = append(carried, verification...)
+		verification = nil
+	}
 	sec := &CycleSection{
 		Delivered:      Tile{Metric: "delivered", Count: len(deliveredList), Cx: cxOver(deliveredList)},
 		OriginalPlan:   Tile{Metric: "original_plan", Count: len(originalPlan)},
@@ -235,6 +243,10 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		AtClose:        len(atClose),
 		Days:           []DayPoint{},
 		Bands:          bandsOver(deliveredList),
+	}
+	if d.hasType("verification") {
+		t := Tile{Metric: "verification", Count: len(verification), Cx: cxOver(verification)}
+		sec.InVerification = &t
 	}
 	if d.hasType("cancelled") {
 		t := Tile{Metric: "cancelled", Count: len(cancelled)}
@@ -250,8 +262,12 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 			completedAtClose++
 		}
 	}
-	sec.Identity = fmt.Sprintf("%d planned + %d added - %d removed = %d at close = %d completed + %d open",
-		len(planned), len(added), len(removed), len(atClose), completedAtClose, len(carried))
+	sec.Identity = fmt.Sprintf("%d planned + %d added - %d removed = %d at close = %d completed",
+		len(planned), len(added), len(removed), len(atClose), completedAtClose)
+	if sec.InVerification != nil {
+		sec.Identity += fmt.Sprintf(" + %d in verification", sec.InVerification.Count)
+	}
+	sec.Identity += fmt.Sprintf(" + %d open", len(carried))
 	if sec.Cancelled != nil {
 		sec.Identity += fmt.Sprintf(" + %d cancelled", sec.Cancelled.Count)
 	}
@@ -457,6 +473,9 @@ func (e *Engine) health(d *projectData) Health {
 		if st.Type == "started" {
 			h.InStarted++
 		}
+		if st.Type == "verification" {
+			h.InVerification++
+		}
 		if d.blocked[t.id] {
 			h.Blocked++
 		}
@@ -469,7 +488,7 @@ func (e *Engine) health(d *projectData) Health {
 				h.Due = append(h.Due, e.dueRow(d, t, late))
 			}
 		}
-		if st.Type == "started" {
+		if isWorkingType(st.Type) {
 			last := t.createdAt
 			for _, ev := range t.events {
 				if ev.typ == "state_changed" {

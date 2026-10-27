@@ -3,6 +3,7 @@ interface ProgressMetrics {
   total: number;
   completed: number;
   in_progress: number;
+  in_verification?: number;
   todo: number;
   cancelled: number;
   archived?: number;
@@ -50,6 +51,11 @@ const progressPct = computed(() => Math.round(donePct.value + archivedPct.value)
       <div class="flex justify-between">
         <dt class="text-muted-foreground">In progress</dt>
         <dd class="font-medium tabular-nums">{{ metrics?.in_progress ?? 0 }}</dd>
+      </div>
+      <!-- Built but still being validated — present only when the project uses it. -->
+      <div v-if="(metrics?.in_verification ?? 0) > 0" class="flex justify-between">
+        <dt class="text-muted-foreground">In verification</dt>
+        <dd class="font-medium tabular-nums">{{ metrics?.in_verification }}</dd>
       </div>
       <div class="flex justify-between">
         <dt class="text-muted-foreground">Done</dt>

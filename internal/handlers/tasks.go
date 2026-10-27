@@ -2704,11 +2704,12 @@ func (h *TaskHandler) RemoveAssignee(c *echo.Context) error {
 	})
 
 	// The hand-over rule: someone unassigned while the task is being worked
-	// (a started-type state) did work on it, so they are recorded as a
-	// contributor — delivery credit survives the assignee change to the next
-	// stage (e.g. developer handing over to a tester). Best-effort: a failure
-	// here never fails the removal, and a duplicate changes nothing.
-	if task.StateType == "started" {
+	// (a started- or verification-type state) did work on it, so they are
+	// recorded as a contributor — delivery credit survives the assignee change
+	// to the next stage (e.g. developer handing over to a tester, or a tester
+	// handing over to the release). Best-effort: a failure here never fails
+	// the removal, and a duplicate changes nothing.
+	if task.StateType == "started" || task.StateType == "verification" {
 		inserted, err := h.store.AddTaskContributor(ctx, store.AddTaskContributorParams{
 			TaskID:  task.ID,
 			UserID:  assigneeID,

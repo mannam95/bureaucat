@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
+import { Circle, CircleDot, CircleDotDashed, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
 import { complexityBand } from "~/utils/complexity";
 import { getAvatarColor } from "~/utils/avatarColor";
 import type { Task, ProjectState } from "~/types";
@@ -85,6 +85,8 @@ const stateIcon = computed(() => {
       return Circle;
     case "started":
       return CircleDot;
+    case "verification":
+      return CircleDotDashed;
     case "completed":
       return CheckCircle2;
     case "cancelled":

@@ -33,11 +33,12 @@ const emit = defineEmits<{
 const { updateTask, addAssignee, removeAssignee, addLabel, removeLabel } = useTasks();
 const updating = ref(false);
 
-const STATE_TYPE_ORDER = ["backlog", "unstarted", "started", "completed", "cancelled", "archived"] as const;
+const STATE_TYPE_ORDER = ["backlog", "unstarted", "started", "verification", "completed", "cancelled", "archived"] as const;
 const STATE_TYPE_LABELS: Record<string, string> = {
   backlog: "Backlog",
   unstarted: "Unstarted",
   started: "Started",
+  verification: "Verification",
   completed: "Completed",
   cancelled: "Cancelled",
   archived: "Archived",

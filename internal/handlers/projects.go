@@ -84,7 +84,7 @@ var defaultStates = []struct {
 	{"unstarted", "Approval Pending", "#F59E0B", 2, false},
 	{"started", "In Progress", "#10B981", 3, false},
 	{"started", "Blocked", "#EF4444", 4, false},
-	{"started", "Testing", "#8B5CF6", 5, false},
+	{"verification", "Testing", "#8B5CF6", 5, false},
 	{"completed", "Done", "#22C55E", 6, false},
 	{"cancelled", "Cancelled", "#9CA3AF", 7, false},
 }
@@ -1239,7 +1239,7 @@ func (h *ProjectHandler) CreateState(c *echo.Context) error {
 	}
 
 	// Validate state type
-	validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true, "archived": true}
+	validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "verification": true, "completed": true, "cancelled": true, "archived": true}
 	if !validTypes[req.StateType] {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid state_type")
 	}
@@ -1312,7 +1312,7 @@ func (h *ProjectHandler) UpdateState(c *echo.Context) error {
 
 	stateType := ""
 	if req.StateType != nil {
-		validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true, "archived": true}
+		validTypes := map[string]bool{"backlog": true, "unstarted": true, "started": true, "verification": true, "completed": true, "cancelled": true, "archived": true}
 		if !validTypes[*req.StateType] {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid state_type")
 		}

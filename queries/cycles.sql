@@ -152,6 +152,7 @@ SELECT
     COUNT(*)::int                                                         AS total,
     COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int             AS completed,
     COUNT(*) FILTER (WHERE ps.state_type = 'started')::int               AS in_progress,
+    COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int          AS in_verification,
     COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
     COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int             AS cancelled,
     COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int              AS archived

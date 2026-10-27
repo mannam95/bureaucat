@@ -121,6 +121,7 @@ export interface WeekPoint {
 export interface InsightsHealth {
   open: number;
   in_started: number;
+  in_verification: number;
   blocked: number;
   overdue: number;
   open_by_state: StateCount[];
@@ -137,6 +138,7 @@ export interface CycleSection {
   added: MetricTile;
   removed: MetricTile;
   carried_over: MetricTile;
+  in_verification?: MetricTile;
   cancelled?: MetricTile;
   archived?: MetricTile;
   at_close: number;

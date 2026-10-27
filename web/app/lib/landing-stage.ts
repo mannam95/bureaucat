@@ -65,7 +65,7 @@ const STATES = [
   { name: "Approval Pending", color: "#F59E0B", type: "unstarted" },
   { name: "In Progress", color: "#10B981", type: "started" },
   { name: "Blocked", color: "#EF4444", type: "started" },
-  { name: "Testing", color: "#8B5CF6", type: "started" },
+  { name: "Testing", color: "#8B5CF6", type: "verification" },
   { name: "Done", color: "#22C55E", type: "completed" },
 ];
 const PRIORITIES = [
@@ -236,7 +236,8 @@ function sceneLifecycle(shared: Shared): Scene {
   const groups: [string, number, number][] = [
     ["backlog", 0, 0],
     ["unstarted", 1, 2],
-    ["started", 3, 5],
+    ["started", 3, 4],
+    ["verification", 5, 5],
     ["completed", 6, 6],
   ];
   for (const [name, a, b] of groups) {
