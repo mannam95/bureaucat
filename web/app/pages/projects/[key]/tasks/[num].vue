@@ -19,6 +19,7 @@ import {
   Paperclip,
   Circle,
   CircleDot,
+  CircleDotDashed,
   CheckCircle2,
   XCircle,
 } from "lucide-vue-next";
@@ -132,6 +133,7 @@ const stateIconMap: Record<string, typeof Circle> = {
   backlog: Clock,
   unstarted: Circle,
   started: CircleDot,
+  verification: CircleDotDashed,
   completed: CheckCircle2,
   cancelled: XCircle,
   archived: Archive,

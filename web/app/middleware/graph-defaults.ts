@@ -1,6 +1,6 @@
 export default defineNuxtRouteMiddleware((to) => {
   const defaults: Record<string, string> = {};
-  if (to.query.state_types === undefined) defaults.state_types = "unstarted,started,backlog";
+  if (to.query.state_types === undefined) defaults.state_types = "unstarted,started,verification,backlog";
 
   // The personal graph defaults to the viewer's own tasks; admin graph shows everyone.
   const { user } = useAuth();

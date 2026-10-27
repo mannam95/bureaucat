@@ -46,6 +46,7 @@ const groupedStates = computed(() => {
     backlog: [],
     unstarted: [],
     started: [],
+    verification: [],
     completed: [],
     cancelled: [],
     archived: [],

@@ -207,6 +207,7 @@ const STATE_LIGHT: Record<string, string> = {
   backlog: "#D1D5DB", // gray-300
   unstarted: "#93C5FD", // blue-300
   started: "#6EE7B7", // emerald-300
+  verification: "#C4B5FD", // violet-300
   completed: "#86EFAC", // green-300
   cancelled: "#E5E7EB", // gray-200
 };

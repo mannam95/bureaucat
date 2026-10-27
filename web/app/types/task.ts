@@ -397,6 +397,7 @@ export const STATE_TYPE_COLORS: Record<string, string> = {
   backlog: "#6B7280",
   unstarted: "#3B82F6",
   started: "#10B981",
+  verification: "#8B5CF6",
   completed: "#22C55E",
   cancelled: "#9CA3AF",
   archived: "#78716C",
