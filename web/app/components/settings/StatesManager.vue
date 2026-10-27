@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Trash2, GripVertical, Loader2, Star, Pencil, TriangleAlert } from "lucide-vue-next";
+import { Plus, Trash2, GripVertical, Loader2, Star, Pencil, TriangleAlert, ArrowUp, ArrowDown } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { ProjectState, StateType } from "~/types";
 
@@ -139,6 +139,24 @@ async function handleSaveEdit() {
   }
 }
 
+// Reorder within the type group by swapping board positions with the
+// neighbour (the same pattern priorities use). Boards, breakdowns and report
+// evidence all follow position, so they pick the new order up directly.
+async function move(state: ProjectState, dir: -1 | 1) {
+  const list = groupedStates.value[state.state_type] ?? [];
+  const idx = list.findIndex((x) => x.id === state.id);
+  const other = list[idx + dir];
+  if (!other) return;
+  loading.value = true;
+  const a = await updateState(props.projectKey, state.id, { position: other.position });
+  const b = await updateState(props.projectKey, other.id, { position: state.position });
+  loading.value = false;
+  if (!a.success || !b.success) {
+    toast.error(a.error || b.error || "Failed to reorder");
+  }
+  emit("refresh");
+}
+
 async function handleSetDefault(state: ProjectState) {
   if (state.is_default) return;
 
@@ -268,7 +286,7 @@ async function handleDelete(state: ProjectState) {
       </div>
       <div v-else class="space-y-1">
         <div
-          v-for="state in groupedStates[type.value]"
+          v-for="(state, idx) in groupedStates[type.value]"
           :key="state.id"
           class="rounded-lg border px-3 py-2"
         >
@@ -371,6 +389,30 @@ async function handleDelete(state: ProjectState) {
               <Star v-else class="size-3.5" />
               Set default
             </Button>
+            <template v-if="isAdmin && groupedStates[type.value].length > 1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Move up"
+                title="Move up within this group"
+                class="size-8 text-muted-foreground"
+                :disabled="idx === 0 || loading"
+                @click="move(state, -1)"
+              >
+                <ArrowUp class="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Move down"
+                title="Move down within this group"
+                class="size-8 text-muted-foreground"
+                :disabled="idx === groupedStates[type.value].length - 1 || loading"
+                @click="move(state, 1)"
+              >
+                <ArrowDown class="size-3.5" />
+              </Button>
+            </template>
             <Button
               v-if="isAdmin"
               variant="ghost"
