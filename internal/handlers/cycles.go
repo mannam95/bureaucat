@@ -44,9 +44,14 @@ type CycleResponse struct {
 	TotalTasks     int       `json:"total_tasks"`
 	CompletedTasks int       `json:"completed_tasks"`
 	// Archived tasks count as complete in progress, shown separately.
-	ArchivedTasks int    `json:"archived_tasks"`
-	ProjectKey    string `json:"project_key,omitempty"`
-	ProjectName   string `json:"project_name,omitempty"`
+	ArchivedTasks int `json:"archived_tasks"`
+	// Per-type counts feed the stacked lifecycle bar on cards and lists.
+	InVerificationTasks int    `json:"in_verification_tasks"`
+	InProgressTasks     int    `json:"in_progress_tasks"`
+	TodoTasks           int    `json:"todo_tasks"`
+	CancelledTasks      int    `json:"cancelled_tasks"`
+	ProjectKey          string `json:"project_key,omitempty"`
+	ProjectName         string `json:"project_name,omitempty"`
 }
 
 // CreateCycleRequest is the request body for creating a cycle.
@@ -292,20 +297,24 @@ func (h *CycleHandler) ListCycles(c *echo.Context) error {
 	cycles := make([]CycleResponse, len(rows))
 	for i, r := range rows {
 		cycles[i] = CycleResponse{
-			ID:             r.ID,
-			ProjectID:      r.ProjectID,
-			Title:          r.Title,
-			Description:    textToStringPtr(r.Description),
-			StartDate:      dateToString(r.StartDate),
-			EndDate:        dateToString(r.EndDate),
-			Status:         derivedCycleStatus(r.StartDate, r.EndDate),
-			CreatedBy:      r.CreatedBy,
-			CreatedAt:      r.CreatedAt.Time,
-			UpdatedAt:      r.UpdatedAt.Time,
-			TotalTasks:     int(r.TotalTasks),
-			CompletedTasks: int(r.CompletedTasks),
-			ArchivedTasks:  int(r.ArchivedTasks),
-			ProjectKey:     projectKey,
+			ID:                  r.ID,
+			ProjectID:           r.ProjectID,
+			Title:               r.Title,
+			Description:         textToStringPtr(r.Description),
+			StartDate:           dateToString(r.StartDate),
+			EndDate:             dateToString(r.EndDate),
+			Status:              derivedCycleStatus(r.StartDate, r.EndDate),
+			CreatedBy:           r.CreatedBy,
+			CreatedAt:           r.CreatedAt.Time,
+			UpdatedAt:           r.UpdatedAt.Time,
+			TotalTasks:          int(r.TotalTasks),
+			CompletedTasks:      int(r.CompletedTasks),
+			ArchivedTasks:       int(r.ArchivedTasks),
+			InVerificationTasks: int(r.InVerificationTasks),
+			InProgressTasks:     int(r.InProgressTasks),
+			TodoTasks:           int(r.TodoTasks),
+			CancelledTasks:      int(r.CancelledTasks),
+			ProjectKey:          projectKey,
 		}
 	}
 
@@ -929,21 +938,25 @@ func (h *CycleHandler) ListActiveCycles(c *echo.Context) error {
 	out := make([]CycleResponse, len(rows))
 	for i, r := range rows {
 		out[i] = CycleResponse{
-			ID:             r.ID,
-			ProjectID:      r.ProjectID,
-			Title:          r.Title,
-			Description:    textToStringPtr(r.Description),
-			StartDate:      dateToString(r.StartDate),
-			EndDate:        dateToString(r.EndDate),
-			Status:         "active",
-			CreatedBy:      r.CreatedBy,
-			CreatedAt:      r.CreatedAt.Time,
-			UpdatedAt:      r.UpdatedAt.Time,
-			TotalTasks:     int(r.TotalTasks),
-			CompletedTasks: int(r.CompletedTasks),
-			ArchivedTasks:  int(r.ArchivedTasks),
-			ProjectKey:     r.ProjectKey,
-			ProjectName:    r.ProjectName,
+			ID:                  r.ID,
+			ProjectID:           r.ProjectID,
+			Title:               r.Title,
+			Description:         textToStringPtr(r.Description),
+			StartDate:           dateToString(r.StartDate),
+			EndDate:             dateToString(r.EndDate),
+			Status:              "active",
+			CreatedBy:           r.CreatedBy,
+			CreatedAt:           r.CreatedAt.Time,
+			UpdatedAt:           r.UpdatedAt.Time,
+			TotalTasks:          int(r.TotalTasks),
+			CompletedTasks:      int(r.CompletedTasks),
+			ArchivedTasks:       int(r.ArchivedTasks),
+			InVerificationTasks: int(r.InVerificationTasks),
+			InProgressTasks:     int(r.InProgressTasks),
+			TodoTasks:           int(r.TodoTasks),
+			CancelledTasks:      int(r.CancelledTasks),
+			ProjectKey:          r.ProjectKey,
+			ProjectName:         r.ProjectName,
 		}
 	}
 	return c.JSON(http.StatusOK, out)

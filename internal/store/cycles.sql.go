@@ -285,16 +285,24 @@ const listActiveCyclesForUser = `-- name: ListActiveCyclesForUser :many
 SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
        p.project_key, p.name AS project_name,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks
 FROM cycles c
 JOIN projects p ON c.project_id = p.id AND p.deleted_at IS NULL
 JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')           AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')                AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted')) AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')              AS cancelled_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -306,20 +314,24 @@ ORDER BY c.end_date ASC, p.name ASC
 `
 
 type ListActiveCyclesForUserRow struct {
-	ID             uuid.UUID          `json:"id"`
-	ProjectID      uuid.UUID          `json:"project_id"`
-	Title          string             `json:"title"`
-	Description    pgtype.Text        `json:"description"`
-	StartDate      pgtype.Date        `json:"start_date"`
-	EndDate        pgtype.Date        `json:"end_date"`
-	CreatedBy      uuid.UUID          `json:"created_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	ProjectKey     string             `json:"project_key"`
-	ProjectName    string             `json:"project_name"`
-	TotalTasks     int32              `json:"total_tasks"`
-	CompletedTasks int32              `json:"completed_tasks"`
-	ArchivedTasks  int32              `json:"archived_tasks"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	StartDate           pgtype.Date        `json:"start_date"`
+	EndDate             pgtype.Date        `json:"end_date"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ProjectKey          string             `json:"project_key"`
+	ProjectName         string             `json:"project_name"`
+	TotalTasks          int32              `json:"total_tasks"`
+	CompletedTasks      int32              `json:"completed_tasks"`
+	ArchivedTasks       int32              `json:"archived_tasks"`
+	InVerificationTasks int32              `json:"in_verification_tasks"`
+	InProgressTasks     int32              `json:"in_progress_tasks"`
+	TodoTasks           int32              `json:"todo_tasks"`
+	CancelledTasks      int32              `json:"cancelled_tasks"`
 }
 
 func (q *Queries) ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID) ([]ListActiveCyclesForUserRow, error) {
@@ -346,6 +358,10 @@ func (q *Queries) ListActiveCyclesForUser(ctx context.Context, userID uuid.UUID)
 			&i.TotalTasks,
 			&i.CompletedTasks,
 			&i.ArchivedTasks,
+			&i.InVerificationTasks,
+			&i.InProgressTasks,
+			&i.TodoTasks,
+			&i.CancelledTasks,
 		); err != nil {
 			return nil, err
 		}
@@ -488,14 +504,22 @@ func (q *Queries) ListCycleTasks(ctx context.Context, arg ListCycleTasksParams) 
 const listProjectCycles = `-- name: ListProjectCycles :many
 SELECT c.id, c.project_id, c.title, c.description, c.start_date, c.end_date,
        c.created_by, c.created_at, c.updated_at,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks
 FROM cycles c
 LEFT JOIN LATERAL (
     SELECT COUNT(*)                                                          AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')              AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')               AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')           AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')                AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted')) AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')              AS cancelled_tasks
     FROM cycle_tasks ct
     JOIN tasks t ON ct.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -517,18 +541,22 @@ type ListProjectCyclesParams struct {
 }
 
 type ListProjectCyclesRow struct {
-	ID             uuid.UUID          `json:"id"`
-	ProjectID      uuid.UUID          `json:"project_id"`
-	Title          string             `json:"title"`
-	Description    pgtype.Text        `json:"description"`
-	StartDate      pgtype.Date        `json:"start_date"`
-	EndDate        pgtype.Date        `json:"end_date"`
-	CreatedBy      uuid.UUID          `json:"created_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	TotalTasks     int32              `json:"total_tasks"`
-	CompletedTasks int32              `json:"completed_tasks"`
-	ArchivedTasks  int32              `json:"archived_tasks"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	StartDate           pgtype.Date        `json:"start_date"`
+	EndDate             pgtype.Date        `json:"end_date"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	TotalTasks          int32              `json:"total_tasks"`
+	CompletedTasks      int32              `json:"completed_tasks"`
+	ArchivedTasks       int32              `json:"archived_tasks"`
+	InVerificationTasks int32              `json:"in_verification_tasks"`
+	InProgressTasks     int32              `json:"in_progress_tasks"`
+	TodoTasks           int32              `json:"todo_tasks"`
+	CancelledTasks      int32              `json:"cancelled_tasks"`
 }
 
 func (q *Queries) ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error) {
@@ -558,6 +586,10 @@ func (q *Queries) ListProjectCycles(ctx context.Context, arg ListProjectCyclesPa
 			&i.TotalTasks,
 			&i.CompletedTasks,
 			&i.ArchivedTasks,
+			&i.InVerificationTasks,
+			&i.InProgressTasks,
+			&i.TodoTasks,
+			&i.CancelledTasks,
 		); err != nil {
 			return nil, err
 		}

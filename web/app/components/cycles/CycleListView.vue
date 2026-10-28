@@ -14,10 +14,26 @@ const statusStyles: Record<string, string> = {
   completed: "border-muted-foreground/30 bg-muted text-muted-foreground",
 };
 
+// Archived counts as complete and cancelled leaves the denominator,
+// matching the detail Progress card. Todo falls back to the remainder so a
+// payload without the per-type counts still renders a sensible bar.
+function counts(c: Cycle) {
+  const done = c.completed_tasks;
+  const archived = c.archived_tasks ?? 0;
+  const verification = c.in_verification_tasks ?? 0;
+  const inProgress = c.in_progress_tasks ?? 0;
+  const cancelled = c.cancelled_tasks ?? 0;
+  const todo =
+    c.todo_tasks ??
+    Math.max(0, c.total_tasks - done - archived - verification - inProgress - cancelled);
+  return { done, archived, verification, inProgress, todo, cancelled };
+}
+
 function pct(c: Cycle): number {
-  if (!c.total_tasks) return 0;
-  // Archived counts as complete, matching the detail Progress card.
-  return Math.round(((c.completed_tasks + (c.archived_tasks ?? 0)) / c.total_tasks) * 100);
+  const n = counts(c);
+  const countable = c.total_tasks - n.cancelled;
+  if (countable <= 0) return 0;
+  return Math.round(((n.done + n.archived) / countable) * 100);
 }
 
 function range(c: Cycle): string {
@@ -56,12 +72,17 @@ const cols = "grid-template-columns: minmax(0,1fr) 8rem 14rem 9rem;";
           {{ c.status }}
         </span>
         <span class="truncate text-xs text-muted-foreground">{{ range(c) }}</span>
-        <span class="flex items-center gap-2">
-          <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <span class="block h-full rounded-full bg-amber-500" :style="{ width: pct(c) + '%' }" />
-          </span>
+        <div class="flex items-center gap-2">
+          <LifecycleBar
+            class="flex-1"
+            :done="counts(c).done"
+            :archived="counts(c).archived"
+            :verification="counts(c).verification"
+            :in-progress="counts(c).inProgress"
+            :todo="counts(c).todo"
+          />
           <span class="w-8 text-right text-xs tabular-nums text-muted-foreground">{{ pct(c) }}%</span>
-        </span>
+        </div>
       </NuxtLink>
     </div>
   </div>

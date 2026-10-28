@@ -26,11 +26,26 @@ const statusStyles: Record<string, string> = {
   cancelled:   "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
 };
 
-// Archived counts as complete, matching the detail Progress card.
+// Archived counts as complete and cancelled leaves the denominator,
+// matching the detail Progress card. Todo falls back to the remainder so a
+// payload without the per-type counts still renders a sensible bar.
+const counts = computed(() => {
+  const m = props.module;
+  const done = m.completed_tasks;
+  const archived = m.archived_tasks ?? 0;
+  const verification = m.in_verification_tasks ?? 0;
+  const inProgress = m.in_progress_tasks ?? 0;
+  const cancelled = m.cancelled_tasks ?? 0;
+  const todo =
+    m.todo_tasks ??
+    Math.max(0, m.total_tasks - done - archived - verification - inProgress - cancelled);
+  return { done, archived, verification, inProgress, todo, cancelled };
+});
 const progressPct = computed(() => {
-  if (props.module.total_tasks === 0) return 0;
-  const done = props.module.completed_tasks + (props.module.archived_tasks ?? 0);
-  return Math.round((done / props.module.total_tasks) * 100);
+  const n = counts.value;
+  const countable = props.module.total_tasks - n.cancelled;
+  if (countable <= 0) return 0;
+  return Math.round(((n.done + n.archived) / countable) * 100);
 });
 
 const visibleMembers = computed(() => (props.module.members ?? []).slice(0, 3));
@@ -144,12 +159,13 @@ function initials(first: string, last: string, username: string): string {
           </span>
           <span class="font-semibold tabular-nums">{{ progressPct }}%</span>
         </div>
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            class="h-full rounded-full bg-amber-500 transition-all"
-            :style="{ width: progressPct + '%' }"
-          />
-        </div>
+        <LifecycleBar
+          :done="counts.done"
+          :archived="counts.archived"
+          :verification="counts.verification"
+          :in-progress="counts.inProgress"
+          :todo="counts.todo"
+        />
       </CardContent>
     </Card>
   </NuxtLink>

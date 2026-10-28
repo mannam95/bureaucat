@@ -67,6 +67,12 @@ type ModuleResponse struct {
 	CompletedTasks int               `json:"completed_tasks"`
 	// Archived tasks count as complete in progress, shown separately.
 	ArchivedTasks int `json:"archived_tasks"`
+	// Per-type counts feed the stacked lifecycle bar on cards and lists.
+	// Only the list endpoints fill them; single-module responses carry zeros.
+	InVerificationTasks int `json:"in_verification_tasks"`
+	InProgressTasks     int `json:"in_progress_tasks"`
+	TodoTasks           int `json:"todo_tasks"`
+	CancelledTasks      int `json:"cancelled_tasks"`
 	// 1-10 star priority rating (0 = unset), for reprioritising epics in the list.
 	PriorityRating int    `json:"priority_rating"`
 	ProjectKey     string `json:"project_key,omitempty"`
@@ -614,23 +620,27 @@ func (h *ModuleHandler) ListModules(c *echo.Context) error {
 	modules := make([]ModuleResponse, len(rows))
 	for i, r := range rows {
 		modules[i] = ModuleResponse{
-			ID:             r.ID,
-			ProjectID:      r.ProjectID,
-			Title:          r.Title,
-			Description:    textToStringPtr(r.Description),
-			Status:         r.Status,
-			StartDate:      moduleDateToPtr(r.StartDate),
-			EndDate:        moduleDateToPtr(r.EndDate),
-			Lead:           pgUUIDToUserBrief(r.LeadID, r.LeadUsername, r.LeadFirstName, r.LeadLastName, r.LeadEmail, r.LeadAvatarUrl),
-			Members:        membersByModule[r.ID],
-			CreatedBy:      r.CreatedBy,
-			CreatedAt:      r.CreatedAt.Time,
-			UpdatedAt:      r.UpdatedAt.Time,
-			TotalTasks:     int(r.TotalTasks),
-			CompletedTasks: int(r.CompletedTasks),
-			ArchivedTasks:  int(r.ArchivedTasks),
-			PriorityRating: int(r.PriorityRating),
-			ProjectKey:     projectKey,
+			ID:                  r.ID,
+			ProjectID:           r.ProjectID,
+			Title:               r.Title,
+			Description:         textToStringPtr(r.Description),
+			Status:              r.Status,
+			StartDate:           moduleDateToPtr(r.StartDate),
+			EndDate:             moduleDateToPtr(r.EndDate),
+			Lead:                pgUUIDToUserBrief(r.LeadID, r.LeadUsername, r.LeadFirstName, r.LeadLastName, r.LeadEmail, r.LeadAvatarUrl),
+			Members:             membersByModule[r.ID],
+			CreatedBy:           r.CreatedBy,
+			CreatedAt:           r.CreatedAt.Time,
+			UpdatedAt:           r.UpdatedAt.Time,
+			TotalTasks:          int(r.TotalTasks),
+			CompletedTasks:      int(r.CompletedTasks),
+			ArchivedTasks:       int(r.ArchivedTasks),
+			InVerificationTasks: int(r.InVerificationTasks),
+			InProgressTasks:     int(r.InProgressTasks),
+			TodoTasks:           int(r.TodoTasks),
+			CancelledTasks:      int(r.CancelledTasks),
+			PriorityRating:      int(r.PriorityRating),
+			ProjectKey:          projectKey,
 		}
 		if modules[i].Members == nil {
 			modules[i].Members = []ModuleUserBrief{}
@@ -1451,23 +1461,27 @@ func (h *ModuleHandler) ListActiveModules(c *echo.Context) error {
 	out := make([]ModuleResponse, len(rows))
 	for i, r := range rows {
 		out[i] = ModuleResponse{
-			ID:             r.ID,
-			ProjectID:      r.ProjectID,
-			Title:          r.Title,
-			Description:    textToStringPtr(r.Description),
-			Status:         r.Status,
-			StartDate:      moduleDateToPtr(r.StartDate),
-			EndDate:        moduleDateToPtr(r.EndDate),
-			Lead:           pgUUIDToUserBrief(r.LeadID, r.LeadUsername, r.LeadFirstName, r.LeadLastName, r.LeadEmail, r.LeadAvatarUrl),
-			Members:        []ModuleUserBrief{},
-			CreatedBy:      r.CreatedBy,
-			CreatedAt:      r.CreatedAt.Time,
-			UpdatedAt:      r.UpdatedAt.Time,
-			TotalTasks:     int(r.TotalTasks),
-			CompletedTasks: int(r.CompletedTasks),
-			ArchivedTasks:  int(r.ArchivedTasks),
-			ProjectKey:     r.ProjectKey,
-			ProjectName:    r.ProjectName,
+			ID:                  r.ID,
+			ProjectID:           r.ProjectID,
+			Title:               r.Title,
+			Description:         textToStringPtr(r.Description),
+			Status:              r.Status,
+			StartDate:           moduleDateToPtr(r.StartDate),
+			EndDate:             moduleDateToPtr(r.EndDate),
+			Lead:                pgUUIDToUserBrief(r.LeadID, r.LeadUsername, r.LeadFirstName, r.LeadLastName, r.LeadEmail, r.LeadAvatarUrl),
+			Members:             []ModuleUserBrief{},
+			CreatedBy:           r.CreatedBy,
+			CreatedAt:           r.CreatedAt.Time,
+			UpdatedAt:           r.UpdatedAt.Time,
+			TotalTasks:          int(r.TotalTasks),
+			CompletedTasks:      int(r.CompletedTasks),
+			ArchivedTasks:       int(r.ArchivedTasks),
+			InVerificationTasks: int(r.InVerificationTasks),
+			InProgressTasks:     int(r.InProgressTasks),
+			TodoTasks:           int(r.TodoTasks),
+			CancelledTasks:      int(r.CancelledTasks),
+			ProjectKey:          r.ProjectKey,
+			ProjectName:         r.ProjectName,
 		}
 	}
 	return c.JSON(http.StatusOK, out)

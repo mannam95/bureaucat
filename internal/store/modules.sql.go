@@ -409,9 +409,13 @@ SELECT m.id, m.project_id, m.title, m.description, m.status,
        m.start_date, m.end_date, m.lead_id,
        m.created_by, m.created_at, m.updated_at,
        p.project_key, p.name AS project_name,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -424,7 +428,11 @@ LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')::int      AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int    AS cancelled_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -435,27 +443,31 @@ ORDER BY COALESCE(m.end_date, '9999-12-31'::date) ASC, p.name ASC
 `
 
 type ListActiveModulesForUserRow struct {
-	ID             uuid.UUID          `json:"id"`
-	ProjectID      uuid.UUID          `json:"project_id"`
-	Title          string             `json:"title"`
-	Description    pgtype.Text        `json:"description"`
-	Status         string             `json:"status"`
-	StartDate      pgtype.Date        `json:"start_date"`
-	EndDate        pgtype.Date        `json:"end_date"`
-	LeadID         pgtype.UUID        `json:"lead_id"`
-	CreatedBy      uuid.UUID          `json:"created_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	ProjectKey     string             `json:"project_key"`
-	ProjectName    string             `json:"project_name"`
-	TotalTasks     int32              `json:"total_tasks"`
-	CompletedTasks int32              `json:"completed_tasks"`
-	ArchivedTasks  int32              `json:"archived_tasks"`
-	LeadUsername   string             `json:"lead_username"`
-	LeadFirstName  string             `json:"lead_first_name"`
-	LeadLastName   string             `json:"lead_last_name"`
-	LeadAvatarUrl  pgtype.Text        `json:"lead_avatar_url"`
-	LeadEmail      string             `json:"lead_email"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	Status              string             `json:"status"`
+	StartDate           pgtype.Date        `json:"start_date"`
+	EndDate             pgtype.Date        `json:"end_date"`
+	LeadID              pgtype.UUID        `json:"lead_id"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ProjectKey          string             `json:"project_key"`
+	ProjectName         string             `json:"project_name"`
+	TotalTasks          int32              `json:"total_tasks"`
+	CompletedTasks      int32              `json:"completed_tasks"`
+	ArchivedTasks       int32              `json:"archived_tasks"`
+	InVerificationTasks int32              `json:"in_verification_tasks"`
+	InProgressTasks     int32              `json:"in_progress_tasks"`
+	TodoTasks           int32              `json:"todo_tasks"`
+	CancelledTasks      int32              `json:"cancelled_tasks"`
+	LeadUsername        string             `json:"lead_username"`
+	LeadFirstName       string             `json:"lead_first_name"`
+	LeadLastName        string             `json:"lead_last_name"`
+	LeadAvatarUrl       pgtype.Text        `json:"lead_avatar_url"`
+	LeadEmail           string             `json:"lead_email"`
 }
 
 // "Active" modules across all projects the user is a member of. Uses the
@@ -487,6 +499,10 @@ func (q *Queries) ListActiveModulesForUser(ctx context.Context, userID uuid.UUID
 			&i.TotalTasks,
 			&i.CompletedTasks,
 			&i.ArchivedTasks,
+			&i.InVerificationTasks,
+			&i.InProgressTasks,
+			&i.TodoTasks,
+			&i.CancelledTasks,
 			&i.LeadUsername,
 			&i.LeadFirstName,
 			&i.LeadLastName,
@@ -713,9 +729,13 @@ const listProjectModules = `-- name: ListProjectModules :many
 SELECT m.id, m.project_id, m.title, m.description, m.status,
        m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -726,7 +746,11 @@ LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')::int      AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int    AS cancelled_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -785,26 +809,30 @@ type ListProjectModulesParams struct {
 }
 
 type ListProjectModulesRow struct {
-	ID             uuid.UUID          `json:"id"`
-	ProjectID      uuid.UUID          `json:"project_id"`
-	Title          string             `json:"title"`
-	Description    pgtype.Text        `json:"description"`
-	Status         string             `json:"status"`
-	StartDate      pgtype.Date        `json:"start_date"`
-	EndDate        pgtype.Date        `json:"end_date"`
-	LeadID         pgtype.UUID        `json:"lead_id"`
-	PriorityRating int32              `json:"priority_rating"`
-	CreatedBy      uuid.UUID          `json:"created_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	TotalTasks     int32              `json:"total_tasks"`
-	CompletedTasks int32              `json:"completed_tasks"`
-	ArchivedTasks  int32              `json:"archived_tasks"`
-	LeadUsername   string             `json:"lead_username"`
-	LeadFirstName  string             `json:"lead_first_name"`
-	LeadLastName   string             `json:"lead_last_name"`
-	LeadAvatarUrl  pgtype.Text        `json:"lead_avatar_url"`
-	LeadEmail      string             `json:"lead_email"`
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	Status              string             `json:"status"`
+	StartDate           pgtype.Date        `json:"start_date"`
+	EndDate             pgtype.Date        `json:"end_date"`
+	LeadID              pgtype.UUID        `json:"lead_id"`
+	PriorityRating      int32              `json:"priority_rating"`
+	CreatedBy           uuid.UUID          `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	TotalTasks          int32              `json:"total_tasks"`
+	CompletedTasks      int32              `json:"completed_tasks"`
+	ArchivedTasks       int32              `json:"archived_tasks"`
+	InVerificationTasks int32              `json:"in_verification_tasks"`
+	InProgressTasks     int32              `json:"in_progress_tasks"`
+	TodoTasks           int32              `json:"todo_tasks"`
+	CancelledTasks      int32              `json:"cancelled_tasks"`
+	LeadUsername        string             `json:"lead_username"`
+	LeadFirstName       string             `json:"lead_first_name"`
+	LeadLastName        string             `json:"lead_last_name"`
+	LeadAvatarUrl       pgtype.Text        `json:"lead_avatar_url"`
+	LeadEmail           string             `json:"lead_email"`
 }
 
 func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModulesParams) ([]ListProjectModulesRow, error) {
@@ -844,6 +872,10 @@ func (q *Queries) ListProjectModules(ctx context.Context, arg ListProjectModules
 			&i.TotalTasks,
 			&i.CompletedTasks,
 			&i.ArchivedTasks,
+			&i.InVerificationTasks,
+			&i.InProgressTasks,
+			&i.TodoTasks,
+			&i.CancelledTasks,
 			&i.LeadUsername,
 			&i.LeadFirstName,
 			&i.LeadLastName,

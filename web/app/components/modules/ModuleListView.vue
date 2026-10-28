@@ -18,10 +18,26 @@ const statusStyles: Record<string, string> = {
   paused: "border-muted-foreground/30 bg-muted text-muted-foreground",
 };
 
+// Archived counts as complete and cancelled leaves the denominator,
+// matching the detail Progress card. Todo falls back to the remainder so a
+// payload without the per-type counts still renders a sensible bar.
+function counts(m: Module) {
+  const done = m.completed_tasks;
+  const archived = m.archived_tasks ?? 0;
+  const verification = m.in_verification_tasks ?? 0;
+  const inProgress = m.in_progress_tasks ?? 0;
+  const cancelled = m.cancelled_tasks ?? 0;
+  const todo =
+    m.todo_tasks ??
+    Math.max(0, m.total_tasks - done - archived - verification - inProgress - cancelled);
+  return { done, archived, verification, inProgress, todo, cancelled };
+}
+
 function pct(m: Module): number {
-  if (!m.total_tasks) return 0;
-  // Archived counts as complete, matching the detail Progress card.
-  return Math.round(((m.completed_tasks + (m.archived_tasks ?? 0)) / m.total_tasks) * 100);
+  const n = counts(m);
+  const countable = m.total_tasks - n.cancelled;
+  if (countable <= 0) return 0;
+  return Math.round(((n.done + n.archived) / countable) * 100);
 }
 
 const cols = "grid-template-columns: minmax(0,1fr) 8rem 6rem 9rem 8rem 6rem;";
@@ -59,12 +75,17 @@ const cols = "grid-template-columns: minmax(0,1fr) 8rem 6rem 9rem 8rem 6rem;";
         <span class="flex items-center">
           <PriorityRating :model-value="m.priority_rating ?? 0" />
         </span>
-        <span class="flex items-center gap-2">
-          <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <span class="block h-full rounded-full bg-amber-500" :style="{ width: pct(m) + '%' }" />
-          </span>
+        <div class="flex items-center gap-2">
+          <LifecycleBar
+            class="flex-1"
+            :done="counts(m).done"
+            :archived="counts(m).archived"
+            :verification="counts(m).verification"
+            :in-progress="counts(m).inProgress"
+            :todo="counts(m).todo"
+          />
           <span class="w-8 text-right text-xs tabular-nums text-muted-foreground">{{ pct(m) }}%</span>
-        </span>
+        </div>
         <span class="min-w-0 truncate text-xs text-muted-foreground">
           {{ m.lead ? `${m.lead.first_name} ${m.lead.last_name}`.trim() : "—" }}
         </span>

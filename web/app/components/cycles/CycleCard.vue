@@ -25,11 +25,26 @@ const statusStyles: Record<string, string> = {
     "border-muted-foreground/30 bg-muted text-muted-foreground",
 };
 
-// Archived counts as complete, matching the detail Progress card.
+// Archived counts as complete and cancelled leaves the denominator,
+// matching the detail Progress card. Todo falls back to the remainder so a
+// payload without the per-type counts still renders a sensible bar.
+const counts = computed(() => {
+  const c = props.cycle;
+  const done = c.completed_tasks;
+  const archived = c.archived_tasks ?? 0;
+  const verification = c.in_verification_tasks ?? 0;
+  const inProgress = c.in_progress_tasks ?? 0;
+  const cancelled = c.cancelled_tasks ?? 0;
+  const todo =
+    c.todo_tasks ??
+    Math.max(0, c.total_tasks - done - archived - verification - inProgress - cancelled);
+  return { done, archived, verification, inProgress, todo, cancelled };
+});
 const progressPct = computed(() => {
-  if (props.cycle.total_tasks === 0) return 0;
-  const done = props.cycle.completed_tasks + (props.cycle.archived_tasks ?? 0);
-  return Math.round((done / props.cycle.total_tasks) * 100);
+  const n = counts.value;
+  const countable = props.cycle.total_tasks - n.cancelled;
+  if (countable <= 0) return 0;
+  return Math.round(((n.done + n.archived) / countable) * 100);
 });
 
 function formatDate(d: string): string {
@@ -95,12 +110,13 @@ function formatRange(a: string, b: string): string {
           </span>
           <span class="font-semibold tabular-nums">{{ progressPct }}%</span>
         </div>
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            class="h-full rounded-full bg-amber-500 transition-all"
-            :style="{ width: progressPct + '%' }"
-          />
-        </div>
+        <LifecycleBar
+          :done="counts.done"
+          :archived="counts.archived"
+          :verification="counts.verification"
+          :in-progress="counts.inProgress"
+          :todo="counts.todo"
+        />
       </CardContent>
     </Card>
   </NuxtLink>

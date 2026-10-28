@@ -17,6 +17,11 @@ export interface Cycle {
   completed_tasks: number;
   /** Archived tasks count as complete in progress (shown separately). */
   archived_tasks?: number;
+  /** Per-type counts for the stacked lifecycle bar on cards and lists. */
+  in_verification_tasks?: number;
+  in_progress_tasks?: number;
+  todo_tasks?: number;
+  cancelled_tasks?: number;
   project_key?: string;
   project_name?: string;
 }

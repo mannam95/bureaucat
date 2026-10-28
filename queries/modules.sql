@@ -84,9 +84,13 @@ WHERE id = $1 AND deleted_at IS NULL;
 SELECT m.id, m.project_id, m.title, m.description, m.status,
        m.start_date, m.end_date, m.lead_id, m.priority_rating,
        m.created_by, m.created_at, m.updated_at,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -97,7 +101,11 @@ LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')::int      AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int    AS cancelled_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id
@@ -148,9 +156,13 @@ SELECT m.id, m.project_id, m.title, m.description, m.status,
        m.start_date, m.end_date, m.lead_id,
        m.created_by, m.created_at, m.updated_at,
        p.project_key, p.name AS project_name,
-       COALESCE(stats.total_tasks, 0)::int     AS total_tasks,
-       COALESCE(stats.completed_tasks, 0)::int AS completed_tasks,
-       COALESCE(stats.archived_tasks, 0)::int  AS archived_tasks,
+       COALESCE(stats.total_tasks, 0)::int           AS total_tasks,
+       COALESCE(stats.completed_tasks, 0)::int       AS completed_tasks,
+       COALESCE(stats.archived_tasks, 0)::int        AS archived_tasks,
+       COALESCE(stats.in_verification_tasks, 0)::int AS in_verification_tasks,
+       COALESCE(stats.in_progress_tasks, 0)::int     AS in_progress_tasks,
+       COALESCE(stats.todo_tasks, 0)::int            AS todo_tasks,
+       COALESCE(stats.cancelled_tasks, 0)::int       AS cancelled_tasks,
        COALESCE(lu.username,   '')::text AS lead_username,
        COALESCE(lu.first_name, '')::text AS lead_first_name,
        COALESCE(lu.last_name,  '')::text AS lead_last_name,
@@ -163,7 +175,11 @@ LEFT JOIN users lu ON m.lead_id = lu.id
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int                                         AS total_tasks,
            COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int AS completed_tasks,
-           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks
+           COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int  AS archived_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int AS in_verification_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'started')::int      AS in_progress_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo_tasks,
+           COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int    AS cancelled_tasks
     FROM module_tasks mt
     JOIN tasks t ON mt.task_id = t.id AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
     JOIN project_states ps ON t.state_id = ps.id

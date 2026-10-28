@@ -47,6 +47,11 @@ export interface Module {
   completed_tasks: number;
   /** Archived tasks count as complete in progress (shown separately). */
   archived_tasks?: number;
+  /** Per-type counts for the stacked lifecycle bar on cards and lists. */
+  in_verification_tasks?: number;
+  in_progress_tasks?: number;
+  todo_tasks?: number;
+  cancelled_tasks?: number;
   /** 1-10 star priority rating; 0 = unset. Used to reprioritise epics in the list. */
   priority_rating?: number;
   project_key?: string;
