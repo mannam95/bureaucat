@@ -436,7 +436,7 @@ watch(moduleId, async () => {
 
             <!-- RIGHT: Overview (collapsible on demand) -->
             <aside v-if="showDetailPanel" class="space-y-6">
-              <ProgressCard :metrics="metrics" />
+              <ProgressCard :metrics="metrics" :buckets="metrics?.state_breakdown" />
 
               <StateBreakdownCard
                 v-if="metrics"

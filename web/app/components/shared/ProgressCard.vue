@@ -9,22 +9,52 @@ interface ProgressMetrics {
   archived?: number;
 }
 
+// Per-state counts, used only to tell on hover which states feed each bucket.
+interface StateBucket {
+  state_name: string;
+  state_type: string;
+  count: number;
+}
+
 const props = defineProps<{
   metrics: ProgressMetrics | null;
+  buckets?: StateBucket[];
 }>();
 
-const donePct = computed(() => {
+// Cancelled is excluded from the denominator (the same rule the subtask
+// rollup and Insights apply): the percentage can honestly reach 100 even
+// when work was cancelled along the way.
+const countable = computed(() => {
   const m = props.metrics;
-  if (!m || m.total === 0) return 0;
-  return (m.completed / m.total) * 100;
+  if (!m) return 0;
+  return Math.max(0, m.total - m.cancelled);
 });
-const archivedPct = computed(() => {
+const progressPct = computed(() => {
   const m = props.metrics;
-  if (!m || m.total === 0) return 0;
-  return ((m.archived ?? 0) / m.total) * 100;
+  if (!m || countable.value === 0) return 0;
+  return Math.round(((m.completed + (m.archived ?? 0)) / countable.value) * 100);
 });
-// Archived counts as complete: a cycle that is all done-or-archived reads 100%.
-const progressPct = computed(() => Math.round(donePct.value + archivedPct.value));
+
+// A bucket is a lifecycle type; the hover names the member states, built live
+// from the state breakdown so workflow edits show up with zero code changes.
+function memberStates(types: string[]): string | undefined {
+  const rows = (props.buckets ?? []).filter((b) => types.includes(b.state_type));
+  if (rows.length === 0) return undefined;
+  return rows.map((b) => `${b.state_name} ${b.count}`).join(" · ");
+}
+
+const rows = computed(() => {
+  const m = props.metrics;
+  if (!m) return [];
+  const out = [
+    { key: "done", label: "Done", count: m.completed, dot: "bg-emerald-500 dark:bg-emerald-400", title: memberStates(["completed"]) },
+    { key: "verification", label: "In verification", count: m.in_verification ?? 0, dot: "bg-violet-500 dark:bg-violet-400", title: memberStates(["verification"]) },
+    { key: "in_progress", label: "In progress", count: m.in_progress, dot: "bg-amber-500", title: memberStates(["started"]) },
+    { key: "todo", label: "Todo", count: m.todo, dot: "bg-muted-foreground/40", title: memberStates(["backlog", "unstarted"]) },
+  ];
+  // In verification only renders for projects that use the type.
+  return out.filter((r) => r.key !== "verification" || r.count > 0);
+});
 </script>
 
 <template>
@@ -33,41 +63,53 @@ const progressPct = computed(() => Math.round(donePct.value + archivedPct.value)
       Progress
     </h3>
     <div class="flex items-baseline gap-2">
-      <span class="text-3xl font-bold tabular-nums">{{ progressPct }}%</span>
+      <span
+        class="text-3xl font-bold tabular-nums"
+        :title="`${(metrics?.completed ?? 0) + (metrics?.archived ?? 0)} of ${countable} tasks delivered (cancelled excluded)`"
+      >{{ progressPct }}%</span>
       <span class="text-sm text-muted-foreground">
-        {{ metrics?.total ?? 0 }} task{{ (metrics?.total ?? 0) === 1 ? "" : "s" }}
+        delivered · {{ metrics?.total ?? 0 }} task{{ (metrics?.total ?? 0) === 1 ? "" : "s" }}
       </span>
     </div>
-    <!-- Done (solid) + archived (muted) fill the bar; together they reach 100%. -->
-    <div class="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div class="h-full bg-amber-500 transition-all" :style="{ width: donePct + '%' }" />
-      <div class="h-full bg-amber-500/40 transition-all" :style="{ width: archivedPct + '%' }" />
-    </div>
-    <dl class="mt-4 grid grid-cols-2 gap-2 text-xs">
-      <div class="flex justify-between">
-        <dt class="text-muted-foreground">Todo</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.todo ?? 0 }}</dd>
+    <LifecycleBar
+      class="mt-3"
+      height-class="h-2"
+      :done="metrics?.completed ?? 0"
+      :archived="metrics?.archived ?? 0"
+      :verification="metrics?.in_verification ?? 0"
+      :in-progress="metrics?.in_progress ?? 0"
+      :todo="metrics?.todo ?? 0"
+    />
+    <dl class="mt-4 space-y-1.5 text-sm">
+      <div
+        v-for="r in rows"
+        :key="r.key"
+        class="flex items-center justify-between gap-2"
+        :title="r.title"
+      >
+        <dt class="flex items-center gap-2 text-muted-foreground">
+          <span class="size-2 rounded-full" :class="r.dot" />
+          {{ r.label }}
+        </dt>
+        <dd class="font-medium tabular-nums">{{ r.count }}</dd>
       </div>
-      <div class="flex justify-between">
-        <dt class="text-muted-foreground">In progress</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.in_progress ?? 0 }}</dd>
+      <!-- Outside the bar and the percentage: cancelled is never progress,
+           archived already rides on the done segment. -->
+      <div
+        v-if="(metrics?.cancelled ?? 0) > 0"
+        class="flex items-center justify-between gap-2 pl-4 text-xs text-muted-foreground"
+        :title="memberStates(['cancelled'])"
+      >
+        <dt>Cancelled · not counted</dt>
+        <dd class="tabular-nums">{{ metrics?.cancelled }}</dd>
       </div>
-      <!-- Built but still being validated — present only when the project uses it. -->
-      <div v-if="(metrics?.in_verification ?? 0) > 0" class="flex justify-between">
-        <dt class="text-muted-foreground">In verification</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.in_verification }}</dd>
-      </div>
-      <div class="flex justify-between">
-        <dt class="text-muted-foreground">Done</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.completed ?? 0 }}</dd>
-      </div>
-      <div class="flex justify-between">
-        <dt class="text-muted-foreground">Cancelled</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.cancelled ?? 0 }}</dd>
-      </div>
-      <div v-if="(metrics?.archived ?? 0) > 0" class="flex justify-between">
-        <dt class="text-muted-foreground">Archived</dt>
-        <dd class="font-medium tabular-nums">{{ metrics?.archived }}</dd>
+      <div
+        v-if="(metrics?.archived ?? 0) > 0"
+        class="flex items-center justify-between gap-2 pl-4 text-xs text-muted-foreground"
+        :title="memberStates(['archived'])"
+      >
+        <dt>Archived · counts as done</dt>
+        <dd class="tabular-nums">{{ metrics?.archived }}</dd>
       </div>
     </dl>
   </section>
