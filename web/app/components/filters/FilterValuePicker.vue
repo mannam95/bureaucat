@@ -217,9 +217,9 @@ function updateStringArray(next: string[]) {
       </button>
     </div>
 
-    <!-- assignees / watchers / created_by (uuid-array of members) -->
+    <!-- assignees / watchers / originators / created_by (uuid-array of members) -->
     <EntityMultiSelect
-      v-else-if="valueKind === 'uuid-array' && (field === 'assignees' || field === 'watchers' || field === 'created_by')"
+      v-else-if="valueKind === 'uuid-array' && (field === 'assignees' || field === 'watchers' || field === 'originators' || field === 'created_by')"
       :items="[{ user_id: '@me', first_name: 'Me', last_name: '', username: 'me', email: '' }, ...members]"
       :model-value="asStringArray"
       item-key="user_id"
