@@ -48,13 +48,6 @@ WHERE ps.project_id = sqlc.arg('project_id')::uuid
 GROUP BY ps.id, ps.name, ps.state_type, ps.color, ps.position
 ORDER BY ps.state_type ASC, ps.position ASC, ps.name ASC;
 
--- name: ProjectTasksByPriority :many
-SELECT t.priority AS priority, COUNT(*)::int AS count
-FROM tasks t
-WHERE t.project_id = sqlc.arg('project_id')::uuid AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
-GROUP BY t.priority
-ORDER BY t.priority ASC;
-
 -- name: ProjectWorkload :many
 -- Open tasks and subtasks per assignee.
 SELECT u.id AS user_id, u.username, u.first_name, u.last_name, u.avatar_url, COUNT(*)::int AS open_tasks

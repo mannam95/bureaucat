@@ -131,6 +131,8 @@ func TestAPIRoutesMatchAssistantCatalog(t *testing.T) {
 		importHandler:        &handlers.ImportHandler{},
 		oauthHandler:         &handlers.OAuthHandler{},
 		patHandler:           &handlers.PATHandler{},
+		preferencesHandler:   &handlers.PreferencesHandler{},
+		insightsHandler:      &handlers.InsightsHandler{},
 		feedbackHandler:      &handlers.FeedbackHandler{},
 		searchHandler:        &handlers.SearchHandler{},
 		releasesHandler:      &handlers.ReleasesHandler{},

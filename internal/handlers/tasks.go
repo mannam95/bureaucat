@@ -3754,7 +3754,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 	// second, the destination's default (lowest active rank) last.
 	full, err := q.GetTaskByID(ctx, taskID)
 	if err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 	var newPriorityID uuid.UUID
 	if p, perr := q.GetProjectPriorityByProjectAndName(ctx, store.GetProjectPriorityByProjectAndNameParams{
@@ -3770,7 +3770,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 	} else if p, perr := q.GetDefaultProjectPriority(ctx, dest.ID); perr == nil {
 		newPriorityID = p.ID
 	} else {
-		return 0, perr
+		return store.MoveTaskRow{}, perr
 	}
 
 	nextNumber, err := q.GetNextTaskNumber(ctx, dest.ID)
@@ -3804,14 +3804,14 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 	// areas, re-add ones matching by name in the destination project.
 	taskAreas, err := q.ListTaskAreas(ctx, taskID)
 	if err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 	for _, ar := range taskAreas {
 		if err := q.RemoveTaskArea(ctx, store.RemoveTaskAreaParams{
 			TaskID: taskID,
 			AreaID: ar.AreaID,
 		}); err != nil {
-			return 0, err
+			return store.MoveTaskRow{}, err
 		}
 		destArea, err := q.GetProjectAreaByProjectAndName(ctx, store.GetProjectAreaByProjectAndNameParams{
 			ProjectID: dest.ID,
@@ -3825,7 +3825,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 			AreaID:  destArea.ID,
 			AddedBy: ar.AddedBy,
 		}); err != nil {
-			return 0, err
+			return store.MoveTaskRow{}, err
 		}
 	}
 

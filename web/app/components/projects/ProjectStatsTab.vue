@@ -67,25 +67,11 @@ const trendCharts: { key: keyof ProjectStatsDay; title: string; color: string }[
   { key: "modules", title: "Modules created", color: "#5EEAD4" },
 ];
 
-const PRIORITY_LIGHT: Record<string, string> = {
-  "No priority": "#D1D5DB", // gray-300
-  "Low": "#93C5FD", // blue-300
-  "Medium": "#FCD34D", // amber-300
-  "High": "#FDBA74", // orange-300
-  "Urgent": "#FCA5A5", // red-300
-};
 
 const stateBars = computed<StatsBar[]>(() =>
   (stats.value?.tasks_by_state ?? []).map((s) => ({ label: s.name, count: s.count, fill: s.color || "#D1D5DB" })),
 );
 
-const priorityBars = computed<StatsBar[]>(() =>
-  (stats.value?.tasks_by_priority ?? []).map((p) => ({
-    label: p.label,
-    count: p.count,
-    fill: PRIORITY_LIGHT[p.label] ?? "#D1D5DB",
-  })),
-);
 
 const maxWorkload = computed(() =>
   Math.max(1, stats.value?.totals.unassigned_open ?? 0, ...(stats.value?.workload ?? []).map((w) => w.open_tasks)),
@@ -140,7 +126,6 @@ const maxWorkload = computed(() =>
         </div>
         <div class="grid gap-3 lg:grid-cols-2">
           <StatsBarChart title="By state" :bars="stateBars" empty-text="No states yet" />
-          <StatsBarChart title="By priority" :bars="priorityBars" empty-text="No tasks yet" />
         </div>
       </div>
 

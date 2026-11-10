@@ -58,10 +58,9 @@ type ProjectStatsResponse struct {
 		Attachments      int64 `json:"attachments"`
 		AttachmentsBytes int64 `json:"attachments_bytes"`
 	} `json:"totals"`
-	TasksByState    []ProjectStateStat `json:"tasks_by_state"`
-	TasksByPriority []StatCount        `json:"tasks_by_priority"`
-	Workload        []WorkloadStat     `json:"workload"`
-	Series          struct {
+	TasksByState []ProjectStateStat `json:"tasks_by_state"`
+	Workload     []WorkloadStat     `json:"workload"`
+	Series       struct {
 		From string            `json:"from"`
 		To   string            `json:"to"`
 		Days []ProjectStatsDay `json:"days"`
@@ -108,19 +107,6 @@ func (h *ProjectHandler) GetProjectStats(c *echo.Context) error {
 	resp.TasksByState = make([]ProjectStateStat, len(states))
 	for i, s := range states {
 		resp.TasksByState[i] = ProjectStateStat{Name: s.Name, StateType: s.StateType, Color: textToStringPtr(s.Color), Count: int(s.Count)}
-	}
-
-	priorities, err := h.store.ProjectTasksByPriority(ctx, projectID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load task priorities")
-	}
-	resp.TasksByPriority = make([]StatCount, len(priorities))
-	for i, p := range priorities {
-		label, ok := priorityLabels[int(p.Priority)]
-		if !ok {
-			label = "Unknown"
-		}
-		resp.TasksByPriority[i] = StatCount{Label: label, Count: int(p.Count)}
 	}
 
 	workload, err := h.store.ProjectWorkload(ctx, projectID)
