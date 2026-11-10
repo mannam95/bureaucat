@@ -17,6 +17,9 @@ import (
 	"bereaucat/internal/store"
 )
 
+// maxToolOutput caps tool output fed to the chat assistant's LLM; the chat UI
+// offers the full output separately. Programmatic callers (MCP, workflow) read
+// the JSON directly - a mid-string cut would corrupt it - so they are not capped.
 const maxToolOutput = 16 * 1024
 
 // executor runs catalog tools against the app's own HTTP router as the given user,
@@ -107,7 +110,10 @@ func (e *executor) run(ctx context.Context, user store.GetUserByIDRow, tool *Too
 	rec := httptest.NewRecorder()
 	e.router.ServeHTTP(rec, req)
 
-	out := truncate(rec.Body.String(), maxToolOutput)
+	out := rec.Body.String()
+	if via == auth.ViaAssistant {
+		out = truncate(out, maxToolOutput)
+	}
 	if rec.Code >= 400 {
 		return fmt.Sprintf("HTTP %d: %s", rec.Code, out), true
 	}
