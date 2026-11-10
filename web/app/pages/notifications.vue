@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, Loader2, Trash2, Circle, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { Bell, Loader2, Trash2, Circle, Check, ChevronLeft, ChevronRight } from "lucide-vue-next";
 import type { NotificationEntry } from "~/types";
 import { ACTIVITY_TYPE_LABELS } from "~/types";
 import { NOTIFICATION_ICONS, formatNotificationDate, notificationLink } from "~/utils/notifications";
@@ -40,6 +40,15 @@ function onItemClick(a: NotificationEntry) {
     a.is_read = true;
     markRead(a.id);
   }
+}
+
+// Mark one notification read in place, without opening the task. The row
+// stays (this page is the history) and just loses its unread styling.
+function onMarkOneRead(a: NotificationEntry, e: Event) {
+  e.preventDefault();
+  e.stopPropagation();
+  a.is_read = true;
+  markRead(a.id);
 }
 
 const showDeleteConfirm = ref(false);
@@ -154,12 +163,17 @@ onMounted(() => load(1));
                     {{ formatNotificationDate(a.updated_at || a.created_at) }}
                   </p>
                 </div>
-                <span
+                <button
                   v-if="!a.is_read"
-                  class="mt-1 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                  type="button"
+                  class="group/dot mt-0.5 flex size-6 shrink-0 items-center justify-center self-start rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Mark read"
+                  title="Mark read"
+                  @click="onMarkOneRead(a, $event)"
                 >
-                  New
-                </span>
+                  <span class="size-2 rounded-full bg-amber-500 group-hover/dot:hidden" />
+                  <Check class="hidden size-4 text-muted-foreground group-hover/dot:block" />
+                </button>
               </NuxtLink>
             </li>
           </ul>

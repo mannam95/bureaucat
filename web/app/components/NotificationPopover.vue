@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, Loader2, Circle, CheckCheck } from "lucide-vue-next";
+import { Bell, Loader2, Circle, Check, CheckCheck } from "lucide-vue-next";
 import type { NotificationEntry } from "~/types";
 import { ACTIVITY_TYPE_LABELS } from "~/types";
 import { NOTIFICATION_ICONS, formatNotificationDate, notificationLink } from "~/utils/notifications";
@@ -61,6 +61,15 @@ function onActivityClick(activity: NotificationEntry) {
     markRead(activity.id);
   }
   open.value = false;
+}
+
+// Mark one notification read without opening the task: it leaves the
+// dropdown (read items live on /notifications) and the badge follows.
+function onMarkOneRead(activity: NotificationEntry, e: Event) {
+  e.preventDefault();
+  e.stopPropagation();
+  activity.is_read = true;
+  markRead(activity.id);
 }
 
 async function onMarkAllRead() {
@@ -183,11 +192,17 @@ onUnmounted(() => {
                 {{ formatNotificationDate(activity.updated_at || activity.created_at) }}
               </p>
             </div>
-            <span
+            <button
               v-if="!activity.is_read"
-              class="mt-1 size-2 shrink-0 rounded-full bg-amber-500"
-              aria-hidden="true"
-            />
+              type="button"
+              class="group/dot mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Mark read"
+              title="Mark read"
+              @click="onMarkOneRead(activity, $event)"
+            >
+              <span class="size-2 rounded-full bg-amber-500 group-hover/dot:hidden" />
+              <Check class="hidden size-3.5 text-muted-foreground group-hover/dot:block" />
+            </button>
           </NuxtLink>
         </div>
         <!-- Loading more indicator -->
