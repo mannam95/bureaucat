@@ -1,7 +1,19 @@
+export interface AssistantSettings {
+  enabled: boolean;
+  provider: "openai" | "anthropic" | "openrouter" | "bedrock";
+  model: string;
+  api_key: string;
+  aws_region: string;
+}
+
 export interface BrandingSettings {
   enabled: boolean;
   app_name: string;
+  logo_url: string | null;
+  favicon_url: string | null;
 }
+
+export type BrandingAsset = "logo" | "favicon";
 
 export interface SSOProviderConfig {
   enabled: boolean;
@@ -30,6 +42,8 @@ export interface MattermostSettings {
   enabled: boolean;
   server_url: string;
   bot_token: string;
+  assistant_enabled: boolean;
+  app_url: string;
 }
 
 export interface FeedbackSettings {
@@ -46,6 +60,8 @@ export interface FeedbackPublicSettings {
 const branding = ref<BrandingSettings>({
   enabled: false,
   app_name: "Bureaucat",
+  logo_url: null,
+  favicon_url: null,
 });
 
 const brandingLoaded = ref(false);
@@ -73,6 +89,11 @@ export function useSettings() {
     return "Bureaucat";
   });
 
+  const logoUrl = computed(() => (branding.value.enabled ? branding.value.logo_url : null));
+  const faviconUrl = computed(() =>
+    branding.value.enabled ? branding.value.favicon_url ?? branding.value.logo_url : null
+  );
+
   async function fetchBranding(): Promise<void> {
     if (brandingLoaded.value) return;
 
@@ -90,7 +111,7 @@ export function useSettings() {
   }
 
   async function updateBranding(
-    settings: BrandingSettings
+    settings: Pick<BrandingSettings, "enabled" | "app_name">
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const response = await fetch("/api/v1/admin/settings/branding", {
@@ -399,12 +420,105 @@ export function useSettings() {
     }
   }
 
+  // --- Assistant Settings ---
+
+  async function fetchAssistantSettings(): Promise<{ success: boolean; data?: AssistantSettings; error?: string }> {
+    try {
+      const response = await fetch("/api/v1/admin/settings/assistant", {
+        headers: { ...getAuthHeader() },
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.message || "Failed to fetch assistant settings" };
+      }
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function updateAssistantSettings(
+    settings: AssistantSettings
+  ): Promise<{ success: boolean; data?: AssistantSettings; error?: string }> {
+    try {
+      const response = await fetch("/api/v1/admin/settings/assistant", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        credentials: "include",
+        body: JSON.stringify(settings),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.message || "Failed to update assistant settings" };
+      }
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function testAssistantSettings(): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await fetch("/api/v1/admin/settings/assistant/test", {
+        method: "POST",
+        headers: { ...getAuthHeader() },
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.message || "Assistant test failed" };
+      }
+      return { success: true, message: data.message };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function uploadBrandingAsset(
+    asset: BrandingAsset,
+    file: File
+  ): Promise<{ success: boolean; error?: string }> {
+    const body = new FormData();
+    body.append("file", file);
+    return sendBrandingAsset(asset, { method: "PUT", body });
+  }
+
+  async function removeBrandingAsset(asset: BrandingAsset): Promise<{ success: boolean; error?: string }> {
+    return sendBrandingAsset(asset, { method: "DELETE" });
+  }
+
+  async function sendBrandingAsset(
+    asset: BrandingAsset,
+    init: RequestInit
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`/api/v1/admin/settings/branding/${asset}`, {
+        ...init,
+        headers: { ...getAuthHeader() },
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.message || `Failed to update ${asset}` };
+      }
+      branding.value = data;
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
   return {
     branding,
     appName,
+    logoUrl,
+    faviconUrl,
     brandingLoaded,
     fetchBranding,
     updateBranding,
+    uploadBrandingAsset,
+    removeBrandingAsset,
     signupSettings,
     signupSettingsLoaded,
     fetchSignupSettings,
@@ -419,6 +533,9 @@ export function useSettings() {
     testMattermostConnection,
     fetchEmailStatus,
     sendTestEmail,
+    fetchAssistantSettings,
+    updateAssistantSettings,
+    testAssistantSettings,
     feedbackPublic,
     feedbackPublicLoaded,
     fetchFeedbackPublicSettings,

@@ -105,6 +105,8 @@ async function onDrop(targetIdx: number) {
   const res = await reorderProjects(items, next);
   if (!res.success) toast.error(res.error || "Failed to reorder projects");
 }
+
+onDataChanged(() => fetchProjects(page.value));
 </script>
 
 <template>
@@ -166,7 +168,7 @@ async function onDrop(targetIdx: number) {
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="flex items-center justify-center py-12">
+        <div v-if="loading && projects.length === 0" class="flex items-center justify-center py-12">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />
         </div>
 

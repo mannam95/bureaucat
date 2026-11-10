@@ -4,6 +4,12 @@ SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL;
 -- name: CountProjects :one
 SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL;
 
+-- name: CountWorkflowEnforcedProjects :one
+SELECT COUNT(*)
+FROM project_workflows w
+JOIN projects p ON p.id = w.project_id AND p.deleted_at IS NULL
+WHERE w.enabled;
+
 -- name: CountTopLevelTasks :one
 SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL AND parent_task_id IS NULL;
 
@@ -12,6 +18,26 @@ SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL AND parent_task_id IS NOT NU
 
 -- name: CountPages :one
 SELECT COUNT(*) FROM pages WHERE deleted_at IS NULL;
+
+-- name: CountActiveBlockerLinks :one
+-- Only links where neither task is deleted, completed or cancelled.
+SELECT COUNT(DISTINCT tb.task_id)::bigint AS blocked_tasks,
+       COUNT(DISTINCT tb.blocker_task_id)::bigint AS blocking_tasks
+FROM task_blockers tb
+JOIN tasks bt ON bt.id = tb.task_id AND bt.deleted_at IS NULL
+JOIN project_states bs ON bs.id = bt.state_id AND bs.state_type NOT IN ('completed', 'cancelled')
+JOIN tasks kt ON kt.id = tb.blocker_task_id AND kt.deleted_at IS NULL
+JOIN project_states ks ON ks.id = kt.state_id AND ks.state_type NOT IN ('completed', 'cancelled');
+
+-- name: CountAssistantConversations :one
+-- Only conversations with at least one user message.
+SELECT COUNT(*)::bigint AS conversations,
+       COUNT(DISTINCT c.user_id)::bigint AS users,
+       (COUNT(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM assistant_mattermost_threads mt WHERE mt.conversation_id = c.id
+       )))::bigint AS mattermost_conversations
+FROM assistant_conversations c
+WHERE EXISTS (SELECT 1 FROM assistant_messages m WHERE m.conversation_id = c.id AND m.role = 'user');
 
 -- name: CountAttachments :one
 SELECT COUNT(*) FROM attachments;
@@ -153,6 +179,26 @@ LEFT JOIN project_views v
 GROUP BY d
 ORDER BY d ASC;
 
+-- name: AssistantConversationsPerDay :many
+-- Same "has a user message" rule as CountAssistantConversations; Mattermost ones have a thread mapping.
+SELECT
+    d::date AS day,
+    (COUNT(c.id) FILTER (WHERE c.id IS NOT NULL AND NOT c.is_mattermost))::int AS web_count,
+    (COUNT(c.id) FILTER (WHERE c.is_mattermost))::int AS mattermost_count
+FROM generate_series(
+    sqlc.arg('from_date')::date,
+    sqlc.arg('to_date')::date,
+    INTERVAL '1 day'
+) d
+LEFT JOIN (
+    SELECT ac.id, ac.created_at,
+           EXISTS (SELECT 1 FROM assistant_mattermost_threads mt WHERE mt.conversation_id = ac.id) AS is_mattermost
+    FROM assistant_conversations ac
+    WHERE EXISTS (SELECT 1 FROM assistant_messages m WHERE m.conversation_id = ac.id AND m.role = 'user')
+) c ON c.created_at::date = d::date
+GROUP BY d
+ORDER BY d ASC;
+
 -- name: CyclesCreatedPerDay :many
 SELECT d::date AS day, COUNT(cy.id)::int AS count
 FROM generate_series(
@@ -181,16 +227,20 @@ ORDER BY d ASC;
 
 -- name: ListTaskAssignmentsForGraph :many
 -- One row per (task, assignee); unassigned tasks come back once with NULL user columns.
+-- The usernames filter keeps whole tasks the user created or is assigned to.
 SELECT t.id AS task_id, t.task_number, t.title,
        (t.parent_task_id IS NOT NULL)::boolean AS is_subtask, t.parent_task_id,
        p.project_key, p.name AS project_name,
        w.id AS workspace_id, w.workspace_key, w.name AS workspace_name,
        ps.name AS state_name, ps.state_type, ps.color AS state_color,
-       u.id AS user_id, u.username, u.email, u.first_name, u.last_name, u.avatar_url
+       u.id AS user_id, u.username, u.email, u.first_name, u.last_name, u.avatar_url,
+       c.id AS creator_id, c.username AS creator_username, c.email AS creator_email,
+       c.first_name AS creator_first_name, c.last_name AS creator_last_name, c.avatar_url AS creator_avatar_url
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN workspaces w ON p.workspace_id = w.id
 JOIN project_states ps ON t.state_id = ps.id
+JOIN users c ON t.created_by = c.id
 LEFT JOIN task_assignees ta ON ta.task_id = t.id
 LEFT JOIN users u ON ta.user_id = u.id
 WHERE t.deleted_at IS NULL
@@ -199,7 +249,11 @@ WHERE t.deleted_at IS NULL
   AND (sqlc.narg('workspace_key')::text IS NULL OR w.workspace_key = sqlc.narg('workspace_key')::text)
   AND (COALESCE(cardinality(sqlc.arg('project_keys')::text[]), 0) = 0 OR p.project_key = ANY(sqlc.arg('project_keys')::text[]))
   AND (COALESCE(cardinality(sqlc.arg('state_types')::text[]), 0) = 0 OR ps.state_type::text = ANY(sqlc.arg('state_types')::text[]))
-  AND (COALESCE(cardinality(sqlc.arg('usernames')::text[]), 0) = 0 OR u.username = ANY(sqlc.arg('usernames')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('usernames')::text[]), 0) = 0
+       OR c.username = ANY(sqlc.arg('usernames')::text[])
+       OR EXISTS (
+           SELECT 1 FROM task_assignees fa JOIN users fu ON fa.user_id = fu.id
+           WHERE fa.task_id = t.id AND fu.username = ANY(sqlc.arg('usernames')::text[])))
   AND (sqlc.narg('viewer_id')::uuid IS NULL OR EXISTS (
       SELECT 1 FROM project_members vm WHERE vm.project_id = p.id AND vm.user_id = sqlc.narg('viewer_id')::uuid))
 ORDER BY p.project_key ASC, t.task_number ASC;

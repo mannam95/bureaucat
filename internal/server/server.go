@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -18,9 +19,12 @@ import (
 
 	_ "bereaucat/docs"
 	"bereaucat/internal/activity"
+	"bereaucat/internal/assistant"
 	"bereaucat/internal/auth"
 	"bereaucat/internal/handlers"
 	"bereaucat/internal/insights"
+	"bereaucat/internal/mattermostbot"
+	"bereaucat/internal/mcpserver"
 	"bereaucat/internal/notifications"
 	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
@@ -64,6 +68,8 @@ type Server struct {
 	searchHandler        *handlers.SearchHandler
 	releasesHandler      *handlers.ReleasesHandler
 	insightsHandler      *handlers.InsightsHandler
+	assistantHandler     *handlers.AssistantHandler
+	mcpHandler           http.Handler
 	activityService      *activity.Service
 	notificationService  *notifier.Service
 	notificationsService *notifications.Service
@@ -181,8 +187,9 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		// Initialize per-user in-app notifications service, then wire it into the
 		// activity service so every logged activity fans out to participants —
 		// and, category-gated, to email. APP_BASE_URL makes the email links
-		// absolute; unset renders them relative.
-		srv.notificationsService = notifications.NewService(srv.store, srv.notificationService, strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"))
+		// absolute; unset renders them relative. The pool serializes
+		// find-or-create so concurrent activity never duplicates a notification.
+		srv.notificationsService = notifications.NewService(srv.store, srv.pool, srv.notificationService, strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"))
 		srv.notificationsHandler = handlers.NewNotificationHandler(srv.store)
 
 		// Initialize activity service
@@ -207,6 +214,16 @@ func New(devMode bool, dbURL string, authConfig AuthConfig, distFS fs.FS) (*Serv
 		srv.feedbackHandler = handlers.NewFeedbackHandler(srv.pool, srv.store)
 		srv.searchHandler = handlers.NewSearchHandler(srv.store)
 		srv.releasesHandler = handlers.NewReleasesHandler()
+
+		// Assistant tools call back into this router as the requesting user.
+		// The service also powers the MCP server's tool catalog, which is why it
+		// exists even though this fork keeps the assistant itself dark.
+		assistantService := assistant.NewService(srv.store, e, srv.authManager)
+		srv.assistantHandler = handlers.NewAssistantHandler(srv.store, assistantService)
+		// Self-host: the Mattermost bot is not used — the adapter never starts.
+		// go mattermostbot.New(srv.store, assistantService).Run(workerCtx)
+		_ = mattermostbot.New
+		srv.mcpHandler = mcpserver.Handler(srv.store, assistantService)
 	}
 
 	// Register routes

@@ -853,6 +853,7 @@ type UserActivityResponse struct {
 	TaskNumber   int32       `json:"task_number"`
 	ProjectKey   string      `json:"project_key"`
 	TaskTitle    string      `json:"task_title"`
+	Via          string      `json:"via"` // web | assistant | pat | workflow | mcp
 }
 
 // UserActivityDateCount represents the activity count on a single date.
@@ -921,6 +922,7 @@ func (h *AuthHandler) GetUserActivity(c *echo.Context) error {
 			TaskNumber:   a.TaskNumber,
 			ProjectKey:   a.ProjectKey,
 			TaskTitle:    a.TaskTitle,
+			Via:          a.Via,
 		}
 	}
 

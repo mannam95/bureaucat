@@ -136,8 +136,9 @@ const unassignedCount = computed(
   () => tasks.value.filter((t) => (t.assignees?.length ?? 0) === 0).length
 );
 
-async function loadAll() {
-  loading.value = true;
+async function loadAll(silent = false) {
+  if (silent && (loading.value || error.value)) return;
+  loading.value = !silent;
   error.value = null;
   const [m, met, t] = await Promise.all([
     getModule(projectKey.value, moduleId.value),
@@ -210,6 +211,7 @@ onMounted(async () => {
   }
   await loadAll();
 });
+onDataChanged(() => loadAll(true));
 
 onBeforeUnmount(() => {
   clearCurrent();

@@ -166,6 +166,7 @@ function copyLink() {
 }
 
 onMounted(loadAll);
+onDataChanged(loadAll);
 </script>
 
 <template>
@@ -204,7 +205,7 @@ onMounted(loadAll);
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="flex items-center justify-center py-12">
+        <div v-if="loading && groups.length === 0" class="flex items-center justify-center py-12">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />
         </div>
 

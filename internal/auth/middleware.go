@@ -74,6 +74,12 @@ func Middleware(manager *Manager, queries store.Querier) echo.MiddlewareFunc {
 			c.Request().Header.Set(HeaderUsername, claims.Username)
 			c.Request().Header.Set(HeaderUserType, claims.UserType)
 
+			via := ViaWeb
+			if claims.Via == ViaAssistant || claims.Via == ViaMCP {
+				via = claims.Via
+			}
+			c.SetRequest(c.Request().WithContext(WithVia(c.Request().Context(), via)))
+
 			return next(c)
 		}
 	}
@@ -132,6 +138,7 @@ func authenticateWithPAT(c *echo.Context, queries store.Querier, token string, n
 		scope = PATScopeReadWrite
 	}
 	c.Request().Header.Set(HeaderPATScope, scope)
+	c.SetRequest(c.Request().WithContext(WithVia(c.Request().Context(), ViaPAT)))
 
 	// Update last_used_at in the background
 	go func() {
@@ -139,4 +146,18 @@ func authenticateWithPAT(c *echo.Context, queries store.Querier, token string, n
 	}()
 
 	return next(c)
+}
+
+// AccessTokenCookieFallback lets browser-initiated GETs (e.g. <img src>) authenticate via the access_token cookie.
+func AccessTokenCookieFallback() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			if c.Request().Header.Get("Authorization") == "" {
+				if cookie, err := c.Cookie("access_token"); err == nil && cookie.Value != "" {
+					c.Request().Header.Set("Authorization", "Bearer "+cookie.Value)
+				}
+			}
+			return next(c)
+		}
+	}
 }

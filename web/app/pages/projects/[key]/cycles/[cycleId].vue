@@ -179,8 +179,9 @@ async function confirmMove() {
   }
 }
 
-async function loadAll() {
-  loading.value = true;
+async function loadAll(silent = false) {
+  if (silent && (loading.value || error.value)) return;
+  loading.value = !silent;
   error.value = null;
   const [c, m, t, s] = await Promise.all([
     getCycle(projectKey.value, cycleId.value),
@@ -230,6 +231,7 @@ onMounted(async () => {
   }
   await loadAll();
 });
+onDataChanged(() => loadAll(true));
 
 onBeforeUnmount(() => {
   clearCurrent();

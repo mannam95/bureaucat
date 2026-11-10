@@ -46,11 +46,17 @@ func (s *Server) registerRoutes() {
 	api.GET("/openapi.json", openAPISpec)
 
 	api.GET("/health", healthCheck)
+
+	// MCP server, outside /api/v1 by convention; PAT-only (enforced in mcpserver)
+	if s.mcpHandler != nil {
+		s.echo.Any("/mcp", echo.WrapHandler(s.mcpHandler), auth.Middleware(s.authManager, s.store))
+	}
 	api.GET("/ht/", s.healthCheckDetailed)
 
 	// Public settings routes
 	if s.settingsHandler != nil {
 		api.GET("/settings/branding", s.settingsHandler.GetBranding)
+		api.GET("/settings/branding/:asset", s.settingsHandler.GetBrandingAsset)
 		api.GET("/settings/sso", s.settingsHandler.GetSSOProviders)
 		api.GET("/settings/signup", s.settingsHandler.GetSignupSettings)
 	}
@@ -83,9 +89,9 @@ func (s *Server) registerRoutes() {
 		api.POST("/token_refresh", s.authHandler.TokenRefresh)
 		api.POST("/logout", s.authHandler.Logout)
 
-		// Public upload serving (no auth required)
 		if s.uploadHandler != nil {
-			api.GET("/uploads/:id", s.uploadHandler.Serve)
+			api.GET("/uploads/:id", s.uploadHandler.Serve,
+				auth.AccessTokenCookieFallback(), auth.Middleware(s.authManager, s.store), auth.EnforcePATScope())
 		}
 
 		// Protected routes
@@ -131,6 +137,20 @@ func (s *Server) registerRoutes() {
 			patGroup.POST("/me/tokens", s.patHandler.CreateToken)
 			patGroup.PATCH("/me/tokens/:tokenId", s.patHandler.UpdateTokenScope)
 			patGroup.DELETE("/me/tokens/:tokenId", s.patHandler.DeleteToken)
+		}
+
+		// LLM assistant (web adapter); PATs are rejected
+		if s.assistantHandler != nil {
+			assistantGroup := protected.Group("/assistant", auth.RejectPAT())
+			assistantGroup.GET("/status", s.assistantHandler.GetStatus)
+			assistantGroup.GET("/conversations", s.assistantHandler.ListConversations)
+			assistantGroup.POST("/conversations", s.assistantHandler.CreateConversation)
+			assistantGroup.GET("/conversations/:id", s.assistantHandler.GetConversation)
+			assistantGroup.GET("/conversations/:id/tool-calls/:callId/output", s.assistantHandler.GetToolOutput)
+			assistantGroup.PATCH("/conversations/:id", s.assistantHandler.RenameConversation)
+			assistantGroup.DELETE("/conversations/:id", s.assistantHandler.DeleteConversation)
+			assistantGroup.POST("/conversations/:id/messages", s.assistantHandler.SendMessage)
+			assistantGroup.POST("/conversations/:id/actions/:actionId", s.assistantHandler.ResolveAction)
 		}
 		// Workspace-level active cycles dashboard (across all projects)
 		if s.cycleHandler != nil {
@@ -207,6 +227,7 @@ func (s *Server) registerRoutes() {
 			projectGroup.PATCH("", s.projectHandler.UpdateProject, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.PATCH("/disabled", s.projectHandler.SetProjectDisabled, auth.ProjectRoleMiddleware("admin"))
 			projectGroup.DELETE("", s.projectHandler.DeleteProject, auth.ProjectRoleMiddleware("admin"))
+			projectGroup.GET("/stats", s.projectHandler.GetProjectStats)
 
 			// Project members
 			projectGroup.GET("/members", s.projectHandler.ListMembers)
@@ -345,6 +366,11 @@ func (s *Server) registerRoutes() {
 				projectGroup.POST("/tasks/:taskNum/blockers", s.taskHandler.AddTaskBlockers, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/blockers/:taskId", s.taskHandler.RemoveTaskBlocker, auth.ProjectRoleMiddleware("member"))
 
+				// Workflow engine (opt-in per project)
+				projectGroup.GET("/workflow", s.taskHandler.GetWorkflow)
+				projectGroup.PUT("/workflow", s.taskHandler.SaveWorkflow, auth.ProjectRoleMiddleware("admin"))
+				projectGroup.PUT("/workflow/enabled", s.taskHandler.SetWorkflowEnabled, auth.ProjectRoleMiddleware("admin"))
+
 				// Task assignees
 				projectGroup.POST("/tasks/:taskNum/assignees", s.taskHandler.AddAssignee, auth.ProjectRoleMiddleware("member"))
 				projectGroup.DELETE("/tasks/:taskNum/assignees/:userId", s.taskHandler.RemoveAssignee, auth.ProjectRoleMiddleware("member"))
@@ -406,6 +432,7 @@ func (s *Server) registerRoutes() {
 		admin.PATCH("/users/:id", s.adminHandler.UpdateUserProfile)
 		admin.DELETE("/users/:id", s.adminHandler.DeleteUser)
 		admin.POST("/users/:id/restore", s.adminHandler.RestoreUser)
+		admin.GET("/users/:id", s.adminHandler.GetUserDetail)
 		admin.PUT("/users/:id/role", s.adminHandler.UpdateUserRole)
 		admin.PUT("/users/:id/password", s.adminHandler.ResetUserPassword)
 		admin.PUT("/users/:id/active", s.adminHandler.SetUserActive)
@@ -432,12 +459,20 @@ func (s *Server) registerRoutes() {
 		// Admin settings
 		if s.settingsHandler != nil {
 			admin.PUT("/settings/branding", s.settingsHandler.UpdateBranding)
+			admin.PUT("/settings/branding/:asset", s.settingsHandler.UploadBrandingAsset)
+			admin.DELETE("/settings/branding/:asset", s.settingsHandler.RemoveBrandingAsset)
 			admin.PUT("/settings/signup", s.settingsHandler.UpdateSignupSettings)
 			admin.GET("/settings/sso", s.settingsHandler.GetSSOSettings)
 			admin.PUT("/settings/sso", s.settingsHandler.UpdateSSOSettings)
 			admin.GET("/settings/mattermost", s.settingsHandler.GetMattermostSettings)
 			admin.PUT("/settings/mattermost", s.settingsHandler.UpdateMattermostSettings)
 			admin.POST("/settings/mattermost/test", s.settingsHandler.TestMattermostConnection)
+		}
+
+		if s.assistantHandler != nil {
+			admin.GET("/settings/assistant", s.assistantHandler.GetAssistantSettings)
+			admin.PUT("/settings/assistant", s.assistantHandler.UpdateAssistantSettings)
+			admin.POST("/settings/assistant/test", s.assistantHandler.TestAssistantSettings)
 		}
 
 		// Admin data import

@@ -7,6 +7,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { Image } from "@tiptap/extension-image";
+import { TaskList, TaskItem } from "@tiptap/extension-list";
 import type { Editor } from "@tiptap/vue-3";
 
 // Files a parent uploader returns so we can embed them in the document.
@@ -27,6 +28,7 @@ import {
   Heading3,
   List,
   ListOrdered,
+  ListTodo,
   Quote,
   CodeSquare,
   Minus,
@@ -45,9 +47,6 @@ const props = defineProps<{
   // Removes the box border/background and left padding so the editor reads as a
   // seamless document surface (used by full-page docs like project Pages).
   borderless?: boolean;
-  // Enables table support (extension + toolbar control). Off by default so the
-  // compact editors (comments, task descriptions) stay simple.
-  tables?: boolean;
   // When provided, dropped/pasted/picked files are uploaded via this callback
   // and embedded inline in the document (images as <img>, others as links).
   // When absent, files are emitted via `files-dropped` for the parent to handle
@@ -230,16 +229,13 @@ const extensions = [
       class: "text-primary underline underline-offset-2",
     },
   }),
+  TaskList,
+  TaskItem.configure({ nested: true }),
+  Table.configure({ resizable: true }),
+  TableRow,
+  TableHeader,
+  TableCell,
 ];
-
-if (props.tables) {
-  extensions.push(
-    Table.configure({ resizable: true }),
-    TableRow,
-    TableHeader,
-    TableCell
-  );
-}
 
 if (props.uploadHandler) {
   extensions.push(
@@ -511,6 +507,16 @@ function handleFileInput(e: Event) {
       <button
         type="button"
         tabindex="-1"
+        aria-label="Checklist"
+        class="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none"
+        :class="{ 'bg-muted text-foreground': isActive('taskList') }"
+        @click="editor!.chain().focus().toggleTaskList().run()"
+      >
+        <ListTodo class="size-3.5" />
+      </button>
+      <button
+        type="button"
+        tabindex="-1"
         aria-label="Blockquote"
         class="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none"
         :class="{ 'bg-muted text-foreground': isActive('blockquote') }"
@@ -541,69 +547,67 @@ function handleFileInput(e: Event) {
         <Minus class="size-3.5" />
       </button>
 
-      <template v-if="tables">
-        <div class="mx-1 h-4 w-px bg-border" role="separator" />
+      <div class="mx-1 h-4 w-px bg-border" role="separator" />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <button
-              type="button"
-              tabindex="-1"
-              aria-label="Table"
-              class="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none"
-              :class="{ 'bg-muted text-foreground': isActive('table') }"
-            >
-              <TableIcon class="size-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem
-              @click="editor!.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()"
-            >
-              Insert table
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              @click="editor!.chain().focus().addColumnAfter().run()"
-            >
-              Add column
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              @click="editor!.chain().focus().deleteColumn().run()"
-            >
-              Delete column
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              @click="editor!.chain().focus().addRowAfter().run()"
-            >
-              Add row
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              @click="editor!.chain().focus().deleteRow().run()"
-            >
-              Delete row
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              @click="editor!.chain().focus().toggleHeaderRow().run()"
-            >
-              Toggle header row
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              :disabled="!isActive('table')"
-              class="text-destructive focus:text-destructive"
-              @click="editor!.chain().focus().deleteTable().run()"
-            >
-              Delete table
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </template>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <button
+            type="button"
+            tabindex="-1"
+            aria-label="Table"
+            class="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none"
+            :class="{ 'bg-muted text-foreground': isActive('table') }"
+          >
+            <TableIcon class="size-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem
+            @click="editor!.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()"
+          >
+            Insert table
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            @click="editor!.chain().focus().addColumnAfter().run()"
+          >
+            Add column
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            @click="editor!.chain().focus().deleteColumn().run()"
+          >
+            Delete column
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            @click="editor!.chain().focus().addRowAfter().run()"
+          >
+            Add row
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            @click="editor!.chain().focus().deleteRow().run()"
+          >
+            Delete row
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            @click="editor!.chain().focus().toggleHeaderRow().run()"
+          >
+            Toggle header row
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            :disabled="!isActive('table')"
+            class="text-destructive focus:text-destructive"
+            @click="editor!.chain().focus().deleteTable().run()"
+          >
+            Delete table
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <div class="mx-1 h-4 w-px bg-border" role="separator" />
 

@@ -23,6 +23,7 @@ const draggable = computed(() => props.canDrag ?? props.isMember);
 const emit = defineEmits<{ refresh: [] }>();
 
 const isDragging = ref(false);
+const draggingTask = inject<Ref<Task | null> | null>("kanban-dragging-task", null);
 const detailOpen = ref(false);
 
 function handleDragStart(event: DragEvent) {
@@ -31,6 +32,7 @@ function handleDragStart(event: DragEvent) {
     return;
   }
   isDragging.value = true;
+  if (draggingTask) draggingTask.value = props.task;
   event.dataTransfer!.effectAllowed = "move";
   event.dataTransfer!.setData(
     "application/json",
@@ -40,6 +42,7 @@ function handleDragStart(event: DragEvent) {
 
 function handleDragEnd() {
   isDragging.value = false;
+  if (draggingTask) draggingTask.value = null;
 }
 
 function toggleDetail(open: boolean) {

@@ -1,6 +1,6 @@
 services:
   landing:
-    image: oven/bun:1.3.7-slim
+    image: oven/bun:1.4.4-slim
     restart: unless-stopped
     working_dir: /app
     volumes:
@@ -21,6 +21,7 @@ services:
       # Named volume shields node_modules from the ./:/app bind mount; it seeds
       # from the image's /app/web/node_modules (baked in Dockerfile.dev) on first run.
       - bureaucat-vue-node:/app/web/node_modules
+      - /etc/localtime:/etc/localtime:ro
     working_dir: /app
     ports:
       - 127.0.0.1:1341:1341
@@ -67,7 +68,6 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.31.3
-    container_name: mailpit
     restart: unless-stopped
     volumes:
       - /tmp/mailpit/data:/data

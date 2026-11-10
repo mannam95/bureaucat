@@ -142,6 +142,8 @@ const form = ref({
   description: "",
   state_id: "",
   priority_id: "",
+  start_date: undefined as string | undefined,
+  due_date: undefined as string | undefined,
   assignees: [] as string[],
   labels: [] as string[],
   areas: [] as string[],
@@ -162,7 +164,27 @@ const form = ref({
   effort: 0,
 });
 
-const defaultState = computed(() => effStates.value.find((s) => s.is_default));
+const { workflows, getWorkflow } = useWorkflow();
+watch(
+  effectiveProjectKey,
+  (key) => {
+    if (key) getWorkflow(key);
+  },
+  { immediate: true }
+);
+// With the workflow engine on, new tasks may only start in entry states.
+const startStates = computed(() => {
+  const entry = entryStateIds(workflows[effectiveProjectKey.value]);
+  return entry ? effStates.value.filter((s) => entry.has(s.id)) : effStates.value;
+});
+const defaultState = computed(
+  () => startStates.value.find((s) => s.is_default) ?? (startStates.value === effStates.value ? undefined : startStates.value[0])
+);
+watch(startStates, (list) => {
+  if (form.value.state_id && !list.some((s) => s.id === form.value.state_id)) {
+    form.value.state_id = defaultState.value?.id || "";
+  }
+});
 
 // Most urgent first, like every other priority picker; new tasks start on the
 // project's least urgent level.
@@ -211,6 +233,8 @@ function resetForm() {
     description: "",
     state_id: defaultState.value?.id || "",
     priority_id: defaultPriorityId.value,
+    start_date: undefined,
+    due_date: undefined,
     assignees: [],
     labels: [],
     areas: [],
@@ -287,7 +311,7 @@ async function loadProjectMeta(key: string) {
 // auto-focus can be redirected to the Template field.
 const focusTemplateOnOpen = ref(false);
 
-// Controls the Template dropdown so it can be auto-opened after a project is
+// Controls the Template popover so it can be auto-opened after a project is
 // chosen.
 const templateOpen = ref(false);
 
@@ -402,6 +426,11 @@ async function handleSubmit() {
     error.value = "Please select a project";
     return;
   }
+  const { start_date, due_date } = form.value;
+  if (start_date && due_date && new Date(start_date) > new Date(due_date)) {
+    error.value = "Start date cannot be after due date";
+    return;
+  }
   if (form.value.originators.length === 0) {
     error.value = "Please choose at least one originator / requester";
     return;
@@ -415,6 +444,8 @@ async function handleSubmit() {
     description: form.value.description || undefined,
     state_id: form.value.state_id || undefined,
     priority_id: form.value.priority_id || undefined,
+    start_date,
+    due_date,
     difficulty: form.value.difficulty || undefined,
     effort: form.value.effort || undefined,
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
@@ -524,6 +555,15 @@ async function handleAttach() {
   } else {
     error.value = result.error || "Failed to attach subtasks";
   }
+}
+
+const selectedTemplate = computed(
+  () => effTemplates.value.find((t) => t.id === selectedTemplateId.value) ?? null
+);
+
+function selectTemplate(id: string) {
+  selectedTemplateId.value = id;
+  templateOpen.value = false;
 }
 
 // shadcn/reka-ui Select works with string values only, and reserves the empty
@@ -790,20 +830,45 @@ function removeLabel(labelId: string) {
              chosen in selector mode. -->
         <div class="space-y-2">
           <Label for="template">Template</Label>
-            <Select v-model="templateValue" v-model:open="templateOpen" :disabled="loading">
-              <SelectTrigger
-                id="template"
-                class="w-full focus:border-ring focus:ring-ring/50 focus:ring-[3px]"
-              >
-                <SelectValue placeholder="No template" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="NO_TEMPLATE">No template</SelectItem>
-                <SelectItem v-for="tmpl in effTemplates" :key="tmpl.id" :value="tmpl.id">
-                  {{ tmpl.name }}<template v-if="tmpl.is_mandatory"> · mandatory</template>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover v-model:open="templateOpen">
+              <PopoverTrigger as-child>
+                <Button
+                  id="template"
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  :disabled="loading"
+                  class="w-full justify-between font-normal"
+                >
+                  <span v-if="selectedTemplate" class="truncate">{{ selectedTemplate.name }}<template v-if="selectedTemplate.is_mandatory"> · mandatory</template></span>
+                  <span v-else class="text-muted-foreground">No template</span>
+                  <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" class="w-[var(--reka-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Search templates..." />
+                  <CommandList>
+                    <CommandEmpty>No template found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem value="no-template" @select="selectTemplate('')">
+                        <Check :class="['size-4', selectedTemplateId ? 'opacity-0' : 'opacity-100']" />
+                        No template
+                      </CommandItem>
+                      <CommandItem
+                        v-for="tmpl in effTemplates"
+                        :key="tmpl.id"
+                        :value="`${tmpl.name} ${tmpl.id}`"
+                        @select="selectTemplate(tmpl.id)"
+                      >
+                        <Check :class="['size-4', selectedTemplateId === tmpl.id ? 'opacity-100' : 'opacity-0']" />
+                        <span class="truncate">{{ tmpl.name }}<template v-if="tmpl.is_mandatory"> · mandatory</template></span>
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div class="space-y-2">
@@ -841,7 +906,7 @@ function removeLabel(labelId: string) {
                   <SelectValue placeholder="Select a state" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="state in effStates" :key="state.id" :value="state.id" :title="state.description || undefined">
+                  <SelectItem v-for="state in startStates" :key="state.id" :value="state.id" :title="state.description || undefined">
                     {{ state.name }}
                   </SelectItem>
                 </SelectContent>
@@ -923,6 +988,28 @@ function removeLabel(labelId: string) {
             <p class="text-xs text-muted-foreground">
               Whose need this is — defaults to you; at least one required.
             </p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label for="start_date">Start date</Label>
+              <DateTimePicker
+                id="start_date"
+                v-model="form.start_date"
+                :max="form.due_date"
+                :disabled="loading"
+              />
+            </div>
+            <div class="space-y-2">
+              <Label for="due_date">Due date</Label>
+              <DateTimePicker
+                id="due_date"
+                v-model="form.due_date"
+                :min="form.start_date"
+                default-time="17:00"
+                :disabled="loading"
+              />
+            </div>
           </div>
 
           <div class="space-y-2">

@@ -30,6 +30,24 @@ interface PaginatedUsersResponse {
   counts: UserStateCounts;
 }
 
+export interface AdminUserDetail {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  avatar_url?: string;
+  auth_provider?: string;
+  has_password: boolean;
+  active_sessions: number;
+  active_tokens: number;
+  workspaces: { workspace_key: string; name: string }[];
+  projects: { project_key: string; name: string; role: string; workspace_name?: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MergeUserResult {
   workspaces: number;
   projects: number;
@@ -84,16 +102,29 @@ interface ViewDayCount {
   shared: number;
 }
 
+interface AIDayCount {
+  day: string;
+  web: number;
+  mattermost: number;
+}
+
 export interface AdminStats {
   totals: {
     workspaces: number;
     projects: number;
+    workflow_projects: number;
     tasks: number;
     subtasks: number;
     pages: number;
     users: number;
+    email_notification_users: number;
+    blocked_tasks: number;
+    blocking_tasks: number;
     attachments: number;
     attachments_bytes: number;
+    ai_conversations: number;
+    ai_users: number;
+    ai_mattermost_conversations: number;
   };
   tasks_by_state: StatCount[];
   tasks_by_priority: StatCount[];
@@ -112,6 +143,7 @@ export interface AdminStats {
     attachments: DayCount[];
     cycles: DayCount[];
     modules: DayCount[];
+    ai_conversations: AIDayCount[];
   };
 }
 
@@ -332,6 +364,28 @@ export function useAdmin() {
       if (!response.ok) {
         const error = await response.json();
         return { success: false, error: error.message || "Failed to update role" };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  async function getUserDetail(userId: string): Promise<{
+    success: boolean;
+    data?: AdminUserDetail;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`/api/v1/admin/users/${userId}`, {
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.message || "Failed to fetch user" };
       }
 
       const data = await response.json();
@@ -658,6 +712,7 @@ export function useAdmin() {
     deleteUser,
     updateUserRole,
     updateUserProfile,
+    getUserDetail,
     resetUserPassword,
     setUserActive,
     restoreUser,

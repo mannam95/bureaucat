@@ -78,14 +78,49 @@ GET  /api/v1/ht/              # Detailed health check
 GET  /api/v1/me               # Get current user
 ```
 
+### Assistant Routes (requires Bearer token, PATs rejected)
+```
+GET    /api/v1/assistant/status                              # Enabled + pinned model
+GET    /api/v1/assistant/conversations                       # List own conversations
+POST   /api/v1/assistant/conversations                       # Create conversation
+GET    /api/v1/assistant/conversations/:id                   # Messages + actions
+GET    /api/v1/assistant/conversations/:id/tool-calls/:callId/output # Full tool output
+PATCH  /api/v1/assistant/conversations/:id                   # Rename conversation
+DELETE /api/v1/assistant/conversations/:id                   # Delete conversation
+POST   /api/v1/assistant/conversations/:id/messages          # Send message (SSE)
+POST   /api/v1/assistant/conversations/:id/actions/:actionId # Approve/reject write (SSE)
+```
+The agent core lives in `internal/assistant` (channel-agnostic). Tools in `tools.go` map 1:1 to API routes and run in-process through the Echo router as the requesting user; write tools need user approval.
+`internal/mattermostbot` is the Mattermost adapter: the notification bot listens over WebSocket, maps the sender's email to a Bureaucat user, keys conversations by thread root + user, and takes `yes`/`no` replies for approvals. Outside DMs it only answers posts that @mention it, and passes up to 10 unseen top-level channel posts (or, in a thread, posts since the user's previous turn) as `Meta.Chat`, deduped by post ID. The `read_chat_history` local tool lets the agent read further back; a conversation holds at most 100 chat messages. Conversations with chat context require approval for every write.
+
+### MCP Route (PAT only)
+```
+ANY /mcp    # MCP server, stateless Streamable HTTP (exception to the /api/v1 prefix rule)
+```
+`internal/mcpserver` builds its tools from `assistant.Catalog()`, so new catalog tools appear automatically. Tools taking `upload_id` are excluded, read_only PATs only see GET tools, GETs are annotated `readOnlyHint` and `Confirm` tools `destructiveHint`. Calls run via `Service.RunTool` and are logged with via `mcp`.
+The `bureaucat api <tool>` CLI (`internal/cli/api.go`) is also generated from the catalog and sends `Tool.BuildRequest` over HTTP with the saved PAT. `internal/server/catalog_drift_test.go` fails when an `/api/v1` route has no catalog tool and isn't listed in `nonCatalogRoutes`.
+
+### Workflow Routes (project-scoped)
+```
+GET    /api/v1/projects/:key/workflow          # Graph config + enabled + bypass (any project role)
+PUT    /api/v1/projects/:key/workflow          # Replace graph atomically (project admin)
+PUT    /api/v1/projects/:key/workflow/enabled  # Toggle enforcement, config kept (project admin)
+```
+Opt-in per project. Enforced in `internal/workflow` from `CreateTask` (entry states), `UpdateTask` (edges are an allowlist, optional movers: users/assignees/creator) and on-enter assignee actions (also on cross-project move-in). Project/global admins bypass checks.
+
 ### Admin Routes (requires Bearer token + admin role)
 ```
 GET    /api/v1/admin/users           # List users (paginated)
 POST   /api/v1/admin/users           # Create user
+GET    /api/v1/admin/users/:id       # User details (SSO, sessions/tokens, memberships)
+PATCH  /api/v1/admin/users/:id       # Edit name, role, email notifications
 DELETE /api/v1/admin/users/:id       # Delete user
 GET    /api/v1/admin/tokens          # List active refresh tokens
 DELETE /api/v1/admin/tokens/:id      # Revoke token
 DELETE /api/v1/admin/tokens/expired  # Clean expired tokens
+GET    /api/v1/admin/settings/assistant      # LLM provider/model/key (masked)
+PUT    /api/v1/admin/settings/assistant      # Update assistant settings
+POST   /api/v1/admin/settings/assistant/test # Ping the configured model
 ```
 
 ## Authentication

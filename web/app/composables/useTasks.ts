@@ -120,9 +120,10 @@ export function useTasks() {
   // paginated view is on screen (e.g. for an export).
   async function fetchAllTasks(
     projectKey: string,
-    opts: ListTasksOptions = {}
+    opts: ListTasksOptions = {},
+    limit = Infinity
   ): Promise<{ success: boolean; data?: Task[]; error?: string }> {
-    const perPage = 100;
+    const perPage = Math.min(100, limit);
     const all: Task[] = [];
     try {
       let page = 1;
@@ -141,8 +142,8 @@ export function useTasks() {
         all.push(...(data.tasks || []));
         totalPages = data.total_pages;
         page++;
-      } while (page <= totalPages);
-      return { success: true, data: all };
+      } while (page <= totalPages && all.length < limit);
+      return { success: true, data: all.slice(0, limit) };
     } catch {
       return { success: false, error: "Network error" };
     }

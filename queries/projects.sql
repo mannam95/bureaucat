@@ -309,7 +309,8 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
        (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
-       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description,
+       (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL)::bigint as comment_count
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
@@ -325,7 +326,8 @@ SELECT t.id, t.project_id, t.task_number, t.title, t.description, t.state_id, t.
        u.username as creator_username, u.first_name as creator_first_name, u.last_name as creator_last_name, u.avatar_url as creator_avatar_url,
        pt.task_number as parent_task_number, pt.title as parent_task_title,
        (SELECT COUNT(*) FROM tasks st WHERE st.parent_task_id = t.id AND st.deleted_at IS NULL)::bigint as subtask_count,
-       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description
+       t.priority_id, pp.name as priority_name, pp.color as priority_color, pp.rank as priority_rank, pp.description as priority_description,
+       (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL)::bigint as comment_count
 FROM tasks t
 JOIN projects p ON t.project_id = p.id
 JOIN project_states ps ON t.state_id = ps.id
@@ -997,9 +999,9 @@ SELECT COUNT(*) FROM comments WHERE task_id = $1 AND deleted_at IS NULL;
 -- ==================== ACTIVITY LOG ====================
 
 -- name: CreateActivityLog :one
-INSERT INTO activity_log (task_id, activity_type, actor_id, field_name, old_value, new_value, checksum, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at, checksum;
+INSERT INTO activity_log (task_id, activity_type, actor_id, field_name, old_value, new_value, checksum, created_at, via, checksum_version)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at, checksum, via, checksum_version;
 
 -- name: GetLastActivityChecksum :one
 SELECT checksum
@@ -1009,7 +1011,7 @@ ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: ListTaskActivity :many
-SELECT al.id, al.task_id, al.activity_type, al.actor_id, al.field_name, al.old_value, al.new_value, al.created_at, al.checksum,
+SELECT al.id, al.task_id, al.activity_type, al.actor_id, al.field_name, al.old_value, al.new_value, al.created_at, al.checksum, al.via,
        u.username, u.first_name, u.last_name, u.avatar_url
 FROM activity_log al
 JOIN users u ON al.actor_id = u.id
@@ -1017,7 +1019,7 @@ WHERE al.task_id = $1
 ORDER BY al.created_at ASC;
 
 -- name: VerifyActivityChain :many
-SELECT id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at, checksum
+SELECT id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at, checksum, via, checksum_version
 FROM activity_log
 WHERE task_id = $1
 ORDER BY created_at ASC;
@@ -1058,12 +1060,12 @@ DELETE FROM task_templates WHERE id = $1;
 -- ==================== USER ACTIVITY ====================
 
 -- name: ListUserActivity :many
-SELECT id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at,
+SELECT id, task_id, activity_type, actor_id, field_name, old_value, new_value, created_at, via,
        username, first_name, last_name,
        task_number, project_key, task_title
 FROM (
   -- Activities from activity_log
-  SELECT al.id, al.task_id, al.activity_type, al.actor_id, al.field_name, al.old_value, al.new_value, al.created_at,
+  SELECT al.id, al.task_id, al.activity_type, al.actor_id, al.field_name, al.old_value, al.new_value, al.created_at, al.via,
          u.username, u.first_name, u.last_name,
          t.task_number, p.project_key, t.title as task_title
   FROM activity_log al
@@ -1076,7 +1078,7 @@ FROM (
 
   -- Synthetic "task_created" entries for imported tasks with no activity_log
   SELECT t.id as id, t.id as task_id, 'task_created'::activity_type as activity_type, t.created_by as actor_id,
-         NULL::varchar(100) as field_name, NULL::jsonb as old_value, NULL::jsonb as new_value, t.created_at,
+         NULL::varchar(100) as field_name, NULL::jsonb as old_value, NULL::jsonb as new_value, t.created_at, 'web'::text as via,
          u.username, u.first_name, u.last_name,
          t.task_number, p.project_key, t.title as task_title
   FROM tasks t

@@ -3,11 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/labstack/echo/v5"
 
+	"bereaucat/internal/branding"
 	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
 )
@@ -22,16 +25,12 @@ func NewSettingsHandler(store store.Querier) *SettingsHandler {
 	return &SettingsHandler{store: store}
 }
 
-// BrandingSettings represents the branding configuration.
-type BrandingSettings struct {
-	Enabled bool   `json:"enabled"`
-	AppName string `json:"app_name"`
-}
-
 // BrandingResponse is the API response for branding settings.
 type BrandingResponse struct {
-	Enabled bool   `json:"enabled"`
-	AppName string `json:"app_name"`
+	Enabled    bool    `json:"enabled"`
+	AppName    string  `json:"app_name"`
+	LogoURL    *string `json:"logo_url"`
+	FaviconURL *string `json:"favicon_url"`
 }
 
 // UpdateBrandingRequest is the request to update branding settings.
@@ -40,8 +39,25 @@ type UpdateBrandingRequest struct {
 	AppName string `json:"app_name"`
 }
 
+func optionalURL(a branding.Asset, img *branding.Image) *string {
+	if u := branding.URL(a, img); u != "" {
+		return &u
+	}
+	return nil
+}
+
+func (h *SettingsHandler) brandingResponse(ctx context.Context) BrandingResponse {
+	s := branding.LoadSettings(ctx, h.store)
+	return BrandingResponse{
+		Enabled:    s.Enabled,
+		AppName:    s.AppName,
+		LogoURL:    optionalURL(branding.AssetLogo, branding.LoadImage(ctx, h.store, branding.AssetLogo)),
+		FaviconURL: optionalURL(branding.AssetFavicon, branding.LoadImage(ctx, h.store, branding.AssetFavicon)),
+	}
+}
+
 // GetBranding returns the current branding settings.
-// This endpoint is public so the frontend can display the correct app name.
+// This endpoint is public so the frontend can display the correct app name and logo.
 //
 //	@Summary		Get branding
 //	@Description	Returns the current branding settings. Public endpoint.
@@ -50,29 +66,37 @@ type UpdateBrandingRequest struct {
 //	@Success		200	{object}	BrandingResponse
 //	@Router			/settings/branding [get]
 func (h *SettingsHandler) GetBranding(c *echo.Context) error {
-	ctx := c.Request().Context()
+	return c.JSON(http.StatusOK, h.brandingResponse(c.Request().Context()))
+}
 
-	setting, err := h.store.GetSetting(ctx, "branding")
-	if err != nil {
-		// Return defaults if not found
-		return c.JSON(http.StatusOK, BrandingResponse{
-			Enabled: false,
-			AppName: "Bureaucat",
-		})
+// GetBrandingAsset serves the uploaded logo or favicon. Public so sign-in and emails can use it.
+//
+//	@Summary		Get branding logo or favicon
+//	@Description	Serves the uploaded logo or favicon image. Public endpoint.
+//	@Tags			Settings
+//	@Produce		png
+//	@Param			asset	path	string	true	"logo or favicon"
+//	@Success		200
+//	@Failure		404	{object}	ErrorResponse
+//	@Router			/settings/branding/{asset} [get]
+func (h *SettingsHandler) GetBrandingAsset(c *echo.Context) error {
+	asset := branding.Asset(c.Param("asset"))
+	if !asset.Valid() {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
-
-	var branding BrandingSettings
-	if err := json.Unmarshal(setting.Value, &branding); err != nil {
-		return c.JSON(http.StatusOK, BrandingResponse{
-			Enabled: false,
-			AppName: "Bureaucat",
-		})
+	img := branding.LoadImage(c.Request().Context(), h.store, asset)
+	if img == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
-
-	return c.JSON(http.StatusOK, BrandingResponse{
-		Enabled: branding.Enabled,
-		AppName: branding.AppName,
-	})
+	hdr := c.Response().Header()
+	hdr.Set("Cache-Control", "public, max-age=86400")
+	hdr.Set("ETag", `"`+img.Hash+`"`)
+	hdr.Set("X-Content-Type-Options", "nosniff")
+	hdr.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	if c.Request().Header.Get("If-None-Match") == `"`+img.Hash+`"` {
+		return c.NoContent(http.StatusNotModified)
+	}
+	return c.Blob(http.StatusOK, img.ContentType, img.Data)
 }
 
 // UpdateBranding updates the branding settings (admin only).
@@ -94,19 +118,14 @@ func (h *SettingsHandler) UpdateBranding(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	// Validate app name
+	req.AppName = strings.TrimSpace(req.AppName)
 	if req.AppName == "" {
-		req.AppName = "Bureaucat"
+		req.AppName = branding.DefaultName
 	}
 
 	ctx := c.Request().Context()
 
-	branding := BrandingSettings{
-		Enabled: req.Enabled,
-		AppName: req.AppName,
-	}
-
-	value, err := json.Marshal(branding)
+	value, err := json.Marshal(branding.Settings{Enabled: req.Enabled, AppName: req.AppName})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal settings")
 	}
@@ -119,10 +138,75 @@ func (h *SettingsHandler) UpdateBranding(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update settings")
 	}
 
-	return c.JSON(http.StatusOK, BrandingResponse{
-		Enabled: branding.Enabled,
-		AppName: branding.AppName,
-	})
+	return c.JSON(http.StatusOK, h.brandingResponse(ctx))
+}
+
+// UploadBrandingAsset replaces the logo (PNG) or favicon (PNG/ICO) (admin only).
+//
+//	@Summary		Upload branding logo or favicon
+//	@Description	Multipart upload in field "file". Logo: PNG up to 256 KB. Favicon: PNG or ICO up to 64 KB. Requires admin role.
+//	@Tags			Admin - Settings
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			asset	path		string	true	"logo or favicon"
+//	@Param			file	formData	file	true	"Image file"
+//	@Success		200		{object}	BrandingResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/settings/branding/{asset} [put]
+func (h *SettingsHandler) UploadBrandingAsset(c *echo.Context) error {
+	asset := branding.Asset(c.Param("asset"))
+	if !asset.Valid() {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	fh, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file is required")
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to read file")
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, int64(asset.MaxBytes())+1))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to read file")
+	}
+
+	img, err := branding.NewImage(asset, data)
+	if err != nil {
+		if asset == branding.AssetLogo {
+			return echo.NewHTTPError(http.StatusBadRequest, "logo must be a PNG up to 256 KB")
+		}
+		return echo.NewHTTPError(http.StatusBadRequest, "favicon must be a PNG or ICO up to 64 KB")
+	}
+
+	ctx := c.Request().Context()
+	if err := branding.SaveImage(ctx, h.store, asset, img); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to save image")
+	}
+	return c.JSON(http.StatusOK, h.brandingResponse(ctx))
+}
+
+// RemoveBrandingAsset clears the logo or favicon (admin only).
+//
+//	@Summary		Remove branding logo or favicon
+//	@Tags			Admin - Settings
+//	@Produce		json
+//	@Param			asset	path		string	true	"logo or favicon"
+//	@Success		200		{object}	BrandingResponse
+//	@Security		BearerAuth
+//	@Router			/admin/settings/branding/{asset} [delete]
+func (h *SettingsHandler) RemoveBrandingAsset(c *echo.Context) error {
+	asset := branding.Asset(c.Param("asset"))
+	if !asset.Valid() {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	ctx := c.Request().Context()
+	if err := branding.RemoveImage(ctx, h.store, asset); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove image")
+	}
+	return c.JSON(http.StatusOK, h.brandingResponse(ctx))
 }
 
 // --- Signup Settings ---
@@ -383,16 +467,20 @@ func (h *SettingsHandler) LoadSSOSettings(c *echo.Context) (*SSOSettings, error)
 
 // MattermostSettings represents the Mattermost integration configuration.
 type MattermostSettings struct {
-	Enabled   bool   `json:"enabled"`
-	ServerURL string `json:"server_url"`
-	BotToken  string `json:"bot_token"`
+	Enabled          bool   `json:"enabled"`
+	ServerURL        string `json:"server_url"`
+	BotToken         string `json:"bot_token"`
+	AssistantEnabled bool   `json:"assistant_enabled"`
+	AppURL           string `json:"app_url"`
 }
 
 // MattermostResponse is the API response for Mattermost settings (token masked).
 type MattermostResponse struct {
-	Enabled   bool   `json:"enabled"`
-	ServerURL string `json:"server_url"`
-	BotToken  string `json:"bot_token"`
+	Enabled          bool   `json:"enabled"`
+	ServerURL        string `json:"server_url"`
+	BotToken         string `json:"bot_token"`
+	AssistantEnabled bool   `json:"assistant_enabled"`
+	AppURL           string `json:"app_url"`
 }
 
 // GetMattermostSettings returns the Mattermost integration config with token masked (admin only).
@@ -418,9 +506,11 @@ func (h *SettingsHandler) GetMattermostSettings(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, MattermostResponse{
-		Enabled:   mm.Enabled,
-		ServerURL: mm.ServerURL,
-		BotToken:  maskSecret(mm.BotToken),
+		Enabled:          mm.Enabled,
+		ServerURL:        mm.ServerURL,
+		BotToken:         maskSecret(mm.BotToken),
+		AssistantEnabled: mm.AssistantEnabled,
+		AppURL:           mm.AppURL,
 	})
 }
 
@@ -462,6 +552,13 @@ func (h *SettingsHandler) UpdateMattermostSettings(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "Mattermost requires server_url and bot_token")
 		}
 	}
+	req.AppURL = strings.TrimSpace(req.AppURL)
+	if req.AssistantEnabled || req.AppURL != "" {
+		u, err := url.Parse(req.AppURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "app_url must be an absolute http(s) URL")
+		}
+	}
 
 	value, err := json.Marshal(req)
 	if err != nil {
@@ -477,9 +574,11 @@ func (h *SettingsHandler) UpdateMattermostSettings(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, MattermostResponse{
-		Enabled:   req.Enabled,
-		ServerURL: req.ServerURL,
-		BotToken:  maskSecret(req.BotToken),
+		Enabled:          req.Enabled,
+		ServerURL:        req.ServerURL,
+		BotToken:         maskSecret(req.BotToken),
+		AssistantEnabled: req.AssistantEnabled,
+		AppURL:           req.AppURL,
 	})
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Users, Key, Shield, ArrowRight, Loader2, Upload, CheckCircle2, Copy, Check, MessageSquare, MessageCircle, Mail, Send, UserPlus, BarChart3, Trash2, Network, Lock, X } from "lucide-vue-next";
 import { toast } from "vue-sonner";
-import type { SSOSettings, MattermostSettings } from "~/composables/useSettings";
+import type { SSOSettings, MattermostSettings, BrandingAsset } from "~/composables/useSettings";
 import type { FeatureGate } from "~/composables/useAdmin";
 
 definePageMeta({
@@ -10,7 +10,7 @@ definePageMeta({
 
 useSeoMeta({ title: "Admin" });
 
-const { branding, updateBranding, signupSettings, updateSignupSettings, fetchSignupSettings, fetchSSOSettings, updateSSOSettings, fetchMattermostSettings, updateMattermostSettings, testMattermostConnection, fetchEmailStatus, sendTestEmail } = useSettings();
+const { branding, updateBranding, uploadBrandingAsset, removeBrandingAsset, signupSettings, updateSignupSettings, fetchSignupSettings, fetchSSOSettings, updateSSOSettings, fetchMattermostSettings, updateMattermostSettings, testMattermostConnection, fetchEmailStatus, sendTestEmail } = useSettings();
 const { getAuthHeader, user } = useAuth();
 
 const brandingForm = ref({
@@ -20,10 +20,48 @@ const brandingForm = ref({
 
 const savingBranding = ref(false);
 
+const brandingAssets = [
+  { asset: "logo", label: "Logo", accept: "image/png", hint: "PNG up to 256 KB. Used in the navbar, error page and emails." },
+  { asset: "favicon", label: "Favicon", accept: "image/png,image/x-icon,.ico", hint: "PNG or ICO up to 64 KB. Falls back to the logo." },
+] as const;
+const brandingFileInput = ref<HTMLInputElement | null>(null);
+const pendingAsset = ref<BrandingAsset>("logo");
+const assetBusy = ref<BrandingAsset | null>(null);
+
+function assetUrl(asset: BrandingAsset) {
+  return asset === "logo" ? branding.value.logo_url : branding.value.favicon_url;
+}
+
+function pickBrandingFile(asset: BrandingAsset, accept: string) {
+  const input = brandingFileInput.value;
+  if (!input) return;
+  pendingAsset.value = asset;
+  input.accept = accept;
+  input.value = "";
+  input.click();
+}
+
+async function runAssetAction(asset: BrandingAsset, action: () => Promise<{ success: boolean; error?: string }>) {
+  assetBusy.value = asset;
+  const result = await action();
+  assetBusy.value = null;
+  if (result.success) {
+    toast.success(asset === "logo" ? "Logo updated" : "Favicon updated");
+  } else {
+    toast.error(result.error || "Failed to update image");
+  }
+}
+
+function handleBrandingFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  const asset = pendingAsset.value;
+  if (file) runAssetAction(asset, () => uploadBrandingAsset(asset, file));
+}
+
 // Sync form with branding when it changes
-watch(branding, (newBranding) => {
-  brandingForm.value.enabled = newBranding.enabled;
-  brandingForm.value.app_name = newBranding.app_name;
+watch(() => [branding.value.enabled, branding.value.app_name] as const, ([enabled, appName]) => {
+  brandingForm.value.enabled = enabled;
+  brandingForm.value.app_name = appName;
 }, { immediate: true });
 
 async function handleSaveBranding() {
@@ -196,6 +234,8 @@ const mattermostForm = ref<MattermostSettings>({
   enabled: false,
   server_url: "",
   bot_token: "",
+  assistant_enabled: false,
+  app_url: "",
 });
 const savingMattermost = ref(false);
 const testingMattermost = ref(false);
@@ -204,11 +244,10 @@ const mattermostLoaded = ref(false);
 async function loadMattermostSettings() {
   const result = await fetchMattermostSettings();
   if (result.success && result.data) {
-    mattermostForm.value = {
-      enabled: result.data.enabled || false,
-      server_url: result.data.server_url || "",
-      bot_token: result.data.bot_token || "",
-    };
+    mattermostForm.value = { ...mattermostForm.value, ...result.data };
+  }
+  if (!mattermostForm.value.app_url) {
+    mattermostForm.value.app_url = window.location.origin;
   }
   mattermostLoaded.value = true;
 }
@@ -220,11 +259,7 @@ async function handleSaveMattermost() {
 
   if (result.success) {
     if (result.data) {
-      mattermostForm.value = {
-        enabled: result.data.enabled || false,
-        server_url: result.data.server_url || "",
-        bot_token: result.data.bot_token || "",
-      };
+      mattermostForm.value = { ...mattermostForm.value, ...result.data };
     }
     toast.success("Mattermost settings saved");
   } else {
@@ -582,7 +617,7 @@ const adminModels = [
                   <div>
                     <p class="font-medium">Hide from the bureaucrats 😾</p>
                     <p class="text-sm text-muted-foreground">
-                      Replace "Bureaucat" with a custom name
+                      Replace "Bureaucat" with a custom name and logo
                     </p>
                   </div>
                   <Switch
@@ -600,6 +635,42 @@ const adminModels = [
                     placeholder="Enter a custom name"
                     :disabled="savingBranding"
                   />
+                </div>
+
+                <div v-if="brandingForm.enabled" class="space-y-3">
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div v-for="item in brandingAssets" :key="item.asset" class="space-y-2">
+                      <Label>{{ item.label }}</Label>
+                      <div class="flex items-center gap-3 rounded-md border p-3">
+                        <div class="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-muted">
+                          <img v-if="assetUrl(item.asset)" :src="assetUrl(item.asset)!" alt="" class="max-h-8 max-w-14 object-contain" >
+                          <span v-else class="text-xs text-muted-foreground">Default</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" :disabled="assetBusy !== null" @click="pickBrandingFile(item.asset, item.accept)">
+                            <Loader2 v-if="assetBusy === item.asset" class="mr-2 size-4 animate-spin" />
+                            <Upload v-else class="mr-2 size-4" />
+                            Upload
+                          </Button>
+                          <Button
+                            v-if="assetUrl(item.asset)"
+                            size="sm"
+                            variant="ghost"
+                            :disabled="assetBusy !== null"
+                            @click="runAssetAction(item.asset, () => removeBrandingAsset(item.asset))"
+                          >
+                            <Trash2 class="mr-2 size-4" />
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                      <p class="text-xs text-muted-foreground">{{ item.hint }}</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    Images save immediately and are shown while custom branding is enabled.
+                  </p>
+                  <input ref="brandingFileInput" type="file" class="hidden" @change="handleBrandingFile" >
                 </div>
 
                 <!-- Save button -->
@@ -847,6 +918,31 @@ const adminModels = [
                       Create a bot account in Mattermost and use its access token
                     </p>
                   </div>
+                  <div class="space-y-2">
+                    <Label for="mm-app-url">App URL</Label>
+                    <Input
+                      id="mm-app-url"
+                      v-model="mattermostForm.app_url"
+                      placeholder="https://bureaucat.example.com"
+                      :disabled="savingMattermost"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Used to build task links in Mattermost messages
+                    </p>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <div>
+                      <Label for="mm-assistant">Assistant in Mattermost</Label>
+                      <p class="text-xs text-muted-foreground">
+                        Users can DM or @mention the bot to use the assistant. Requires the assistant to be enabled below.
+                      </p>
+                    </div>
+                    <Switch
+                      id="mm-assistant"
+                      :checked="mattermostForm.assistant_enabled"
+                      @update:checked="mattermostForm.assistant_enabled = $event"
+                    />
+                  </div>
                 </div>
 
                 <!-- Action buttons -->
@@ -907,6 +1003,94 @@ const adminModels = [
                   <Send class="mr-1.5 size-4" />
                   Send test email
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card class="mt-4">
+            <CardContent class="pt-6">
+              <div class="space-y-6">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="flex items-center gap-3">
+                    <Bot class="size-5 shrink-0 text-muted-foreground" />
+                    <div>
+                      <p class="font-medium">Assistant</p>
+                      <p class="text-sm text-muted-foreground">
+                        An LLM chat assistant that acts with each user's own permissions. Changes need the user's approval.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    :checked="assistantForm.enabled"
+                    @update:checked="assistantForm.enabled = $event"
+                  />
+                </div>
+
+                <div v-if="assistantForm.enabled" class="space-y-4">
+                  <div class="grid gap-4 sm:grid-cols-[12rem_1fr]">
+                    <div class="space-y-2">
+                      <Label for="assistant-provider">Provider</Label>
+                      <Select v-model="assistantForm.provider" :disabled="savingAssistant">
+                        <SelectTrigger id="assistant-provider" class="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="anthropic">Anthropic</SelectItem>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="openrouter">OpenRouter</SelectItem>
+                          <SelectItem value="bedrock">AWS Bedrock</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="assistant-model">Model</Label>
+                      <Input
+                        id="assistant-model"
+                        v-model="assistantForm.model"
+                        :placeholder="assistantModelPlaceholders[assistantForm.provider]"
+                        :disabled="savingAssistant"
+                      />
+                    </div>
+                  </div>
+
+                  <div v-if="assistantForm.provider === 'bedrock'" class="space-y-2">
+                    <Label for="assistant-region">AWS region</Label>
+                    <Input
+                      id="assistant-region"
+                      v-model="assistantForm.aws_region"
+                      placeholder="us-east-1"
+                      :disabled="savingAssistant"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Credentials come from the server's AWS environment (IAM role or environment variables)
+                    </p>
+                  </div>
+                  <div v-else class="space-y-2">
+                    <Label for="assistant-key">API key</Label>
+                    <Input
+                      id="assistant-key"
+                      v-model="assistantForm.api_key"
+                      type="password"
+                      autocomplete="new-password"
+                      :disabled="savingAssistant"
+                    />
+                  </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-2">
+                  <Button
+                    v-if="assistantForm.enabled"
+                    variant="outline"
+                    @click="handleTestAssistant"
+                    :disabled="testingAssistant || savingAssistant"
+                  >
+                    <Loader2 v-if="testingAssistant" class="mr-2 size-4 animate-spin" />
+                    Test Saved Settings
+                  </Button>
+                  <Button @click="handleSaveAssistant" :disabled="savingAssistant">
+                    <Loader2 v-if="savingAssistant" class="mr-2 size-4 animate-spin" />
+                    Save Changes
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

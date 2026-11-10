@@ -1,5 +1,9 @@
 -- ==================== NOTIFICATIONS ====================
 
+-- name: LockNotificationSlot :exec
+-- Serializes find-or-create per (recipient, task) so concurrent activity can't create duplicate rows.
+SELECT pg_advisory_xact_lock(hashtextextended('notifications:' || sqlc.arg('recipient_id')::uuid::text || ':' || sqlc.arg('task_id')::uuid::text, 0));
+
 -- name: GetOpenNotification :one
 -- Most recent notification for a (recipient, task) pair still within the
 -- coalescing window. Used to merge new activity into an existing notification
@@ -13,8 +17,8 @@ ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: CreateNotification :one
-INSERT INTO notifications (recipient_id, task_id, activity_type, actor_id, comment_id)
-VALUES (sqlc.arg('recipient_id'), sqlc.arg('task_id'), sqlc.arg('activity_type'), sqlc.arg('actor_id'), sqlc.narg('comment_id'))
+INSERT INTO notifications (recipient_id, task_id, activity_type, actor_id, comment_id, via)
+VALUES (sqlc.arg('recipient_id'), sqlc.arg('task_id'), sqlc.arg('activity_type'), sqlc.arg('actor_id'), sqlc.narg('comment_id'), sqlc.arg('via'))
 RETURNING id, recipient_id, task_id, activity_type, actor_id, event_count, read_at, created_at, updated_at;
 
 -- name: CoalesceNotification :exec
@@ -25,13 +29,14 @@ SET event_count   = event_count + 1,
     activity_type = sqlc.arg('activity_type'),
     actor_id      = sqlc.arg('actor_id'),
     comment_id    = sqlc.narg('comment_id'),
+    via           = sqlc.arg('via'),
     read_at       = NULL,
     updated_at    = NOW()
 WHERE id = sqlc.arg('id');
 
 -- name: ListNotifications :many
 -- A recipient's notifications, newest first, with task/project/actor display fields.
-SELECT n.id, n.task_id, n.activity_type, n.actor_id, n.comment_id, n.event_count, n.read_at, n.created_at, n.updated_at,
+SELECT n.id, n.task_id, n.activity_type, n.actor_id, n.comment_id, n.event_count, n.read_at, n.created_at, n.updated_at, n.via,
        u.username, u.first_name, u.last_name, u.avatar_url,
        t.task_number, t.title AS task_title, p.project_key
 FROM notifications n

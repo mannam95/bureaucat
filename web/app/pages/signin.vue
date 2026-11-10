@@ -8,15 +8,10 @@ definePageMeta({
 useSeoMeta({ title: "Sign In" });
 
 const { signin } = useAuth();
-const { fetchSSOProviders, ssoProviders } = useSettings();
+const { fetchSSOProviders, ssoProviders, branding } = useSettings();
 const route = useRoute();
 
-const redirectTo = computed(() => {
-  const r = route.query.redirect as string | undefined;
-  // Only allow relative paths to prevent open redirect
-  if (r && r.startsWith("/")) return r;
-  return "/dashboard";
-});
+const redirectTo = computed(() => safeRedirect(route.query.redirect));
 
 const identifier = ref("");
 const password = ref("");
@@ -68,7 +63,7 @@ async function handleSubmit() {
   <div class="flex min-h-screen flex-col">
     <Navbar />
 
-    <main id="main-content" class="flex flex-1 items-center justify-center px-4 py-12">
+    <main id="main-content" class="flex flex-1 flex-col items-center justify-center px-4 py-12">
       <Card class="w-full max-w-md">
         <CardHeader class="space-y-1 text-center">
           <CardTitle class="text-2xl font-bold">Welcome back</CardTitle>
@@ -177,6 +172,10 @@ async function handleSubmit() {
           </p>
         </CardFooter>
       </Card>
+      <p v-if="branding.enabled" class="mt-6 text-xs text-muted-foreground">
+        Powered by
+        <a href="https://bureaucat.org" target="_blank" rel="noopener" class="underline-offset-4 hover:underline">Bureaucat</a>
+      </p>
     </main>
   </div>
 </template>

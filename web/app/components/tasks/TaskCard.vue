@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Circle, CircleDot, CircleDotDashed, CheckCircle2, XCircle, Clock, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
+import { Circle, CircleDot, CircleDotDashed, CheckCircle2, XCircle, Clock, MessageSquare, Building2, ChevronRight, CornerDownRight } from "lucide-vue-next";
+import { toast } from "vue-sonner";
 import { complexityBand } from "~/utils/complexity";
 import { getAvatarColor } from "~/utils/avatarColor";
 import type { Task, ProjectState } from "~/types";
@@ -75,6 +76,7 @@ async function changeState(stateId: string) {
   const res = await updateTask(resolvedKey.value, props.task.task_number, { state_id: stateId });
   updatingState.value = false;
   if (res.success) emit("updated");
+  else toast.error(res.error || "Failed to update state");
 }
 
 const stateIcon = computed(() => {
@@ -214,6 +216,7 @@ const assignedTo = computed<Person[]>(() =>
           v-if="canEditState"
           :states="states"
           :model-value="task.state_id"
+          :task="task"
           :disabled="updatingState"
           compact
           dense

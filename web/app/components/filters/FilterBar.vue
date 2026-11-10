@@ -36,6 +36,7 @@ const props = defineProps<{
   /** When true, hide the free-text search box (e.g. inside the view editor,
    *  where search is not part of a saved view). */
   hideSearch?: boolean;
+  defaultHint?: string;
 }>();
 
 const emit = defineEmits<{
@@ -133,6 +134,7 @@ function updatePredicate(index: number, p: Predicate) {
         v-if="hasAnyFilter()"
         variant="ghost"
         size="sm"
+        class="text-destructive hover:bg-destructive/10 hover:text-destructive"
         @click="emit('reset')"
       >
         <X class="mr-1 size-3.5" />
@@ -166,5 +168,8 @@ function updatePredicate(index: number, p: Predicate) {
         />
       </template>
     </div>
+    <p v-else-if="defaultHint" class="text-xs text-muted-foreground">
+      {{ defaultHint }}
+    </p>
   </div>
 </template>

@@ -20,7 +20,7 @@ import {
   UserX,
 } from "lucide-vue-next";
 import type { ActivityLogEntry, ActivityType } from "~/types";
-import { activityLabel } from "~/types";
+import { activityActorName, activityLabel } from "~/types";
 
 const props = defineProps<{
   activity: ActivityLogEntry;
@@ -117,8 +117,9 @@ const fieldLabel = computed(() => {
     <div class="min-w-0 flex-1 pt-0.5">
       <p class="text-sm">
         <span class="font-medium">
-          {{ activity.first_name }} {{ activity.last_name }}
+          {{ activityActorName(activity) }}
         </span>
+        <ViaBadge :via="activity.via" :triggered-by="`${activity.first_name} ${activity.last_name}`" class="ml-1" />
         <span class="text-muted-foreground">
           {{ " " }}{{ label }}
           <template v-if="fieldLabel">

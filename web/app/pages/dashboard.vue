@@ -353,6 +353,12 @@ function onResize() {
   resizeFrame = requestAnimationFrame(syncCardWidths);
 }
 
+onDataChanged(() => {
+  fetchProjects();
+  fetchAllProjects();
+  fetchMyTasks();
+});
+
 onMounted(async () => {
   fetchProjects();
   fetchAllProjects();
@@ -548,7 +554,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Loading -->
-          <div v-if="projectsLoading" class="flex items-center justify-center py-12">
+          <div v-if="projectsLoading && projects.length === 0" class="flex items-center justify-center py-12">
             <Loader2 class="size-8 animate-spin text-muted-foreground" />
           </div>
 

@@ -30,6 +30,7 @@ const appliedKey = ref<string | null>(null);
 const workspaceOpen = ref(false);
 const projectsOpen = ref(false);
 const stateTypesOpen = ref(false);
+const linesOpen = ref(false);
 const usersOpen = ref(false);
 const userSearchOpen = ref(false);
 const taskSearchOpen = ref(false);
@@ -84,6 +85,25 @@ const selectedProjects = computed(() => listParam("projects"));
 const selectedStateTypes = computed(() => listParam("state_types"));
 const selectedUsers = computed(() => listParam("users"));
 
+const LINE_OPTIONS = [
+  { id: "creator", label: "Creator — task", color: "var(--graph-creator)" },
+  { id: "assignee", label: "Assignee — task", color: "var(--muted-foreground)" },
+  { id: "subtask", label: "Parent → subtask", color: "var(--graph-subtask)" },
+  { id: "blocker", label: "Blocker → blocked task", color: "var(--destructive)" },
+] as const;
+type LineKind = (typeof LINE_OPTIONS)[number]["id"];
+
+const ALL_LINES = LINE_OPTIONS.map((l) => l.id as string);
+const selectedLines = computed(() => (route.query.lines === undefined ? ALL_LINES : listParam("lines")));
+const visibleLines = computed(() => new Set<string>(selectedLines.value));
+const linesLabel = computed(() => {
+  const count = selectedLines.value.length;
+  if (count === ALL_LINES.length) return "All lines";
+  if (count === 0) return "No lines";
+  if (count === 1) return LINE_OPTIONS.find((l) => l.id === selectedLines.value[0])?.label ?? "1 line type";
+  return `${count} line types`;
+});
+
 const filtersKey = computed(() =>
   JSON.stringify([
     selectedWorkspace.value,
@@ -94,13 +114,20 @@ const filtersKey = computed(() =>
 );
 const canRun = computed(() => !loading.value && (!graph.value || filtersKey.value !== appliedKey.value));
 
-function updateQuery(patch: { workspace?: string; projects?: string[]; stateTypes?: string[]; users?: string[] }) {
+function updateQuery(patch: {
+  workspace?: string;
+  projects?: string[];
+  stateTypes?: string[];
+  users?: string[];
+  lines?: string[];
+}) {
   const query: LocationQueryRaw = { ...route.query };
   if (patch.workspace !== undefined) query.workspace = patch.workspace || undefined;
   if (patch.projects) query.projects = patch.projects.length ? patch.projects.join(",") : undefined;
   // An empty value means "all"; a missing one triggers the default redirect.
   if (patch.stateTypes) query.state_types = patch.stateTypes.join(",");
   if (patch.users) query.users = patch.users.join(",");
+  if (patch.lines) query.lines = patch.lines.length === ALL_LINES.length ? undefined : patch.lines.join(",");
   router.replace({ query });
 }
 
@@ -223,11 +250,14 @@ const usersLabel = computed(() => {
 const filtered = computed(() => {
   const tasks = graph.value?.tasks ?? [];
   const edges = graph.value?.edges ?? [];
+  const creatorEdges = tasks.map((t) => ({ user_id: t.creator_id, task_id: t.id }));
   const taskCounts = new Map<string, number>();
   for (const e of edges) taskCounts.set(e.user_id, (taskCounts.get(e.user_id) ?? 0) + 1);
+  const createdCounts = new Map<string, number>();
+  for (const e of creatorEdges) createdCounts.set(e.user_id, (createdCounts.get(e.user_id) ?? 0) + 1);
   const users = (graph.value?.users ?? [])
-    .filter((u) => taskCounts.has(u.id))
-    .map((u) => ({ ...u, task_count: taskCounts.get(u.id)! }));
+    .filter((u) => taskCounts.has(u.id) || createdCounts.has(u.id))
+    .map((u) => ({ ...u, task_count: taskCounts.get(u.id) ?? 0, created_count: createdCounts.get(u.id) ?? 0 }));
   const taskIds = new Set(tasks.map((t) => t.id));
   const subtaskEdges = tasks
     .filter((t) => t.parent_id && taskIds.has(t.parent_id))
@@ -237,14 +267,14 @@ const filtered = computed(() => {
   );
   const assignedIds = new Set(edges.map((e) => e.task_id));
   const unassignedCount = tasks.filter((t) => !assignedIds.has(t.id)).length;
-  return { users, tasks, edges, subtaskEdges, blockerEdges, unassignedCount };
+  return { users, tasks, edges, creatorEdges, subtaskEdges, blockerEdges, unassignedCount };
 });
 
 const flow = computed(() => {
-  const { users, tasks, edges, subtaskEdges, blockerEdges } = filtered.value;
+  const { users, tasks, edges, creatorEdges, subtaskEdges, blockerEdges } = filtered.value;
 
   const tasksByUser = new Map<string, string[]>();
-  for (const e of edges) {
+  for (const e of [...edges, ...creatorEdges]) {
     const list = tasksByUser.get(e.user_id) ?? [];
     list.push(e.task_id);
     tasksByUser.set(e.user_id, list);
@@ -267,6 +297,7 @@ const flow = computed(() => {
 
   const positions = forceLayout(order, [
     ...edges.map((e): [string, string] => [`u:${e.user_id}`, `t:${e.task_id}`]),
+    ...creatorEdges.map((e): [string, string] => [`u:${e.user_id}`, `t:${e.task_id}`]),
     ...subtaskEdges.map((e): [string, string] => [`t:${e.parent_id}`, `t:${e.child_id}`]),
     ...blockerEdges.map((e): [string, string] => [`t:${e.blocker_id}`, `t:${e.blocked_id}`]),
   ]);
@@ -282,6 +313,16 @@ const flow = computed(() => {
     type: "straight",
     style: { stroke: "var(--muted-foreground)", strokeOpacity: 0.4 },
   }));
+  for (const e of creatorEdges) {
+    flowEdges.push({
+      id: `c:${e.user_id}:${e.task_id}`,
+      source: `u:${e.user_id}`,
+      target: `t:${e.task_id}`,
+      type: "straight",
+      class: "creator",
+      style: { stroke: "var(--graph-creator)", strokeOpacity: 0.6 },
+    });
+  }
   for (const e of subtaskEdges) {
     flowEdges.push({
       id: `s:${e.parent_id}:${e.child_id}`,
@@ -308,13 +349,54 @@ const flow = computed(() => {
   return { nodes, edges: flowEdges };
 });
 
+// Users whose every line is hidden are hidden too; positions stay put so toggling doesn't relayout.
+const visibleUserIds = computed(() => {
+  const ids = new Set<string>();
+  if (visibleLines.value.has("assignee")) for (const e of filtered.value.edges) ids.add(e.user_id);
+  if (visibleLines.value.has("creator")) for (const e of filtered.value.creatorEdges) ids.add(e.user_id);
+  return ids;
+});
+
+function lineKind(edgeId: string): LineKind {
+  if (edgeId.startsWith("c:")) return "creator";
+  if (edgeId.startsWith("s:")) return "subtask";
+  if (edgeId.startsWith("b:")) return "blocker";
+  return "assignee";
+}
+
+function applyLineVisibility() {
+  for (const e of flow.value.edges) {
+    const edge = findEdge(e.id);
+    if (edge) edge.hidden = !visibleLines.value.has(lineKind(e.id));
+  }
+  for (const u of filtered.value.users) {
+    const node = findNode(`u:${u.id}`);
+    if (node) node.hidden = !visibleUserIds.value.has(u.id);
+  }
+}
+
+watch(() => selectedLines.value.join(","), () => {
+  if (highlightedNode.value?.startsWith("u:") && !visibleUserIds.value.has(highlightedNode.value.slice(2))) {
+    setHighlight(null);
+  } else if (highlightedNode.value) {
+    setHighlight(highlightedNode.value);
+  }
+  applyLineVisibility();
+});
+
+function onNodesInitialized() {
+  applyLineVisibility();
+  fitView();
+}
+
 const sortedUsers = computed(() =>
-  [...filtered.value.users].sort((a, b) =>
+  [...filtered.value.users].filter((u) => visibleUserIds.value.has(u.id)).sort((a, b) =>
     `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`),
   ),
 );
 
 function edgeClass(id: string) {
+  if (id.startsWith("c:")) return "creator";
   if (id.startsWith("s:")) return "subtask";
   if (id.startsWith("b:")) return "blocker";
   return undefined;
@@ -337,18 +419,24 @@ function setHighlight(nodeId: string | null) {
   const isUser = nodeId.startsWith("u:");
   const id = nodeId.slice(2);
   highlightedIds.nodes.push(nodeId);
-  for (const e of filtered.value.edges) {
+  const lines = visibleLines.value;
+  for (const e of lines.has("assignee") ? filtered.value.edges : []) {
     if ((isUser ? e.user_id : e.task_id) !== id) continue;
     highlightedIds.nodes.push(isUser ? `t:${e.task_id}` : `u:${e.user_id}`);
     highlightedIds.edges.push(`${e.user_id}:${e.task_id}`);
   }
+  for (const e of lines.has("creator") ? filtered.value.creatorEdges : []) {
+    if ((isUser ? e.user_id : e.task_id) !== id) continue;
+    highlightedIds.nodes.push(isUser ? `t:${e.task_id}` : `u:${e.user_id}`);
+    highlightedIds.edges.push(`c:${e.user_id}:${e.task_id}`);
+  }
   if (!isUser) {
-    for (const e of filtered.value.subtaskEdges) {
+    for (const e of lines.has("subtask") ? filtered.value.subtaskEdges : []) {
       if (e.parent_id !== id && e.child_id !== id) continue;
       highlightedIds.nodes.push(`t:${e.parent_id === id ? e.child_id : e.parent_id}`);
       highlightedIds.edges.push(`s:${e.parent_id}:${e.child_id}`);
     }
-    for (const e of filtered.value.blockerEdges) {
+    for (const e of lines.has("blocker") ? filtered.value.blockerEdges : []) {
       if (e.blocker_id !== id && e.blocked_id !== id) continue;
       highlightedIds.nodes.push(`t:${e.blocker_id === id ? e.blocked_id : e.blocker_id}`);
       highlightedIds.edges.push(`b:${e.blocker_id}:${e.blocked_id}`);
@@ -417,7 +505,7 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
     <Navbar />
 
     <main id="main-content" class="relative min-h-0 flex-1">
-      <div class="absolute inset-x-3 top-3 z-10 flex flex-wrap items-center gap-2">
+      <div class="absolute inset-x-3 top-3 z-10 flex flex-wrap items-start gap-2">
         <Popover v-model:open="workspaceOpen">
           <PopoverTrigger as-child>
             <Button variant="outline" size="sm" class="max-w-48 justify-between gap-2 bg-background/90 shadow-sm backdrop-blur">
@@ -560,6 +648,43 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
           </PopoverContent>
         </Popover>
 
+        <Popover v-model:open="linesOpen">
+          <PopoverTrigger as-child>
+            <Button variant="outline" size="sm" class="max-w-48 justify-between gap-2 bg-background/90 shadow-sm backdrop-blur">
+              <span class="truncate">{{ linesLabel }}</span>
+              <ChevronsUpDown class="size-3.5 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" class="w-64 p-0">
+            <Command>
+              <CommandInput placeholder="Search lines..." />
+              <CommandList>
+                <CommandEmpty>No line type found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    v-if="selectedLines.length < ALL_LINES.length"
+                    value="show-all-lines"
+                    class="text-muted-foreground"
+                    @select="updateQuery({ lines: ALL_LINES })"
+                  >
+                    Show all lines
+                  </CommandItem>
+                  <CommandItem
+                    v-for="l in LINE_OPTIONS"
+                    :key="l.id"
+                    :value="l.label"
+                    @select="updateQuery({ lines: toggle(selectedLines, l.id) })"
+                  >
+                    <Check :class="['size-4', selectedLines.includes(l.id) ? 'opacity-100' : 'opacity-0']" />
+                    <span class="h-0.5 w-4 shrink-0 rounded" :style="{ backgroundColor: l.color }" />
+                    <span class="truncate">{{ l.label }}</span>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
         <Button size="sm" class="gap-1.5 shadow-sm" :disabled="!canRun" @click="runGraph">
           <Loader2 v-if="loading" class="size-3.5 animate-spin" />
           <Play v-else class="size-3.5" />
@@ -624,16 +749,18 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
         </Popover>
 
         <div v-if="graph" class="ml-auto flex flex-col items-end gap-2">
-          <span class="rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
-            {{ filtered.users.length }} users · {{ filtered.tasks.length }} tasks
-            <template v-if="filtered.unassignedCount">({{ filtered.unassignedCount }} unassigned)</template>
-          </span>
           <div class="space-y-1 rounded-md border bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            <div class="flex items-center gap-2">
+              <svg width="28" height="8" aria-hidden="true">
+                <line x1="0" y1="4" x2="28" y2="4" style="stroke: var(--graph-creator)" stroke-width="2" />
+              </svg>
+              Creator — task
+            </div>
             <div class="flex items-center gap-2">
               <svg width="28" height="8" aria-hidden="true">
                 <line x1="0" y1="4" x2="28" y2="4" style="stroke: var(--muted-foreground)" stroke-width="2" />
               </svg>
-              User → assigned task
+              Assignee — task
             </div>
             <div class="flex items-center gap-2">
               <svg width="28" height="8" aria-hidden="true">
@@ -650,6 +777,10 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
               Blocker → blocked task
             </div>
           </div>
+          <span class="rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {{ filtered.users.length }} users · {{ filtered.tasks.length }} tasks
+            <template v-if="filtered.unassignedCount">({{ filtered.unassignedCount }} unassigned)</template>
+          </span>
         </div>
       </div>
 
@@ -681,7 +812,7 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
           @node-mouse-leave="hideTooltip"
           @node-drag-start="hideTooltip"
           @move-start="hideTooltip"
-          @nodes-initialized="fitView()"
+          @nodes-initialized="onNodesInitialized"
         >
           <template #node-user="{ data }">
             <GraphUserNode :data="data" />
@@ -703,6 +834,7 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
 <style>
 :root {
   --graph-subtask: #eab308;
+  --graph-creator: #3b82f6;
 }
 
 .vue-flow__controls-button {
@@ -737,6 +869,12 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
   stroke: var(--foreground) !important;
   stroke-opacity: 0.35 !important;
   stroke-width: 1.25;
+}
+
+.vue-flow__edge.creator.highlighted path.vue-flow__edge-path {
+  stroke: var(--graph-creator) !important;
+  stroke-opacity: 1 !important;
+  stroke-width: 2;
 }
 
 .vue-flow__edge.subtask.highlighted path.vue-flow__edge-path {

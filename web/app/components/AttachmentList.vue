@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { FileText, X, Loader2, Download } from "lucide-vue-next";
 import type { Attachment } from "~/composables/useAttachments";
+import { previewKind } from "~/utils/filePreview";
 
 const props = withDefaults(
   defineProps<{
@@ -19,8 +20,8 @@ const emit = defineEmits<{
 }>();
 
 const lightboxOpen = ref(false);
-const lightboxSrc = ref("");
-const lightboxAlt = ref("");
+const lightboxIndex = ref(0);
+const previewing = ref<Attachment | null>(null);
 
 // Detection falls back to the filename extension because attachments uploaded
 // via the API (e.g. the Taiga migration) can land with a generic
@@ -30,9 +31,6 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
 function isImage(a: Attachment): boolean {
   return a.mime_type.startsWith("image/") || IMAGE_EXT.test(a.filename);
 }
-function isPdf(a: Attachment): boolean {
-  return a.mime_type === "application/pdf" || /\.pdf$/i.test(a.filename);
-}
 
 const imageAttachments = computed(() =>
   props.attachments.filter((a) => isImage(a))
@@ -41,9 +39,12 @@ const fileAttachments = computed(() =>
   props.attachments.filter((a) => !isImage(a))
 );
 
-function openLightbox(attachment: Attachment) {
-  lightboxSrc.value = attachment.url;
-  lightboxAlt.value = attachment.filename;
+const lightboxImages = computed(() =>
+  imageAttachments.value.map((a) => ({ src: a.url, alt: a.filename }))
+);
+
+function openLightbox(index: number) {
+  lightboxIndex.value = index;
   lightboxOpen.value = true;
 }
 
@@ -53,27 +54,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Images preview in-app; PDFs open in a new tab (the browser's viewer renders
-// them inline and offers its own download); anything else downloads directly
-// rather than opening a blank tab that immediately downloads.
-function handleClick(attachment: Attachment) {
-  if (isImage(attachment)) {
-    openLightbox(attachment);
-  } else if (isPdf(attachment)) {
-    window.open(attachment.url, "_blank");
-  } else {
-    triggerDownload(attachment);
-  }
-}
-
-function triggerDownload(attachment: Attachment) {
-  const a = document.createElement("a");
-  a.href = attachment.url;
-  a.download = attachment.filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
 </script>
 
 <template>
@@ -86,7 +66,7 @@ function triggerDownload(attachment: Attachment) {
   <!-- Image / SVG previews -->
   <div v-if="imageAttachments.length > 0" class="flex flex-wrap gap-2 pt-2">
     <div
-      v-for="attachment in imageAttachments"
+      v-for="(attachment, index) in imageAttachments"
       :key="attachment.id"
       class="group relative overflow-hidden rounded-md border bg-muted/30"
     >
@@ -94,7 +74,7 @@ function triggerDownload(attachment: Attachment) {
         type="button"
         class="block"
         :aria-label="`View ${attachment.filename}`"
-        @click="openLightbox(attachment)"
+        @click="openLightbox(index)"
       >
         <img
           :src="attachment.url"
@@ -141,14 +121,26 @@ function triggerDownload(attachment: Attachment) {
       class="group flex items-center gap-1.5 rounded-full border bg-muted/30 py-1 pl-2 pr-1.5 text-xs transition-colors hover:bg-muted/60"
     >
       <button
+        v-if="previewKind(attachment)"
         type="button"
         class="flex items-center gap-1.5"
-        @click="handleClick(attachment)"
+        :aria-label="`Preview ${attachment.filename}`"
+        @click="previewing = attachment"
       >
         <FileText class="size-3.5 shrink-0 text-muted-foreground" />
         <span class="max-w-[150px] truncate">{{ attachment.filename }}</span>
         <span class="text-muted-foreground/60">{{ formatSize(attachment.size_bytes) }}</span>
       </button>
+      <a
+        v-else
+        :href="attachment.url"
+        :download="attachment.filename"
+        class="flex items-center gap-1.5"
+      >
+        <FileText class="size-3.5 shrink-0 text-muted-foreground" />
+        <span class="max-w-[150px] truncate">{{ attachment.filename }}</span>
+        <span class="text-muted-foreground/60">{{ formatSize(attachment.size_bytes) }}</span>
+      </a>
 
       <a
         :href="attachment.url"
@@ -173,5 +165,6 @@ function triggerDownload(attachment: Attachment) {
   </div>
   </template>
 
-  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxSrc" :alt="lightboxAlt" />
+  <ImageLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :images="lightboxImages" />
+  <FilePreviewDialog :attachment="previewing" @close="previewing = null" />
 </template>

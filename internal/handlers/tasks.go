@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"bereaucat/internal/auth"
 	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
+	"bereaucat/internal/workflow"
 )
 
 // NullableTime distinguishes between an absent JSON field, an explicit null
@@ -760,6 +762,13 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		}
 		stateID = defaultState.ID
 	}
+	if st, err := h.store.GetProjectStateByID(ctx, stateID); err != nil || st.ProjectID != projectID {
+		return echo.NewHTTPError(http.StatusBadRequest, "state does not belong to this project")
+	}
+	isProjectAdmin := c.Request().Header.Get(auth.HeaderProjectRole) == "admin"
+	if err := workflow.CheckEntry(ctx, h.store, projectID, stateID, isProjectAdmin); err != nil {
+		return workflowHTTPError(err)
+	}
 
 	if req.Priority != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "the integer priority field is no longer accepted; send priority_id")
@@ -1015,6 +1024,8 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		})
 	}
 
+	h.applyWorkflowOnEnter(ctx, requestBaseURL(c), projectID, projectKey, task.ID, int(task.TaskNumber), task.Title, stateID, userID)
+
 	// Send notifications for assignees and mentions
 	if h.notificationService != nil {
 		actorUser, _ := h.store.GetUserByID(ctx, userID)
@@ -1246,6 +1257,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		ParentTaskNumber:    pgInt4ToIntPtr(task.ParentTaskNumber),
 		ParentTaskTitle:     textToStringPtr(task.ParentTaskTitle),
 		SubtaskCount:        int(task.SubtaskCount),
+		CommentCount:        int(task.CommentCount),
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
@@ -1345,6 +1357,13 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid state_id")
 		}
 		stateID = pgtype.UUID{Bytes: id, Valid: true}
+		if st, err := h.store.GetProjectStateByID(ctx, id); err != nil || st.ProjectID != projectID {
+			return echo.NewHTTPError(http.StatusBadRequest, "state does not belong to this project")
+		}
+		isProjectAdmin := c.Request().Header.Get(auth.HeaderProjectRole) == "admin"
+		if err := workflow.CheckTransition(ctx, h.store, projectID, oldTask.ID, oldTask.CreatedBy, oldTask.StateID, id, userID, isProjectAdmin); err != nil {
+			return workflowHTTPError(err)
+		}
 	}
 
 	// Build nullable date args: only applied when the field was present in the request.
@@ -1457,6 +1476,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 				"name":     newState.Name,
 			},
 		})
+		h.applyWorkflowOnEnter(ctx, requestBaseURL(c), projectID, projectKey, task.ID, taskNum, task.Title, task.StateID, userID)
 	}
 	if newPriorityID.Valid && uuid.UUID(newPriorityID.Bytes) != oldTask.PriorityID {
 		h.activityService.LogActivity(ctx, activity.LogActivityParams{
@@ -1647,6 +1667,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
 		SubtaskCount:        int(fullTask.SubtaskCount),
+		CommentCount:        int(fullTask.CommentCount),
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
@@ -2601,25 +2622,7 @@ func (h *TaskHandler) AddAssignee(c *echo.Context) error {
 		},
 	})
 
-	// Send notification to assignee (skip if self-assigning)
-	if h.notificationService != nil && assigneeID != userID {
-		username := c.Request().Header.Get(auth.HeaderUsername)
-		actorUser, _ := h.store.GetUserByID(ctx, userID)
-		actorName := actorUser.FirstName + " " + actorUser.LastName
-		if actorName == " " {
-			actorName = username
-		}
-		projectKey := c.Request().Header.Get(auth.HeaderProjectKey)
-		h.notificationService.Notify(ctx, notifier.Notification{
-			Event:       notifier.EventTaskAssigned,
-			RecipientID: assigneeID,
-			ActorName:   actorName,
-			ProjectKey:  projectKey,
-			TaskNumber:  taskNum,
-			TaskTitle:   task.Title,
-			BaseURL:     requestBaseURL(c),
-		})
-	}
+	h.notifyAssigned(ctx, requestBaseURL(c), userID, assigneeID, c.Request().Header.Get(auth.HeaderProjectKey), taskNum, task.Title)
 
 	return c.JSON(http.StatusCreated, map[string]string{"message": "assignee added"})
 }
@@ -3671,7 +3674,7 @@ func (h *TaskHandler) resolveMoveTarget(ctx context.Context, c *echo.Context, ta
 // moveTaskTx moves one task to destProject inside a transaction, remapping the
 // state and labels by name and dropping cycle/module links. It returns the new
 // (destination-local) task number. Activity is logged after commit.
-func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjectAndNumberRow, dest store.Project, actorID uuid.UUID) (int32, error) {
+func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjectAndNumberRow, dest store.Project, actorID uuid.UUID, baseURL string) (int32, error) {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -3679,10 +3682,12 @@ func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjec
 	defer tx.Rollback(ctx)
 	q := store.New(tx)
 
-	newNumber, err := h.moveOneWithinTx(ctx, q, task.ID, task.StateName, dest, actorID)
+	parent, err := h.moveOneWithinTx(ctx, q, task.ID, task.StateName, dest, actorID)
 	if err != nil {
 		return 0, err
 	}
+	newNumber := parent.TaskNumber
+	entered := []store.MoveTaskRow{parent}
 
 	// Cascade the move to subtasks: children move with their parent, keeping the
 	// parent link (the parent's UUID is unchanged). Each child is renumbered in
@@ -3692,13 +3697,20 @@ func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjec
 		return 0, err
 	}
 	for _, child := range children {
-		if _, err := h.moveOneWithinTx(ctx, q, child.ID, child.StateName, dest, actorID); err != nil {
+		moved, err := h.moveOneWithinTx(ctx, q, child.ID, child.StateName, dest, actorID)
+		if err != nil {
 			return 0, err
 		}
+		entered = append(entered, moved)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
+	}
+
+	// The remapped state is accepted as-is; only its on-enter actions apply.
+	for _, m := range entered {
+		h.applyWorkflowOnEnter(ctx, baseURL, dest.ID, dest.ProjectKey, m.ID, int(m.TaskNumber), m.Title, m.StateID, actorID)
 	}
 
 	// Log the move outside the transaction (best-effort, matching other handlers).
@@ -3722,7 +3734,7 @@ func (h *TaskHandler) moveTaskTx(ctx context.Context, task store.GetTaskByProjec
 // moveOneWithinTx moves a single task to dest within an existing transaction:
 // remaps state and labels by name and drops cycle/module/blocker links. It
 // returns the new (destination-local) task number. The task's parent_task_id is preserved.
-func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, taskID uuid.UUID, stateName string, dest store.Project, actorID uuid.UUID) (int32, error) {
+func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, taskID uuid.UUID, stateName string, dest store.Project, actorID uuid.UUID) (store.MoveTaskRow, error) {
 	// Remap state by name; fall back to the destination's default state.
 	var newStateID uuid.UUID
 	if st, err := q.GetProjectStateByProjectAndName(ctx, store.GetProjectStateByProjectAndNameParams{
@@ -3733,7 +3745,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 	} else {
 		def, err := q.GetDefaultProjectState(ctx, dest.ID)
 		if err != nil {
-			return 0, err
+			return store.MoveTaskRow{}, err
 		}
 		newStateID = def.ID
 	}
@@ -3763,7 +3775,7 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 
 	nextNumber, err := q.GetNextTaskNumber(ctx, dest.ID)
 	if err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 
 	moved, err := q.MoveTask(ctx, store.MoveTaskParams{
@@ -3774,18 +3786,18 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		PriorityID: newPriorityID,
 	})
 	if err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 
 	// Drop project-scoped cycle/module/blocker associations.
 	if err := q.DeleteTaskCycleLinks(ctx, taskID); err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 	if err := q.DeleteTaskModuleLinks(ctx, taskID); err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 	if err := q.DeleteTaskBlockerLinks(ctx, taskID); err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 
 	// Remap areas by name, mirroring the label remap below: drop the source
@@ -3821,14 +3833,14 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 	// the destination project. Unmatched labels are silently dropped.
 	labels, err := q.ListTaskLabels(ctx, taskID)
 	if err != nil {
-		return 0, err
+		return store.MoveTaskRow{}, err
 	}
 	for _, l := range labels {
 		if err := q.RemoveTaskLabel(ctx, store.RemoveTaskLabelParams{
 			TaskID:  taskID,
 			LabelID: l.LabelID,
 		}); err != nil {
-			return 0, err
+			return store.MoveTaskRow{}, err
 		}
 		destLabel, err := q.GetProjectLabelByProjectAndName(ctx, store.GetProjectLabelByProjectAndNameParams{
 			ProjectID: dest.ID,
@@ -3842,11 +3854,11 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 			LabelID: destLabel.ID,
 			AddedBy: actorID,
 		}); err != nil {
-			return 0, err
+			return store.MoveTaskRow{}, err
 		}
 	}
 
-	return moved.TaskNumber, nil
+	return moved, nil
 }
 
 // MoveTask moves a single task to another project.
@@ -3902,7 +3914,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot move a subtask; move its parent task instead")
 	}
 
-	newNumber, err := h.moveTaskTx(ctx, task, dest, userID)
+	newNumber, err := h.moveTaskTx(ctx, task, dest, userID, requestBaseURL(c))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to move task")
 	}
@@ -4015,7 +4027,7 @@ func (h *TaskHandler) MoveTasks(c *echo.Context) error {
 			resp.Results = append(resp.Results, result)
 			continue
 		}
-		newNumber, err := h.moveTaskTx(ctx, task, dest, userID)
+		newNumber, err := h.moveTaskTx(ctx, task, dest, userID, requestBaseURL(c))
 		if err != nil {
 			result.Error = "failed to move task"
 			resp.Failed++
@@ -4193,4 +4205,72 @@ func (h *TaskHandler) getTaskLabels(ctx context.Context, taskID uuid.UUID) []Tas
 		}
 	}
 	return result
+}
+
+// notifyAssigned sends the task-assigned notification unless users assign themselves.
+func (h *TaskHandler) notifyAssigned(ctx context.Context, baseURL string, actorID, assigneeID uuid.UUID, projectKey string, taskNum int, title string) {
+	if h.notificationService == nil || assigneeID == actorID {
+		return
+	}
+	actorUser, _ := h.store.GetUserByID(ctx, actorID)
+	actorName := actorUser.FirstName + " " + actorUser.LastName
+	if actorName == " " {
+		actorName = actorUser.Username
+	}
+	if auth.ViaFromContext(ctx) == auth.ViaWorkflow {
+		actorName = "Workflow Engine"
+	}
+	h.notificationService.Notify(ctx, notifier.Notification{
+		Event:       notifier.EventTaskAssigned,
+		RecipientID: assigneeID,
+		ActorName:   actorName,
+		ProjectKey:  projectKey,
+		TaskNumber:  taskNum,
+		TaskTitle:   title,
+		BaseURL:     baseURL,
+	})
+}
+
+// applyWorkflowOnEnter runs the state's workflow actions (best-effort). They are
+// logged with via=workflow; actorID stays as the user whose move triggered them.
+func (h *TaskHandler) applyWorkflowOnEnter(ctx context.Context, baseURL string, projectID uuid.UUID, projectKey string, taskID uuid.UUID, taskNum int, title string, stateID, actorID uuid.UUID) {
+	added, removed, _ := workflow.ApplyOnEnter(ctx, h.store, projectID, taskID, stateID, actorID)
+	ctx = auth.WithVia(ctx, auth.ViaWorkflow)
+	for _, id := range added {
+		u, _ := h.store.GetUserByID(ctx, id)
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       taskID,
+			ActivityType: activity.AssigneeAdded,
+			ActorID:      actorID,
+			NewValue: map[string]interface{}{
+				"user_id":    id.String(),
+				"username":   u.Username,
+				"first_name": u.FirstName,
+				"last_name":  u.LastName,
+			},
+		})
+		h.notifyAssigned(ctx, baseURL, actorID, id, projectKey, taskNum, title)
+	}
+	for _, id := range removed {
+		u, _ := h.store.GetUserByID(ctx, id)
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       taskID,
+			ActivityType: activity.AssigneeRemoved,
+			ActorID:      actorID,
+			OldValue: map[string]interface{}{
+				"user_id":    id.String(),
+				"username":   u.Username,
+				"first_name": u.FirstName,
+				"last_name":  u.LastName,
+			},
+		})
+	}
+}
+
+func workflowHTTPError(err error) error {
+	var wfErr *workflow.Error
+	if errors.As(err, &wfErr) {
+		return echo.NewHTTPError(wfErr.Status, wfErr.Message)
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "failed to check workflow rules")
 }

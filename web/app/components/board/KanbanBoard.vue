@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Loader2 } from "lucide-vue-next";
+import { toast } from "vue-sonner";
+import { useResizeObserver, useWindowSize } from "@vueuse/core";
 import type { Task, ProjectState, ProjectPriority, ProjectMember, ProjectLabel, ViewGroupBy } from "~/types";
 import { STATE_TYPE_COLORS } from "~/types";
 
@@ -33,6 +35,39 @@ const emit = defineEmits<{
 const { updateTask, addAssignee, removeAssignee, addLabel, removeLabel } = useTasks();
 const updating = ref(false);
 
+const draggingTask = ref<Task | null>(null);
+provide("kanban-dragging-task", draggingTask);
+const { workflows, getWorkflow } = useWorkflow();
+const { user } = useAuth();
+watch(
+  () => props.projectKey,
+  (key) => {
+    if (key) getWorkflow(key);
+  },
+  { immediate: true }
+);
+
+// The state a drop into columnId would set, honouring the project workflow.
+function dropTargetStateId(task: Task, columnId: string): string | undefined {
+  const [kind, value] = columnId.split(":");
+  const allowed = allowedTargetStateIds(workflows[props.projectKey], task, user.value?.id);
+  if (kind === "state") return !allowed || allowed.has(value) ? value : undefined;
+  if (kind === "state_type") {
+    return props.states.find((s) => s.state_type === value && (!allowed || allowed.has(s.id)))?.id;
+  }
+  return undefined;
+}
+
+const workflowBlocked = computed(() => {
+  const task = draggingTask.value;
+  const blocked = new Set<string>();
+  if (!task || (props.groupBy !== "state" && props.groupBy !== "state_type")) return blocked;
+  for (const col of columns.value) {
+    if (!dropTargetStateId(task, col.id)) blocked.add(col.id);
+  }
+  return blocked;
+});
+
 const STATE_TYPE_ORDER = ["backlog", "unstarted", "started", "verification", "completed", "cancelled", "archived"] as const;
 const STATE_TYPE_LABELS: Record<string, string> = {
   backlog: "Backlog",
@@ -57,6 +92,7 @@ const columns = computed<BoardColumn[]>(() => {
         }));
 
     case "state":
+      // The server already orders states by lifecycle type, then position.
       return props.states.map((s) => ({
         id: `state:${s.id}`,
         label: s.name,
@@ -269,15 +305,15 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
   try {
     const [, toValue] = toColumnId.split(":");
     switch (props.groupBy) {
-      case "state_type": {
-        const targetState = props.states.find((s) => s.state_type === toValue);
-        if (targetState) {
-          await updateTask(props.projectKey, task.task_number, { state_id: targetState.id });
-        }
-        break;
-      }
+      case "state_type":
       case "state": {
-        await updateTask(props.projectKey, task.task_number, { state_id: toValue });
+        const targetId = dropTargetStateId(task, toColumnId);
+        if (!targetId) {
+          toast.error("The project workflow doesn't allow this move");
+          return;
+        }
+        const res = await updateTask(props.projectKey, task.task_number, { state_id: targetId });
+        if (!res.success) toast.error(res.error || "Failed to update state");
         break;
       }
       case "priority": {
@@ -329,10 +365,32 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
     updating.value = false;
   }
 }
+
+// Fill the viewport below the sticky navbar, minus whatever page content sits under the board,
+// so at full scroll the board's top sits TOP_GAP below the navbar.
+const boardEl = ref<HTMLElement | null>(null);
+const { height: viewportHeight } = useWindowSize();
+const TOP_GAP = 20;
+const navbarHeight = ref(49);
+const spaceBelow = ref(0);
+
+function measure() {
+  const el = boardEl.value;
+  if (!el) return;
+  navbarHeight.value = document.querySelector("header.sticky")?.getBoundingClientRect().height ?? 49;
+  spaceBelow.value = document.documentElement.scrollHeight - (el.getBoundingClientRect().bottom + window.scrollY);
+}
+
+useResizeObserver(() => document.body, measure);
+onMounted(measure);
+
+const boardHeight = computed(() =>
+  Math.max(384, viewportHeight.value - navbarHeight.value - TOP_GAP - spaceBelow.value),
+);
 </script>
 
 <template>
-  <div class="relative">
+  <div ref="boardEl" class="relative" :style="{ height: `${boardHeight}px` }">
     <div
       v-if="updating"
       class="absolute inset-0 z-10 flex items-center justify-center bg-background/50"
@@ -340,7 +398,7 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
       <Loader2 class="size-6 animate-spin" />
     </div>
 
-    <div class="flex gap-4 overflow-x-auto pb-4">
+    <div class="flex h-full gap-4 overflow-x-auto pb-4">
       <KanbanColumn
         v-for="column in columns"
         :key="column.id"
@@ -351,7 +409,8 @@ async function handleDrop(task: Task, fromColumnId: string, toColumnId: string) 
         :tasks="column.tasks"
         :project-key="projectKey"
         :is-member="isMember"
-        :drop-locked="column.dropLocked"
+        :drop-locked="column.dropLocked || workflowBlocked.has(column.id)"
+        :dimmed="workflowBlocked.has(column.id)"
         :states="states"
         :members="members"
         :labels="labels"

@@ -125,6 +125,11 @@ SELECT id, username, email, password_hash, first_name, last_name, user_type,
 FROM users
 WHERE email = $1;
 
+-- name: ListUsersByEmailInsensitive :many
+SELECT id, username FROM users
+WHERE LOWER(email) = LOWER($1)
+LIMIT 2;
+
 -- name: GetUserByProviderID :one
 SELECT id, username, email, password_hash, first_name, last_name, user_type,
        auth_provider, provider_user_id, created_at, updated_at
@@ -253,3 +258,15 @@ WHERE (
       )
 ORDER BY u.created_at ASC
 LIMIT @lim OFFSET @off;
+
+-- name: GetAdminUserDetail :one
+SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.user_type, u.avatar_url, u.auth_provider,
+       (u.password_hash IS NOT NULL AND u.password_hash <> '')::boolean AS has_password,
+       u.created_at, u.updated_at,
+       (SELECT COUNT(*) FROM refresh_tokens rt
+        WHERE rt.user_id = u.id AND rt.revoked_at IS NULL AND rt.expires_at > NOW())::bigint AS active_sessions,
+       (SELECT COUNT(*) FROM personal_access_tokens pat
+        WHERE pat.user_id = u.id AND (pat.expires_at IS NULL OR pat.expires_at > NOW()))::bigint AS active_tokens
+FROM users u
+WHERE u.id = $1;
+

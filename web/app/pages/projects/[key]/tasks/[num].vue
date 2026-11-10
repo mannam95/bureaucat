@@ -139,8 +139,9 @@ const stateIconMap: Record<string, typeof Circle> = {
   archived: Archive,
 };
 
-async function loadData() {
-  loading.value = true;
+async function loadData(silent = false) {
+  if (silent && (loading.value || error.value)) return;
+  loading.value = !silent;
   error.value = null;
 
   // Load project data if not already loaded
@@ -759,6 +760,7 @@ function copyLink() {
 onMounted(() => {
   loadData();
 });
+onDataChanged(() => loadData(true));
 </script>
 
 <template>
@@ -787,7 +789,7 @@ onMounted(() => {
             <Button as-child>
               <NuxtLink :to="`/projects/${projectKey}`">Back to project</NuxtLink>
             </Button>
-            <Button variant="outline" @click="loadData">Try again</Button>
+            <Button variant="outline" @click="loadData()">Try again</Button>
           </template>
         </NotFoundState>
 
@@ -1231,6 +1233,7 @@ onMounted(() => {
                   <TaskStateSelector
                     :states="states"
                     :model-value="currentTask.state_id"
+                    :task="currentTask"
                     :disabled="!isMember || updating"
                     compact
                     @update:model-value="handleStateChange"

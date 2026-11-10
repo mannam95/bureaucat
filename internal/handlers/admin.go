@@ -511,6 +511,124 @@ func (h *AdminHandler) RevokeToken(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "token revoked"})
 }
 
+// AdminUserProject is a project the user belongs to, with their role in it.
+type AdminUserProject struct {
+	ProjectKey    string `json:"project_key"`
+	Name          string `json:"name"`
+	Role          string `json:"role"`
+	WorkspaceName string `json:"workspace_name,omitempty"`
+}
+
+// AdminUserWorkspace is a workspace the user belongs to.
+type AdminUserWorkspace struct {
+	WorkspaceKey string `json:"workspace_key"`
+	Name         string `json:"name"`
+}
+
+// AdminUserDetailResponse is the full view of a user shown to admins.
+type AdminUserDetailResponse struct {
+	ID             uuid.UUID            `json:"id"`
+	Username       string               `json:"username"`
+	Email          string               `json:"email"`
+	FirstName      string               `json:"first_name"`
+	LastName       string               `json:"last_name"`
+	UserType       string               `json:"user_type"`
+	AvatarURL      *string              `json:"avatar_url,omitempty"`
+	AuthProvider   *string              `json:"auth_provider,omitempty"`
+	HasPassword    bool                 `json:"has_password"`
+	ActiveSessions int64                `json:"active_sessions"`
+	ActiveTokens   int64                `json:"active_tokens"`
+	Workspaces     []AdminUserWorkspace `json:"workspaces"`
+	Projects       []AdminUserProject   `json:"projects"`
+	CreatedAt      time.Time            `json:"created_at"`
+	UpdatedAt      time.Time            `json:"updated_at"`
+}
+
+const adminUserMembershipLimit = 500
+
+// GetUserDetail returns a user's profile, sessions and memberships.
+//
+//	@Summary		Get user details
+//	@Description	Get a user's profile, SSO/password status, active sessions/tokens, workspaces and projects.
+//	@Tags			Admin - Users
+//	@Produce		json
+//	@Param			id	path		string	true	"User ID"
+//	@Success		200	{object}	AdminUserDetailResponse
+//	@Failure		400	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/admin/users/{id} [get]
+func (h *AdminHandler) GetUserDetail(c *echo.Context) error {
+	userID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid user ID")
+	}
+	return h.respondUserDetail(c, userID)
+}
+
+func (h *AdminHandler) respondUserDetail(c *echo.Context, userID uuid.UUID) error {
+	ctx := c.Request().Context()
+
+	u, err := h.store.GetAdminUserDetail(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
+	}
+
+	workspaces, err := h.store.ListUserWorkspaces(ctx, store.ListUserWorkspacesParams{
+		UserID: userID,
+		Limit:  adminUserMembershipLimit,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list workspaces")
+	}
+	projects, err := h.store.ListUserProjects(ctx, store.ListUserProjectsParams{
+		UserID: userID,
+		Limit:  adminUserMembershipLimit,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list projects")
+	}
+
+	resp := AdminUserDetailResponse{
+		ID:             u.ID,
+		Username:       u.Username,
+		Email:          u.Email,
+		FirstName:      u.FirstName,
+		LastName:       u.LastName,
+		UserType:       u.UserType,
+		HasPassword:    u.HasPassword,
+		ActiveSessions: u.ActiveSessions,
+		ActiveTokens:   u.ActiveTokens,
+		Workspaces:     make([]AdminUserWorkspace, len(workspaces)),
+		Projects:       make([]AdminUserProject, len(projects)),
+		CreatedAt:      u.CreatedAt.Time,
+		UpdatedAt:      u.UpdatedAt.Time,
+	}
+	if u.AvatarUrl.Valid {
+		resp.AvatarURL = &u.AvatarUrl.String
+	}
+	if u.AuthProvider.Valid && u.AuthProvider.String != "" {
+		resp.AuthProvider = &u.AuthProvider.String
+	}
+
+	workspaceNames := make(map[uuid.UUID]string, len(workspaces))
+	for i, w := range workspaces {
+		resp.Workspaces[i] = AdminUserWorkspace{WorkspaceKey: w.WorkspaceKey, Name: w.Name}
+		workspaceNames[w.ID] = w.Name
+	}
+	for i, p := range projects {
+		resp.Projects[i] = AdminUserProject{
+			ProjectKey:    p.ProjectKey,
+			Name:          p.Name,
+			Role:          p.Role,
+			WorkspaceName: workspaceNames[p.WorkspaceID],
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
 // UpdateUserRoleRequest represents the request to update a user's role.
 type UpdateUserRoleRequest struct {
 	UserType string `json:"user_type"`
@@ -924,17 +1042,60 @@ type ViewDayCount struct {
 	Shared  int    `json:"shared"`
 }
 
+// AIDayCount is a single day bucket of AI conversations split by channel.
+type AIDayCount struct {
+	Day        string `json:"day"`
+	Web        int    `json:"web"`
+	Mattermost int    `json:"mattermost"`
+}
+
+const statsDateLayout = "2006-01-02"
+
+// statsRange reads the from/to query params, defaulting to the trailing 30 days and capping the span at 366 days.
+func statsRange(c *echo.Context) (fromDate, toDate time.Time) {
+	const maxSpanDays = 366
+
+	today := time.Now().Truncate(24 * time.Hour)
+	toDate = today
+	fromDate = today.AddDate(0, 0, -29)
+
+	if v := c.QueryParam("to"); v != "" {
+		if parsed, err := time.Parse(statsDateLayout, v); err == nil {
+			toDate = parsed
+		}
+	}
+	if v := c.QueryParam("from"); v != "" {
+		if parsed, err := time.Parse(statsDateLayout, v); err == nil {
+			fromDate = parsed
+		}
+	}
+
+	if fromDate.After(toDate) {
+		fromDate, toDate = toDate, fromDate
+	}
+	if toDate.Sub(fromDate) > maxSpanDays*24*time.Hour {
+		fromDate = toDate.AddDate(0, 0, -(maxSpanDays - 1))
+	}
+	return fromDate, toDate
+}
+
 // AdminStatsResponse is the aggregate stats payload for the admin stats page.
 type AdminStatsResponse struct {
 	Totals struct {
 		Workspaces       int64 `json:"workspaces"`
 		Projects         int64 `json:"projects"`
+		WorkflowProjects int64 `json:"workflow_projects"`
 		Tasks            int64 `json:"tasks"`
 		Subtasks         int64 `json:"subtasks"`
 		Pages            int64 `json:"pages"`
 		Users            int64 `json:"users"`
+		BlockedTasks     int64 `json:"blocked_tasks"`
+		BlockingTasks    int64 `json:"blocking_tasks"`
 		Attachments      int64 `json:"attachments"`
 		AttachmentsBytes int64 `json:"attachments_bytes"`
+		AIConversations  int64 `json:"ai_conversations"`
+		AIUsers          int64 `json:"ai_users"`
+		AIMattermost     int64 `json:"ai_mattermost_conversations"`
 	} `json:"totals"`
 	TasksByState         []StatCount     `json:"tasks_by_state"`
 	TasksByPriority      []StatCount     `json:"tasks_by_priority"`
@@ -953,6 +1114,7 @@ type AdminStatsResponse struct {
 		Attachments []DayCount     `json:"attachments"`
 		Cycles      []DayCount     `json:"cycles"`
 		Modules     []DayCount     `json:"modules"`
+		AI          []AIDayCount   `json:"ai_conversations"`
 	} `json:"series"`
 }
 
@@ -970,33 +1132,7 @@ type AdminStatsResponse struct {
 //	@Router			/admin/stats [get]
 func (h *AdminHandler) GetStats(c *echo.Context) error {
 	ctx := c.Request().Context()
-
-	const dateLayout = "2006-01-02"
-	const maxSpanDays = 366
-
-	// Default range: trailing 30 days ending today.
-	today := time.Now().Truncate(24 * time.Hour)
-	toDate := today
-	fromDate := today.AddDate(0, 0, -29)
-
-	if v := c.QueryParam("to"); v != "" {
-		if parsed, err := time.Parse(dateLayout, v); err == nil {
-			toDate = parsed
-		}
-	}
-	if v := c.QueryParam("from"); v != "" {
-		if parsed, err := time.Parse(dateLayout, v); err == nil {
-			fromDate = parsed
-		}
-	}
-
-	// Normalise: ensure from <= to and clamp the span to a sane maximum.
-	if fromDate.After(toDate) {
-		fromDate, toDate = toDate, fromDate
-	}
-	if toDate.Sub(fromDate) > maxSpanDays*24*time.Hour {
-		fromDate = toDate.AddDate(0, 0, -(maxSpanDays - 1))
-	}
+	fromDate, toDate := statsRange(c)
 
 	var resp AdminStatsResponse
 	var err error
@@ -1016,15 +1152,28 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	if resp.Totals.Pages, err = h.store.CountPages(ctx); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count pages")
 	}
+	if resp.Totals.WorkflowProjects, err = h.store.CountWorkflowEnforcedProjects(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count workflow projects")
+	}
 	if resp.Totals.Users, err = h.store.CountUsers(ctx); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count users")
 	}
+	blockers, err := h.store.CountActiveBlockerLinks(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count blocked tasks")
+	}
+	resp.Totals.BlockedTasks, resp.Totals.BlockingTasks = blockers.BlockedTasks, blockers.BlockingTasks
 	if resp.Totals.Attachments, err = h.store.CountAttachments(ctx); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count attachments")
 	}
 	if resp.Totals.AttachmentsBytes, err = h.store.AttachmentsTotalSize(ctx); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to sum attachment sizes")
 	}
+	ai, err := h.store.CountAssistantConversations(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count AI conversations")
+	}
+	resp.Totals.AIConversations, resp.Totals.AIUsers, resp.Totals.AIMattermost = ai.Conversations, ai.Users, ai.MattermostConversations
 
 	states, err := h.store.TasksByStateType(ctx)
 	if err != nil {
@@ -1065,8 +1214,8 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	from := pgtype.Date{Time: fromDate, Valid: true}
 	to := pgtype.Date{Time: toDate, Valid: true}
 
-	resp.Series.From = fromDate.Format(dateLayout)
-	resp.Series.To = toDate.Format(dateLayout)
+	resp.Series.From = fromDate.Format(statsDateLayout)
+	resp.Series.To = toDate.Format(statsDateLayout)
 	resp.Series.Days = int(toDate.Sub(fromDate).Hours()/24) + 1
 
 	tasksSeries, err := h.store.TasksCreatedPerDay(ctx, store.TasksCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1075,7 +1224,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Tasks = make([]DayCount, len(tasksSeries))
 	for i, d := range tasksSeries {
-		resp.Series.Tasks[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Tasks[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	subtasksSeries, err := h.store.SubtasksCreatedPerDay(ctx, store.SubtasksCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1084,7 +1233,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Subtasks = make([]DayCount, len(subtasksSeries))
 	for i, d := range subtasksSeries {
-		resp.Series.Subtasks[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Subtasks[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	pagesSeries, err := h.store.PagesCreatedPerDay(ctx, store.PagesCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1093,7 +1242,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Pages = make([]DayCount, len(pagesSeries))
 	for i, d := range pagesSeries {
-		resp.Series.Pages[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Pages[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	viewsSeries, err := h.store.ViewsCreatedPerDay(ctx, store.ViewsCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1103,7 +1252,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	resp.Series.Views = make([]ViewDayCount, len(viewsSeries))
 	for i, d := range viewsSeries {
 		resp.Series.Views[i] = ViewDayCount{
-			Day:     d.Day.Time.Format(dateLayout),
+			Day:     d.Day.Time.Format(statsDateLayout),
 			Private: int(d.PrivateCount),
 			Shared:  int(d.SharedCount),
 		}
@@ -1115,7 +1264,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Comments = make([]DayCount, len(commentsSeries))
 	for i, d := range commentsSeries {
-		resp.Series.Comments[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Comments[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	activitySeries, err := h.store.ActivityCreatedPerDay(ctx, store.ActivityCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1124,7 +1273,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Activity = make([]DayCount, len(activitySeries))
 	for i, d := range activitySeries {
-		resp.Series.Activity[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Activity[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	attachmentsSeries, err := h.store.AttachmentsCreatedPerDay(ctx, store.AttachmentsCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1133,7 +1282,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Attachments = make([]DayCount, len(attachmentsSeries))
 	for i, d := range attachmentsSeries {
-		resp.Series.Attachments[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Attachments[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	cyclesSeries, err := h.store.CyclesCreatedPerDay(ctx, store.CyclesCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1142,7 +1291,7 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Cycles = make([]DayCount, len(cyclesSeries))
 	for i, d := range cyclesSeries {
-		resp.Series.Cycles[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Cycles[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
 	}
 
 	modulesSeries, err := h.store.ModulesCreatedPerDay(ctx, store.ModulesCreatedPerDayParams{FromDate: from, ToDate: to})
@@ -1151,7 +1300,20 @@ func (h *AdminHandler) GetStats(c *echo.Context) error {
 	}
 	resp.Series.Modules = make([]DayCount, len(modulesSeries))
 	for i, d := range modulesSeries {
-		resp.Series.Modules[i] = DayCount{Day: d.Day.Time.Format(dateLayout), Count: int(d.Count)}
+		resp.Series.Modules[i] = DayCount{Day: d.Day.Time.Format(statsDateLayout), Count: int(d.Count)}
+	}
+
+	aiSeries, err := h.store.AssistantConversationsPerDay(ctx, store.AssistantConversationsPerDayParams{FromDate: from, ToDate: to})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load AI conversations series")
+	}
+	resp.Series.AI = make([]AIDayCount, len(aiSeries))
+	for i, d := range aiSeries {
+		resp.Series.AI[i] = AIDayCount{
+			Day:        d.Day.Time.Format(statsDateLayout),
+			Web:        int(d.WebCount),
+			Mattermost: int(d.MattermostCount),
+		}
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -1182,6 +1344,7 @@ type GraphTask struct {
 	StateName     string     `json:"state_name"`
 	StateType     string     `json:"state_type"`
 	StateColor    *string    `json:"state_color,omitempty"`
+	CreatorID     string     `json:"creator_id"`
 }
 
 // GraphEdge links a user to a task they are assigned to.
@@ -1391,6 +1554,18 @@ func (h *AdminHandler) taskGraph(c *echo.Context, viewer pgtype.UUID) error {
 		if !seenTasks[taskID] {
 			seenTasks[taskID] = true
 			taskIDs = append(taskIDs, r.TaskID)
+			creatorID := r.CreatorID.String()
+			if !seenUsers[creatorID] {
+				seenUsers[creatorID] = true
+				resp.Users = append(resp.Users, GraphUser{
+					ID:        creatorID,
+					Username:  r.CreatorUsername,
+					Email:     r.CreatorEmail,
+					FirstName: r.CreatorFirstName,
+					LastName:  r.CreatorLastName,
+					AvatarURL: textToStringPtr(r.CreatorAvatarUrl),
+				})
+			}
 			resp.Tasks = append(resp.Tasks, GraphTask{
 				ID:            taskID,
 				ProjectKey:    r.ProjectKey,
@@ -1405,6 +1580,7 @@ func (h *AdminHandler) taskGraph(c *echo.Context, viewer pgtype.UUID) error {
 				StateName:     r.StateName,
 				StateType:     r.StateType,
 				StateColor:    textToStringPtr(r.StateColor),
+				CreatorID:     creatorID,
 			})
 		}
 

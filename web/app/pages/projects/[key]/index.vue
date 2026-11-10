@@ -20,6 +20,8 @@ import {
   Lock,
   Trash2,
   Pin,
+  BarChart3,
+  Workflow as WorkflowIcon,
 } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { FilterTree, ProjectView, MoveTasksResponse, CycleSibling, Task, ViewGroupBy, SortKey, SortDir, ViewDefaultTab, ViewVisibility } from "~/types";
@@ -33,7 +35,7 @@ const router = useRouter();
 const projectKey = computed(() => route.params.key as string);
 
 // Valid tab values
-const validTabs = ["tasks", "board", "cycles", "modules", "members", "pages", "views", "settings"] as const;
+const validTabs = ["tasks", "board", "cycles", "modules", "members", "pages", "views", "workflow", "settings"] as const;
 type TabValue = (typeof validTabs)[number];
 
 const activeTab = computed({
@@ -494,8 +496,95 @@ async function loadProject() {
   applyProjectDefaultView();
   applyDefaultCycleFilter();
 
-  await loadTasks(currentPageFromUrl.value);
+  await reloadActiveTasks();
   loading.value = false;
+}
+
+// Refetches in place so open tabs (and their unsaved edits) stay mounted.
+async function refreshProject() {
+  if (loading.value || error.value) return;
+  const result = await getProject(projectKey.value);
+  if (!result.success) return;
+  await Promise.all([
+    listMembers(projectKey.value),
+    listStates(projectKey.value),
+    listLabels(projectKey.value),
+    listTemplates(projectKey.value),
+    listViews(projectKey.value),
+    reloadActiveTasks(),
+  ]);
+}
+
+onDataChanged(refreshProject);
+
+const BOARD_CLOSED_LIMIT = 100;
+const BOARD_CLOSED_DAYS = 14;
+const CLOSED_STATE_TYPES = ["completed", "cancelled"];
+
+const boardTasks = ref<Task[]>([]);
+let boardRequestId = 0;
+
+const isDefaultScope = computed(
+  () => !searchQuery.value && tree.value.children.length === 0 && !activeViewSlug.value
+);
+
+const filterHint = computed(() => {
+  if (!isDefaultScope.value || activeTab.value === "board") return undefined;
+  return "Hiding completed and cancelled tasks";
+});
+
+function closedSinceDate(): string {
+  // "after" is exclusive of the given day, so step back one extra day.
+  const d = new Date(Date.now() - (BOARD_CLOSED_DAYS + 1) * 24 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+async function loadBoardTasks() {
+  const requestId = ++boardRequestId;
+  const sort = { sortBy: sortBy.value, sortDir: sortDir.value };
+  let next: Task[];
+
+  if (isDefaultScope.value) {
+    const [open, closed] = await Promise.all([
+      fetchAllTasks(projectKey.value, {
+        ...sort,
+        tree: {
+          children: [{ predicate: { field: "state_type", op: "not_in", value: CLOSED_STATE_TYPES } }],
+        },
+      }),
+      fetchAllTasks(
+        projectKey.value,
+        {
+          sortBy: "updated_at",
+          sortDir: "desc",
+          tree: {
+            children: [
+              { predicate: { field: "state_type", op: "in", value: CLOSED_STATE_TYPES } },
+              { predicate: { field: "updated_at", op: "after", value: closedSinceDate() } },
+            ],
+          },
+        },
+        BOARD_CLOSED_LIMIT
+      ),
+    ]);
+    next = [...(open.data ?? []), ...(closed.data ?? [])];
+  } else {
+    const hasFilter = effectiveTree.value.children.length > 0;
+    const res = await fetchAllTasks(projectKey.value, {
+      ...sort,
+      tree: effectiveTree.value,
+      viewSlug: hasFilter ? activeViewSlug.value ?? undefined : undefined,
+    });
+    next = res.data ?? [];
+  }
+
+  if (requestId === boardRequestId) boardTasks.value = next;
+}
+
+function reloadActiveTasks() {
+  return activeTab.value === "board"
+    ? loadBoardTasks()
+    : loadTasks(currentPageFromUrl.value);
 }
 
 async function loadTasks(page = 1) {
@@ -531,6 +620,10 @@ async function loadBoardTasks() {
 }
 
 async function handleTaskCreated() {
+  if (activeTab.value === "board") {
+    await loadBoardTasks();
+    return;
+  }
   setPageInUrl(1);
   await loadTasks(1);
   // The board reads its own full task set, so refresh it too when it's on screen
@@ -760,6 +853,11 @@ watch(
   { deep: true }
 );
 
+watch(activeTab, (tab, prev) => {
+  if (loading.value) return;
+  if (tab === "board" || (tab === "tasks" && prev === "board")) reloadActiveTasks();
+});
+
 const existingMemberIds = computed(() => members.value.map((m) => m.user_id));
 
 onMounted(async () => {
@@ -793,7 +891,7 @@ onMounted(async () => {
   <div class="flex min-h-screen flex-col">
     <Navbar />
 
-    <main id="main-content" class="flex-1">
+    <main id="main-content" class="flex-1 overflow-x-clip">
       <div class="mx-auto max-w-6xl px-6 py-8">
         <div v-if="loading" class="flex items-center justify-center py-20">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />
@@ -833,9 +931,9 @@ onMounted(async () => {
             </span>
           </div>
 
-          <Tabs v-model="activeTab" class="mt-6">
+          <Tabs v-model="activeTab" activation-mode="manual" class="mt-6">
             <div class="flex items-center justify-between gap-3">
-              <TabsList>
+              <TabsList class="min-w-0 max-w-full justify-start overflow-x-auto">
                 <TabsTrigger value="tasks" class="gap-2">
                   <ListTodo class="size-4" />
                   Tasks
@@ -869,6 +967,15 @@ onMounted(async () => {
                   >
                     {{ views.length }}
                   </span>
+                </TabsTrigger>
+                <!-- Stats tab trigger - HIDDEN (self-host), see the TabsContent note. -->
+                <TabsTrigger v-if="false" value="stats" class="gap-2">
+                  <BarChart3 class="size-4" />
+                  Stats
+                </TabsTrigger>
+                <TabsTrigger v-if="isAdmin" value="workflow" class="gap-2">
+                  <WorkflowIcon class="size-4" />
+                  Workflow
                 </TabsTrigger>
                 <TabsTrigger v-if="isAdmin" value="settings" class="gap-2">
                   <Settings class="size-4" />
@@ -922,6 +1029,7 @@ onMounted(async () => {
                   :members="members"
                   :cycles="projectCycles"
                   :show-group-by="activeTab === 'board'"
+                  :default-hint="filterHint"
                   @update:tree="handleTreeUpdate"
                   @update:search-query="(v) => (searchQuery = v)"
                   @update:sort-by="(v) => (sortBy = v)"
@@ -988,7 +1096,7 @@ onMounted(async () => {
 
             <!-- Tasks Tab -->
             <TabsContent value="tasks" class="mt-6 space-y-4">
-              <div v-if="tasksLoading" class="flex items-center justify-center py-12">
+              <div v-if="tasksLoading && tasks.length === 0" class="flex items-center justify-center py-12">
                 <Loader2 class="size-6 animate-spin text-muted-foreground" />
               </div>
 
@@ -1144,7 +1252,7 @@ onMounted(async () => {
             </TabsContent>
 
             <!-- Board Tab -->
-            <TabsContent value="board" class="-mx-32 mt-6 px-2">
+            <TabsContent value="board" class="mx-[calc(50%-(100vw-var(--app-inset,0px))/2)] mt-6 -mb-6 px-4">
               <KanbanBoard
                 :tasks="boardTasks"
                 :states="states"
@@ -1230,6 +1338,18 @@ onMounted(async () => {
                 @edit:view="openEditView"
                 @refresh="listViews(projectKey)"
               />
+            </TabsContent>
+
+            <!-- Stats Tab -->
+            <!-- Stats tab - HIDDEN (self-host): Insights is the reporting
+                 surface; re-enable by removing v-if="false". -->
+            <TabsContent v-if="false" value="stats" class="mt-6">
+              <ProjectStatsTab :project-key="projectKey" />
+            </TabsContent>
+
+            <!-- Workflow Tab -->
+            <TabsContent v-if="isAdmin" value="workflow" class="mt-6">
+              <WorkflowEditor :project-key="projectKey" :states="states" :members="members" />
             </TabsContent>
 
             <!-- Settings Tab -->

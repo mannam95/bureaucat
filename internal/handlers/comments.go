@@ -70,6 +70,7 @@ type ActivityLogResponse struct {
 	OldValue     interface{} `json:"old_value,omitempty"`
 	NewValue     interface{} `json:"new_value,omitempty"`
 	CreatedAt    time.Time   `json:"created_at"`
+	Via          string      `json:"via"` // web | assistant | pat | workflow | mcp
 }
 
 // ListComments returns comments for a task.
@@ -550,6 +551,7 @@ func (h *CommentHandler) GetActivity(c *echo.Context) error {
 			OldValue:     parseJSONB(a.OldValue),
 			NewValue:     parseJSONB(a.NewValue),
 			CreatedAt:    a.CreatedAt.Time,
+			Via:          a.Via,
 		}
 	}
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw, Pencil, Merge, Check, RefreshCw, Copy } from "lucide-vue-next";
+import { Users, Plus, Trash2, Loader2, ChevronLeft, ChevronRight, Shield, ShieldOff, KeyRound, Search, X, Lock, UserCheck, UserX, RotateCcw, Pencil, Merge, Check, RefreshCw, Copy, Eye } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { MergeUserResult } from "~/composables/useAdmin";
 
@@ -211,6 +211,15 @@ async function handleEditUser() {
 
 // Merge dialog state
 const showMergeDialog = ref(false);
+
+// Read-only user detail dialog (sign-in method, sessions, memberships).
+const showDetailDialog = ref(false);
+const detailUserId = ref<string | null>(null);
+
+function openDetail(user: User) {
+  detailUserId.value = user.id;
+  showDetailDialog.value = true;
+}
 const mergeLoading = ref(false);
 const mergeError = ref<string | null>(null);
 const mergeSource = ref<User | null>(null);
@@ -590,6 +599,15 @@ onMounted(() => {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="User details"
+                        title="Details: sign-in, sessions, memberships"
+                        @click="openDetail(user)"
+                      >
+                        <Eye class="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         aria-label="Edit profile"
                         title="Edit profile"
                         @click="openEdit(user)"
@@ -619,6 +637,15 @@ onMounted(() => {
 
                     <!-- Active tab: edit, role, deactivate, reset password, delete. -->
                     <div v-else class="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="User details"
+                        title="Details: sign-in, sessions, memberships"
+                        @click="openDetail(user)"
+                      >
+                        <Eye class="size-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1040,4 +1067,6 @@ onMounted(() => {
       </div>
     </main>
   </div>
+
+  <UserDetailDialog v-model:open="showDetailDialog" :user-id="detailUserId" />
 </template>

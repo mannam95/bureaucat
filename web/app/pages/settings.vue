@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock, UserCircle, Bell } from "lucide-vue-next";
+import { Key, Trash2, Loader2, Plus, Copy, Check, Eye, EyeOff, CalendarIcon, X, Clock, Lock, UserCircle, Bell, Plug, FileCode } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import { cn } from "@/lib/utils";
@@ -636,6 +636,34 @@ onMounted(() => {
               </Button>
             </div>
           </div>
+        </div>
+
+        <!-- MCP Section -->
+        <div class="mb-10">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <Plug class="size-5" />
+              MCP Server
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Connect AI coding agents to Bureaucat over the Model Context Protocol. They can read and update your projects and tasks as you, with the permissions of the token you use — a read-only token stays read-only.
+            </p>
+          </div>
+          <McpSetup />
+        </div>
+
+        <!-- API Skill Section -->
+        <div class="mb-10">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <FileCode class="size-5" />
+              Use the API from your agent
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              No MCP needed: agents that can run shell commands can call the REST API directly with a token.
+            </p>
+          </div>
+          <ApiSkill />
         </div>
 
         <!-- Token Created Dialog -->

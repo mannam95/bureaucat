@@ -99,7 +99,7 @@ Builds a single Go binary with the frontend embedded and serves everything on po
 | `REFRESH_TOKEN_EXPIRY_DAYS` | No | `7` | Refresh token lifetime in days |
 | `SUPERADMIN_EMAIL` | No | - | Break-glass account (by email) that cannot be deleted, demoted, or password-reset via the app/API; promoted to admin on startup. Change only here or in the database. |
 | `UPLOADS_DIR` | No | `./uploads` | File upload storage path |
-| `MAX_UPLOAD_SIZE` | No | `5242880` | Max upload size in bytes (5MB) |
+| `MAX_UPLOAD_SIZE` | No | `10485760` | Max upload size in bytes (10MB) |
 
 ### Integrations
 

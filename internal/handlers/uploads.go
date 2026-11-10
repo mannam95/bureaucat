@@ -143,13 +143,15 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 // Serve serves an uploaded file by streaming it from S3.
 //
 //	@Summary		Serve uploaded file
-//	@Description	Serve a previously uploaded file by its ID.
+//	@Description	Serve a previously uploaded file by its ID. Accepts a Bearer token or the access_token cookie.
 //	@Tags			Uploads
 //	@Produce		octet-stream
 //	@Param			id	path	string	true	"Upload ID"
 //	@Success		200
 //	@Failure		400	{object}	ErrorResponse
+//	@Failure		401	{object}	ErrorResponse
 //	@Failure		404	{object}	ErrorResponse
+//	@Security		BearerAuth
 //	@Router			/uploads/{id} [get]
 func (h *UploadHandler) Serve(c *echo.Context) error {
 	if !h.authorized(c) {
@@ -193,7 +195,7 @@ func (h *UploadHandler) Serve(c *echo.Context) error {
 
 	header := c.Response().Header()
 	header.Set("Content-Type", contentType)
-	header.Set("Cache-Control", "public, max-age=3600")
+	header.Set("Cache-Control", "private, max-age=3600")
 	header.Set("X-Content-Type-Options", "nosniff")
 	// The type is ultimately client-supplied (stored MIME or the uploaded
 	// filename's extension), so anything that could execute on our origin is

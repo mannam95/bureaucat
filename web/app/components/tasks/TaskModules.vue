@@ -81,7 +81,7 @@ async function toggleModule(module: Module) {
   <div class="flex items-start justify-between gap-2">
     <p class="shrink-0 pt-0.5 text-xs text-muted-foreground">Modules</p>
 
-    <div class="flex min-w-0 items-center gap-1">
+    <div class="flex min-w-0 items-center gap-1" :class="canEdit ? '' : dense ? 'pr-[30px]' : 'pr-8'">
       <NuxtLink
         v-if="canEdit && modules.length === 1"
         :to="`/projects/${projectKey}/modules/${modules[0]!.id}`"

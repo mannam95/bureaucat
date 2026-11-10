@@ -6,12 +6,16 @@ package notifications
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"bereaucat/internal/auth"
 	"bereaucat/internal/notifier"
 	"bereaucat/internal/store"
 )
@@ -23,7 +27,10 @@ const DefaultWindow = 15 * time.Minute
 // Service fans out task activity to per-user notification rows, and mirrors
 // the fan-out to email for recipients who opted into the matching category.
 type Service struct {
-	store  store.Querier
+	store store.Querier
+	// pool serializes find-or-create per (recipient, task) so concurrent
+	// activity never duplicates a notification.
+	pool   *pgxpool.Pool
 	window time.Duration
 	// emailer delivers category-gated emails; nil disables the email mirror.
 	emailer *notifier.Service
@@ -33,8 +40,8 @@ type Service struct {
 }
 
 // NewService creates a notifications service with the default 15-minute window.
-func NewService(s store.Querier, emailer *notifier.Service, baseURL string) *Service {
-	return &Service{store: s, window: DefaultWindow, emailer: emailer, baseURL: baseURL}
+func NewService(s store.Querier, pool *pgxpool.Pool, emailer *notifier.Service, baseURL string) *Service {
+	return &Service{store: s, pool: pool, window: DefaultWindow, emailer: emailer, baseURL: baseURL}
 }
 
 // emailEventFor maps an activity type to the email event mirrored to opted-in
@@ -137,32 +144,52 @@ func (s *Service) enqueue(ctx context.Context, recipientID, taskID uuid.UUID, ac
 		commentRef = pgtype.UUID{Bytes: *commentID, Valid: true}
 	}
 
-	open, err := s.store.GetOpenNotification(ctx, store.GetOpenNotificationParams{
+	if err := s.upsertNotification(ctx, recipientID, taskID, activityType, actorID, commentRef, cutoff); err != nil {
+		log.Printf("notifications: failed to notify user %s on task %s: %v", recipientID, taskID, err)
+	}
+}
+
+// upsertNotification coalesces into the recipient's open notification for the
+// task, or creates one. The row lock serializes concurrent find-or-create for
+// the same (recipient, task), so parallel activity never duplicates a row.
+func (s *Service) upsertNotification(ctx context.Context, recipientID, taskID uuid.UUID, activityType string, actorID uuid.UUID, commentRef pgtype.UUID, cutoff pgtype.Timestamptz) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	q := store.New(tx)
+
+	if err := q.LockNotificationSlot(ctx, store.LockNotificationSlotParams{RecipientID: recipientID, TaskID: taskID}); err != nil {
+		return err
+	}
+
+	open, err := q.GetOpenNotification(ctx, store.GetOpenNotificationParams{
 		RecipientID: recipientID,
 		TaskID:      taskID,
 		Cutoff:      cutoff,
 	})
-	if err == nil {
-		// An open notification exists within the window: merge into it.
-		if err := s.store.CoalesceNotification(ctx, store.CoalesceNotificationParams{
+	switch {
+	case err == nil:
+		err = q.CoalesceNotification(ctx, store.CoalesceNotificationParams{
 			ID:           open.ID,
 			ActivityType: activityType,
 			ActorID:      actorID,
 			CommentID:    commentRef,
-		}); err != nil {
-			log.Printf("notifications: failed to coalesce notification %s: %v", open.ID, err)
-		}
-		return
+			Via:          auth.ViaFromContext(ctx),
+		})
+	case errors.Is(err, pgx.ErrNoRows):
+		_, err = q.CreateNotification(ctx, store.CreateNotificationParams{
+			RecipientID:  recipientID,
+			TaskID:       taskID,
+			ActivityType: activityType,
+			ActorID:      actorID,
+			CommentID:    commentRef,
+			Via:          auth.ViaFromContext(ctx),
+		})
 	}
-
-	// No open notification (or lookup miss): create a fresh one.
-	if _, err := s.store.CreateNotification(ctx, store.CreateNotificationParams{
-		RecipientID:  recipientID,
-		TaskID:       taskID,
-		ActivityType: activityType,
-		ActorID:      actorID,
-		CommentID:    commentRef,
-	}); err != nil {
-		log.Printf("notifications: failed to create notification for user %s on task %s: %v", recipientID, taskID, err)
+	if err != nil {
+		return err
 	}
+	return tx.Commit(ctx)
 }

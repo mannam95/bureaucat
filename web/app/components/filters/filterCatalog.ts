@@ -21,6 +21,8 @@ import {
   Clock,
   Gauge,
   Shapes,
+  Paperclip,
+  MessagesSquare,
 } from "lucide-vue-next";
 import type { FilterField, FilterOp } from "~/types";
 
@@ -252,6 +254,24 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "gte", label: "≥", valueKind: "number" },
       { op: "lt", label: "<", valueKind: "number" },
       { op: "lte", label: "≤", valueKind: "number" },
+    ],
+  },
+  {
+    field: "attachments",
+    label: "Task attachments",
+    icon: Paperclip,
+    ops: [
+      { op: "is_set", label: "has any attachment", valueKind: "none" },
+      { op: "is_empty", label: "has no attachments", valueKind: "none" },
+    ],
+  },
+  {
+    field: "comment_attachments",
+    label: "Comment attachments",
+    icon: MessagesSquare,
+    ops: [
+      { op: "is_set", label: "has any attachment", valueKind: "none" },
+      { op: "is_empty", label: "has no attachments", valueKind: "none" },
     ],
   },
 ];
