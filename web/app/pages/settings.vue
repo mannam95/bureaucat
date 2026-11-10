@@ -392,6 +392,74 @@ onMounted(() => {
           </Card>
         </div>
 
+        <!-- Password Section -->
+        <div class="mb-10">
+          <div class="mb-4">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+              <Lock class="size-5" />
+              Password
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Change the password you use to sign in. This signs you out everywhere, so you will need to sign in again with the new password.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent class="pt-6">
+              <form class="space-y-4" @submit.prevent="handleChangePassword">
+                <div
+                  v-if="pwError"
+                  role="alert"
+                  class="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  {{ pwError }}
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="current-password">Current password</Label>
+                  <Input
+                    id="current-password"
+                    v-model="currentPassword"
+                    type="password"
+                    autocomplete="current-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="new-password">New password</Label>
+                  <Input
+                    id="new-password"
+                    v-model="newPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <div class="space-y-2 sm:max-w-sm">
+                  <Label for="confirm-password">Confirm new password</Label>
+                  <Input
+                    id="confirm-password"
+                    v-model="confirmPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    :disabled="pwLoading"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  :disabled="pwLoading || !currentPassword || !newPassword || !confirmPassword"
+                >
+                  <Loader2 v-if="pwLoading" class="mr-2 size-4 animate-spin" />
+                  Change password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
         <!-- Notifications Section -->
         <div class="mb-10">
           <div class="mb-4">
@@ -729,73 +797,6 @@ onMounted(() => {
           </DialogContent>
         </Dialog>
 
-        <!-- Password Section -->
-        <div class="mt-12">
-          <div class="mb-4">
-            <h2 class="flex items-center gap-2 text-lg font-semibold">
-              <Lock class="size-5" />
-              Password
-            </h2>
-            <p class="mt-1 text-sm text-muted-foreground">
-              Change the password you use to sign in. This signs you out everywhere, so you will need to sign in again with the new password.
-            </p>
-          </div>
-
-          <Card>
-            <CardContent class="pt-6">
-              <form class="space-y-4" @submit.prevent="handleChangePassword">
-                <div
-                  v-if="pwError"
-                  role="alert"
-                  class="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
-                >
-                  {{ pwError }}
-                </div>
-
-                <div class="space-y-2 sm:max-w-sm">
-                  <Label for="current-password">Current password</Label>
-                  <Input
-                    id="current-password"
-                    v-model="currentPassword"
-                    type="password"
-                    autocomplete="current-password"
-                    :disabled="pwLoading"
-                  />
-                </div>
-
-                <div class="space-y-2 sm:max-w-sm">
-                  <Label for="new-password">New password</Label>
-                  <Input
-                    id="new-password"
-                    v-model="newPassword"
-                    type="password"
-                    autocomplete="new-password"
-                    :disabled="pwLoading"
-                  />
-                </div>
-
-                <div class="space-y-2 sm:max-w-sm">
-                  <Label for="confirm-password">Confirm new password</Label>
-                  <Input
-                    id="confirm-password"
-                    v-model="confirmPassword"
-                    type="password"
-                    autocomplete="new-password"
-                    :disabled="pwLoading"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  :disabled="pwLoading || !currentPassword || !newPassword || !confirmPassword"
-                >
-                  <Loader2 v-if="pwLoading" class="mr-2 size-4 animate-spin" />
-                  Change password
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </main>
   </div>
