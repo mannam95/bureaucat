@@ -28,8 +28,8 @@ description: Read and update Bureaucat projects, tasks, comments, cycles and mod
 
 - A task key like ENG-42 is project \`ENG\`, task number \`42\`: \`/projects/ENG/tasks/42\`.
 - Send JSON bodies with \`Content-Type: application/json\`.
-- States, labels and users are referenced by UUID. Look them up first (states, labels, members endpoints).
-- Dates are RFC3339, e.g. \`2026-01-31T00:00:00Z\`. Priority: 0 none, 1 low, 2 medium, 3 high, 4 urgent.
+- States, labels, priorities and users are referenced by UUID. Look them up first (states, labels, priorities, members endpoints).
+- Dates are RFC3339, e.g. \`2026-01-31T00:00:00Z\`. Priorities are per-project: send a \`priority_id\` from the priorities endpoint, or omit it for the project default. An integer \`priority\` is rejected.
 - A \`403 token is read-only\` means the token cannot write; tell the user instead of retrying.
 
 ## Example
@@ -49,9 +49,9 @@ ${fence}
 | List projects | \`GET /projects\` |
 | List tasks | \`GET /projects/{KEY}/tasks?page=1&per_page=20\` |
 | Get a task | \`GET /projects/{KEY}/tasks/{N}\` |
-| Create a task | \`POST /projects/{KEY}/tasks\` \`{"title", "description", "state_id", "priority", "assignees": [uuid], "labels": [uuid]}\` |
-| Update a task | \`PATCH /projects/{KEY}/tasks/{N}\` \`{"title", "description", "state_id", "priority", "due_date"}\` |
-| States / labels / members | \`GET /projects/{KEY}/states\`, \`/labels\`, \`/members\` |
+| Create a task | \`POST /projects/{KEY}/tasks\` \`{"title", "description", "state_id", "priority_id", "assignees": [uuid], "labels": [uuid]}\` |
+| Update a task | \`PATCH /projects/{KEY}/tasks/{N}\` \`{"title", "description", "state_id", "priority_id", "due_date"}\` |
+| States / labels / priorities / members | \`GET /projects/{KEY}/states\`, \`/labels\`, \`/priorities\`, \`/members\` |
 | Assign a user | \`POST /projects/{KEY}/tasks/{N}/assignees\` \`{"user_id"}\` |
 | Comments | \`GET\` / \`POST /projects/{KEY}/tasks/{N}/comments\` \`{"content"}\` |
 | Task history | \`GET /projects/{KEY}/tasks/{N}/activity\` |
