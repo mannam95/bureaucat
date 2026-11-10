@@ -278,6 +278,55 @@ func (q *Queries) DeleteUserByID(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getAdminUserDetail = `-- name: GetAdminUserDetail :one
+SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.user_type, u.avatar_url, u.auth_provider,
+       (u.password_hash IS NOT NULL AND u.password_hash <> '')::boolean AS has_password,
+       u.created_at, u.updated_at,
+       (SELECT COUNT(*) FROM refresh_tokens rt
+        WHERE rt.user_id = u.id AND rt.revoked_at IS NULL AND rt.expires_at > NOW())::bigint AS active_sessions,
+       (SELECT COUNT(*) FROM personal_access_tokens pat
+        WHERE pat.user_id = u.id AND (pat.expires_at IS NULL OR pat.expires_at > NOW()))::bigint AS active_tokens
+FROM users u
+WHERE u.id = $1
+`
+
+type GetAdminUserDetailRow struct {
+	ID             uuid.UUID          `json:"id"`
+	Username       string             `json:"username"`
+	Email          string             `json:"email"`
+	FirstName      string             `json:"first_name"`
+	LastName       string             `json:"last_name"`
+	UserType       string             `json:"user_type"`
+	AvatarUrl      pgtype.Text        `json:"avatar_url"`
+	AuthProvider   pgtype.Text        `json:"auth_provider"`
+	HasPassword    bool               `json:"has_password"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ActiveSessions int64              `json:"active_sessions"`
+	ActiveTokens   int64              `json:"active_tokens"`
+}
+
+func (q *Queries) GetAdminUserDetail(ctx context.Context, id uuid.UUID) (GetAdminUserDetailRow, error) {
+	row := q.db.QueryRow(ctx, getAdminUserDetail, id)
+	var i GetAdminUserDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.FirstName,
+		&i.LastName,
+		&i.UserType,
+		&i.AvatarUrl,
+		&i.AuthProvider,
+		&i.HasPassword,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ActiveSessions,
+		&i.ActiveTokens,
+	)
+	return i, err
+}
+
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
 SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
 FROM refresh_tokens
@@ -595,6 +644,37 @@ func (q *Queries) ListActiveRefreshTokens(ctx context.Context, arg ListActiveRef
 			&i.Username,
 			&i.Email,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersByEmailInsensitive = `-- name: ListUsersByEmailInsensitive :many
+SELECT id, username FROM users
+WHERE LOWER(email) = LOWER($1)
+LIMIT 2
+`
+
+type ListUsersByEmailInsensitiveRow struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+}
+
+func (q *Queries) ListUsersByEmailInsensitive(ctx context.Context, lower string) ([]ListUsersByEmailInsensitiveRow, error) {
+	rows, err := q.db.Query(ctx, listUsersByEmailInsensitive, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersByEmailInsensitiveRow{}
+	for rows.Next() {
+		var i ListUsersByEmailInsensitiveRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

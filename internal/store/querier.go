@@ -39,8 +39,12 @@ type Querier interface {
 	AddTaskWatcher(ctx context.Context, arg AddTaskWatcherParams) (TaskWatcher, error)
 	// ==================== CYCLE TASKS ====================
 	AddTasksToCycle(ctx context.Context, arg AddTasksToCycleParams) error
+	AddWorkflowStateAction(ctx context.Context, arg AddWorkflowStateActionParams) error
+	AddWorkflowTransitionMover(ctx context.Context, arg AddWorkflowTransitionMoverParams) error
 	// ==================== WORKSPACE MEMBERS ====================
 	AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMemberParams) (WorkspaceMember, error)
+	// Same "has a user message" rule as CountAssistantConversations; Mattermost ones have a thread mapping.
+	AssistantConversationsPerDay(ctx context.Context, arg AssistantConversationsPerDayParams) ([]AssistantConversationsPerDayRow, error)
 	AttachmentsCreatedPerDay(ctx context.Context, arg AttachmentsCreatedPerDayParams) ([]AttachmentsCreatedPerDayRow, error)
 	AttachmentsTotalSize(ctx context.Context) (int64, error)
 	// True if blocked_id already (transitively) blocks blocker_id, so adding
@@ -57,12 +61,16 @@ type Querier interface {
 	// update the latest actor/type/comment, and re-surface as unread.
 	CoalesceNotification(ctx context.Context, arg CoalesceNotificationParams) error
 	CommentsCreatedPerDay(ctx context.Context, arg CommentsCreatedPerDayParams) ([]CommentsCreatedPerDayRow, error)
+	// Only links where neither task is deleted, completed or cancelled.
+	CountActiveBlockerLinks(ctx context.Context) (CountActiveBlockerLinksRow, error)
 	CountActiveProjectPriorities(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountActiveRefreshTokens(ctx context.Context) (int64, error)
 	CountAllProjects(ctx context.Context) (int64, error)
 	CountAllProjectsFiltered(ctx context.Context, arg CountAllProjectsFilteredParams) (int64, error)
 	CountAllWorkspaces(ctx context.Context) (int64, error)
 	CountAllWorkspacesFiltered(ctx context.Context, search pgtype.Text) (int64, error)
+	// Only conversations with at least one user message.
+	CountAssistantConversations(ctx context.Context) (CountAssistantConversationsRow, error)
 	CountAttachments(ctx context.Context) (int64, error)
 	CountAttachmentsByUpload(ctx context.Context, uploadID uuid.UUID) (int64, error)
 	CountDeletedProjects(ctx context.Context) (int64, error)
@@ -97,9 +105,14 @@ type Querier interface {
 	CountUsersByState(ctx context.Context) (CountUsersByStateRow, error)
 	// Total rows matching the selected state and search, for pagination.
 	CountUsersByStateSearch(ctx context.Context, arg CountUsersByStateSearchParams) (int64, error)
+	CountWorkflowEnforcedProjects(ctx context.Context) (int64, error)
 	CountWorkspaces(ctx context.Context) (int64, error)
 	// ==================== ACTIVITY LOG ====================
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
+	CreateAssistantAction(ctx context.Context, arg CreateAssistantActionParams) (AssistantAction, error)
+	CreateAssistantConversation(ctx context.Context, arg CreateAssistantConversationParams) (AssistantConversation, error)
+	CreateAssistantMattermostThread(ctx context.Context, arg CreateAssistantMattermostThreadParams) error
+	CreateAssistantMessage(ctx context.Context, arg CreateAssistantMessageParams) (AssistantMessage, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	// ==================== COMMENTS ====================
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
@@ -142,11 +155,14 @@ type Querier interface {
 	CreateTaskTemplate(ctx context.Context, arg CreateTaskTemplateParams) (TaskTemplate, error)
 	CreateUpload(ctx context.Context, arg CreateUploadParams) (Upload, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	CreateWorkflowState(ctx context.Context, arg CreateWorkflowStateParams) error
+	CreateWorkflowTransition(ctx context.Context, arg CreateWorkflowTransitionParams) (uuid.UUID, error)
 	// ==================== WORKSPACES ====================
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	CyclesCreatedPerDay(ctx context.Context, arg CyclesCreatedPerDayParams) ([]CyclesCreatedPerDayRow, error)
 	DeactivateUser(ctx context.Context, arg DeactivateUserParams) error
 	DeleteAllNotifications(ctx context.Context, recipientID uuid.UUID) error
+	DeleteAssistantConversation(ctx context.Context, arg DeleteAssistantConversationParams) (int64, error)
 	// Scoped to the routed entity so a cross-task/comment id can't delete someone
 	// else's attachment. Returns the upload_id so the caller can clean up the
 	// underlying file once no attachment references it anymore.
@@ -166,6 +182,13 @@ type Querier interface {
 	DeleteTaskTemplate(ctx context.Context, id uuid.UUID) error
 	DeleteUpload(ctx context.Context, id uuid.UUID) error
 	DeleteUserByID(ctx context.Context, id uuid.UUID) error
+	DeleteWorkflowStates(ctx context.Context, projectID uuid.UUID) error
+	DeleteWorkflowTransitions(ctx context.Context, projectID uuid.UUID) error
+	GetAdminUserDetail(ctx context.Context, id uuid.UUID) (GetAdminUserDetailRow, error)
+	GetAssistantAction(ctx context.Context, arg GetAssistantActionParams) (AssistantAction, error)
+	GetAssistantConversation(ctx context.Context, arg GetAssistantConversationParams) (AssistantConversation, error)
+	GetAssistantMattermostThread(ctx context.Context, arg GetAssistantMattermostThreadParams) (uuid.UUID, error)
+	GetAssistantToolOutput(ctx context.Context, arg GetAssistantToolOutputParams) (string, error)
 	GetBlockerTaskRef(ctx context.Context, id uuid.UUID) (GetBlockerTaskRefRow, error)
 	GetCommentByID(ctx context.Context, id uuid.UUID) (GetCommentByIDRow, error)
 	GetCycleByID(ctx context.Context, id uuid.UUID) (GetCycleByIDRow, error)
@@ -190,7 +213,6 @@ type Querier interface {
 	GetModuleStateBreakdown(ctx context.Context, moduleID uuid.UUID) ([]GetModuleStateBreakdownRow, error)
 	GetNextPageNumber(ctx context.Context, projectID uuid.UUID) (int32, error)
 	GetNextTaskNumber(ctx context.Context, projectID uuid.UUID) (int32, error)
-	// ==================== NOTIFICATIONS ====================
 	// Most recent notification for a (recipient, task) pair still within the
 	// coalescing window. Used to merge new activity into an existing notification
 	// instead of creating a new one (max 1 notification per task per window).
@@ -213,6 +235,8 @@ type Querier interface {
 	GetProjectStateByProjectAndName(ctx context.Context, arg GetProjectStateByProjectAndNameParams) (ProjectState, error)
 	GetProjectViewByID(ctx context.Context, id uuid.UUID) (GetProjectViewByIDRow, error)
 	GetProjectViewBySlug(ctx context.Context, arg GetProjectViewBySlugParams) (GetProjectViewBySlugRow, error)
+	// ==================== WORKFLOW ENGINE ====================
+	GetProjectWorkflow(ctx context.Context, projectID uuid.UUID) (ProjectWorkflow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRefreshTokenByID(ctx context.Context, id uuid.UUID) (RefreshToken, error)
 	GetSetting(ctx context.Context, key string) (Setting, error)
@@ -237,6 +261,8 @@ type Querier interface {
 	// The state of the account that owns a conflicting email/username, so create
 	// can explain whether it's active, deactivated or deleted.
 	GetUserStatusByEmailOrUsername(ctx context.Context, arg GetUserStatusByEmailOrUsernameParams) (GetUserStatusByEmailOrUsernameRow, error)
+	GetWorkflowState(ctx context.Context, stateID uuid.UUID) (WorkflowState, error)
+	GetWorkflowTransition(ctx context.Context, arg GetWorkflowTransitionParams) (WorkflowTransition, error)
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByKey(ctx context.Context, workspaceKey string) (Workspace, error)
 	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)
@@ -263,6 +289,9 @@ type Querier interface {
 	// Filtered list and count are now built dynamically by internal/store/tasks_filter.go
 	// from a FilterTree. The projection here is documented for reference by that runner.
 	ListAssigneesForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListAssigneesForTasksRow, error)
+	ListAssistantActions(ctx context.Context, conversationID uuid.UUID) ([]AssistantAction, error)
+	ListAssistantConversations(ctx context.Context, userID uuid.UUID) ([]AssistantConversation, error)
+	ListAssistantMessages(ctx context.Context, conversationID uuid.UUID) ([]AssistantMessage, error)
 	ListAttachmentsByEntity(ctx context.Context, arg ListAttachmentsByEntityParams) ([]ListAttachmentsByEntityRow, error)
 	// Project tasks that can be linked to the given task in either direction:
 	// excludes the task itself and tasks already linked to it.
@@ -321,6 +350,7 @@ type Querier interface {
 	// parent. One level only, so tasks that are themselves sub-tasks are out.
 	// Server-searched and capped — never meant to list a whole project.
 	ListParentCandidates(ctx context.Context, arg ListParentCandidatesParams) ([]ListParentCandidatesRow, error)
+	ListPendingAssistantActions(ctx context.Context, conversationID uuid.UUID) ([]AssistantAction, error)
 	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]ListPersonalAccessTokensByUserRow, error)
 	ListProjectAreas(ctx context.Context, projectID uuid.UUID) ([]ProjectArea, error)
 	ListProjectCycles(ctx context.Context, arg ListProjectCyclesParams) ([]ListProjectCyclesRow, error)
@@ -354,6 +384,7 @@ type Querier interface {
 	// Returns every shared view in the project plus private views owned by the caller.
 	ListProjectViews(ctx context.Context, arg ListProjectViewsParams) ([]ListProjectViewsRow, error)
 	ListSettings(ctx context.Context) ([]Setting, error)
+	ListStateActions(ctx context.Context, stateID uuid.UUID) ([]ListStateActionsRow, error)
 	// Picker source for "attach an existing task as a subtask". Returns project
 	// tasks eligible to become a child of the given parent. Excludes: the parent
 	// itself, tasks already parented to this same parent, and tasks that already
@@ -369,6 +400,7 @@ type Querier interface {
 	ListTaskAreas(ctx context.Context, taskID uuid.UUID) ([]ListTaskAreasRow, error)
 	ListTaskAssignees(ctx context.Context, taskID uuid.UUID) ([]ListTaskAssigneesRow, error)
 	// One row per (task, assignee); unassigned tasks come back once with NULL user columns.
+	// The usernames filter keeps whole tasks the user created or is assigned to.
 	ListTaskAssignmentsForGraph(ctx context.Context, arg ListTaskAssignmentsForGraphParams) ([]ListTaskAssignmentsForGraphRow, error)
 	// ==================== TASK BLOCKERS ====================
 	// Both sides of a task's blocker links: is_blocked_by is true when the row is a
@@ -393,6 +425,7 @@ type Querier interface {
 	ListTaskTemplates(ctx context.Context, projectID uuid.UUID) ([]TaskTemplate, error)
 	ListTaskWatchers(ctx context.Context, taskID uuid.UUID) ([]ListTaskWatchersRow, error)
 	ListTasksByAssignee(ctx context.Context, arg ListTasksByAssigneeParams) ([]ListTasksByAssigneeRow, error)
+	ListTransitionMoverIDs(ctx context.Context, transitionID uuid.UUID) ([]uuid.UUID, error)
 	ListUnassignedProjectTasks(ctx context.Context, arg ListUnassignedProjectTasksParams) ([]ListUnassignedProjectTasksRow, error)
 	ListUploadsByUser(ctx context.Context, arg ListUploadsByUserParams) ([]Upload, error)
 	// ==================== USER ACTIVITY ====================
@@ -402,6 +435,7 @@ type Querier interface {
 	ListUserProjectsFiltered(ctx context.Context, arg ListUserProjectsFilteredParams) ([]ListUserProjectsFilteredRow, error)
 	ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]Workspace, error)
 	ListUserWorkspacesFiltered(ctx context.Context, arg ListUserWorkspacesFilteredParams) ([]Workspace, error)
+	ListUsersByEmailInsensitive(ctx context.Context, lower string) ([]ListUsersByEmailInsensitiveRow, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]ListUsersByIDsRow, error)
 	// One page of users in the selected state, filtered by an optional search.
 	// Actor names for who deactivated/deleted are folded in via LEFT JOINs and
@@ -412,7 +446,14 @@ type Querier interface {
 	// Users following a task to receive its updates, many-to-many, mirroring task
 	// assignees. Zero or more per task.
 	ListWatchersForTasks(ctx context.Context, taskIds []uuid.UUID) ([]ListWatchersForTasksRow, error)
+	ListWorkflowStateActions(ctx context.Context, projectID uuid.UUID) ([]WorkflowStateAction, error)
+	ListWorkflowStates(ctx context.Context, projectID uuid.UUID) ([]WorkflowState, error)
+	ListWorkflowTransitionMovers(ctx context.Context, projectID uuid.UUID) ([]WorkflowTransitionMover, error)
+	ListWorkflowTransitions(ctx context.Context, projectID uuid.UUID) ([]WorkflowTransition, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceMembersRow, error)
+	// ==================== NOTIFICATIONS ====================
+	// Serializes find-or-create per (recipient, task) so concurrent activity can't create duplicate rows.
+	LockNotificationSlot(ctx context.Context, arg LockNotificationSlotParams) error
 	// Serializes blocker writes per project so concurrent adds can't form a cycle.
 	LockProjectBlockers(ctx context.Context, projectID uuid.UUID) error
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
@@ -434,7 +475,17 @@ type Querier interface {
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
 	PagesCreatedPerDay(ctx context.Context, arg PagesCreatedPerDayParams) ([]PagesCreatedPerDayRow, error)
 	ProjectKeyExists(ctx context.Context, projectKey string) (bool, error)
+	// One row per day in the range. "completed" counts top-level tasks moved into a completed state that day.
+	ProjectStatsSeries(ctx context.Context, arg ProjectStatsSeriesParams) ([]ProjectStatsSeriesRow, error)
+	// ==================== PROJECT STATS ====================
+	// Blocked/blocking only count links where neither task is completed or cancelled.
+	ProjectStatsTotals(ctx context.Context, projectID uuid.UUID) (ProjectStatsTotalsRow, error)
+	ProjectTasksByPriority(ctx context.Context, projectID uuid.UUID) ([]ProjectTasksByPriorityRow, error)
+	// Top-level tasks per project state, in the project's state order.
+	ProjectTasksByState(ctx context.Context, projectID uuid.UUID) ([]ProjectTasksByStateRow, error)
 	ProjectViewSlugExists(ctx context.Context, arg ProjectViewSlugExistsParams) (bool, error)
+	// Open tasks and subtasks per assignee.
+	ProjectWorkload(ctx context.Context, projectID uuid.UUID) ([]ProjectWorkloadRow, error)
 	ProjectsPerWorkspace(ctx context.Context) ([]ProjectsPerWorkspaceRow, error)
 	ReactivateUser(ctx context.Context, id uuid.UUID) error
 	RemoveFeatureGrant(ctx context.Context, arg RemoveFeatureGrantParams) error
@@ -451,11 +502,13 @@ type Querier interface {
 	RemoveTaskOriginator(ctx context.Context, arg RemoveTaskOriginatorParams) error
 	RemoveTaskWatcher(ctx context.Context, arg RemoveTaskWatcherParams) error
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
+	RenameAssistantConversation(ctx context.Context, arg RenameAssistantConversationParams) (int64, error)
 	// Pass a JSON array of {id, new_position} objects.
 	ReorderProjectViews(ctx context.Context, arg ReorderProjectViewsParams) error
 	// Pass a JSON array of {id, new_position} objects. Site-admin only
 	// (enforced in the route); positions are one global order for everyone.
 	ReorderProjects(ctx context.Context, items []byte) error
+	ResolveAssistantAction(ctx context.Context, arg ResolveAssistantActionParams) (AssistantAction, error)
 	RestoreProject(ctx context.Context, id uuid.UUID) error
 	// Restores a deleted account back to Active (usable right away).
 	RestoreUser(ctx context.Context, id uuid.UUID) error
@@ -489,6 +542,7 @@ type Querier interface {
 	// clears it everywhere else in one statement.
 	SetProjectDefaultView(ctx context.Context, arg SetProjectDefaultViewParams) error
 	SetProjectDisabled(ctx context.Context, arg SetProjectDisabledParams) (Project, error)
+	SetProjectWorkflowEnabled(ctx context.Context, arg SetProjectWorkflowEnabledParams) (int64, error)
 	// Sets (or clears) a task's parent. Used to attach/re-parent an existing task
 	// as a subtask.
 	SetTaskParent(ctx context.Context, arg SetTaskParentParams) error
@@ -510,6 +564,7 @@ type Querier interface {
 	TasksByStateType(ctx context.Context) ([]TasksByStateTypeRow, error)
 	TasksCreatedPerDay(ctx context.Context, arg TasksCreatedPerDayParams) ([]TasksCreatedPerDayRow, error)
 	TopProjectsByTaskCount(ctx context.Context) ([]TopProjectsByTaskCountRow, error)
+	TouchAssistantConversation(ctx context.Context, arg TouchAssistantConversationParams) error
 	// When a member leaves a project, keep their shared views alive by reassigning ownership.
 	TransferOwnedSharedViews(ctx context.Context, arg TransferOwnedSharedViewsParams) error
 	UpdateComment(ctx context.Context, arg UpdateCommentParams) (Comment, error)
@@ -545,6 +600,7 @@ type Querier interface {
 	// inserts at revision 1.
 	UpsertGlobalPreference(ctx context.Context, arg UpsertGlobalPreferenceParams) (UpsertGlobalPreferenceRow, error)
 	UpsertProjectPreference(ctx context.Context, arg UpsertProjectPreferenceParams) (UpsertProjectPreferenceRow, error)
+	UpsertProjectWorkflow(ctx context.Context, projectID uuid.UUID) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) (Setting, error)
 	// Whether a DIFFERENT user (active, deactivated or soft-deleted alike) already
 	// owns this email or username. Used by admin profile edits, where the target's

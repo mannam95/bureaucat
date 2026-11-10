@@ -303,15 +303,58 @@ func (ns NullViewVisibility) Value() (driver.Value, error) {
 }
 
 type ActivityLog struct {
-	ID           uuid.UUID          `json:"id"`
-	TaskID       uuid.UUID          `json:"task_id"`
-	ActivityType string             `json:"activity_type"`
-	ActorID      uuid.UUID          `json:"actor_id"`
-	FieldName    pgtype.Text        `json:"field_name"`
-	OldValue     []byte             `json:"old_value"`
-	NewValue     []byte             `json:"new_value"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	Checksum     string             `json:"checksum"`
+	ID              uuid.UUID          `json:"id"`
+	TaskID          uuid.UUID          `json:"task_id"`
+	ActivityType    string             `json:"activity_type"`
+	ActorID         uuid.UUID          `json:"actor_id"`
+	FieldName       pgtype.Text        `json:"field_name"`
+	OldValue        []byte             `json:"old_value"`
+	NewValue        []byte             `json:"new_value"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Checksum        string             `json:"checksum"`
+	Via             string             `json:"via"`
+	ChecksumVersion int16              `json:"checksum_version"`
+}
+
+type AssistantAction struct {
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	ToolCallID     string             `json:"tool_call_id"`
+	ToolName       string             `json:"tool_name"`
+	Args           []byte             `json:"args"`
+	Status         string             `json:"status"`
+	Result         string             `json:"result"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
+}
+
+type AssistantConversation struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	Title     string             `json:"title"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssistantMattermostThread struct {
+	RootPostID     string             `json:"root_post_id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type AssistantMessage struct {
+	ID             uuid.UUID          `json:"id"`
+	Seq            pgtype.Int8        `json:"seq"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Role           string             `json:"role"`
+	Content        string             `json:"content"`
+	ToolCalls      []byte             `json:"tool_calls"`
+	ToolCallID     string             `json:"tool_call_id"`
+	ToolName       string             `json:"tool_name"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Attachments    []byte             `json:"attachments"`
+	Meta           []byte             `json:"meta"`
 }
 
 type Attachment struct {
@@ -417,6 +460,7 @@ type Notification struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	CommentID    pgtype.UUID        `json:"comment_id"`
+	Via          string             `json:"via"`
 }
 
 type Page struct {
@@ -527,6 +571,12 @@ type ProjectView struct {
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	DefaultTab  string             `json:"default_tab"`
 	IsDefault   bool               `json:"is_default"`
+}
+
+type ProjectWorkflow struct {
+	ProjectID uuid.UUID          `json:"project_id"`
+	Enabled   bool               `json:"enabled"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type RefreshToken struct {
@@ -675,6 +725,34 @@ type UserPreference struct {
 	Revision      int64              `json:"revision"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type WorkflowState struct {
+	StateID   uuid.UUID `json:"state_id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	IsEntry   bool      `json:"is_entry"`
+	PosX      float64   `json:"pos_x"`
+	PosY      float64   `json:"pos_y"`
+}
+
+type WorkflowStateAction struct {
+	StateID uuid.UUID `json:"state_id"`
+	Action  string    `json:"action"`
+	UserID  uuid.UUID `json:"user_id"`
+}
+
+type WorkflowTransition struct {
+	ID             uuid.UUID `json:"id"`
+	ProjectID      uuid.UUID `json:"project_id"`
+	FromStateID    uuid.UUID `json:"from_state_id"`
+	ToStateID      uuid.UUID `json:"to_state_id"`
+	AllowAssignees bool      `json:"allow_assignees"`
+	AllowCreator   bool      `json:"allow_creator"`
+}
+
+type WorkflowTransitionMover struct {
+	TransitionID uuid.UUID `json:"transition_id"`
+	UserID       uuid.UUID `json:"user_id"`
 }
 
 type Workspace struct {
