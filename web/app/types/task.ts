@@ -60,7 +60,7 @@ export interface Task {
   cycle_id?: string;
   cycle_title?: string;
   modules?: TaskModule[];
-  figma_link?: string;
+  design_link?: string;
   branch?: string;
   pull_request?: string;
   created_at: string;
@@ -223,7 +223,7 @@ export interface CreateTaskRequest {
   labels?: string[];
   /** Area ids to attach (admin-defined classification). */
   areas?: string[];
-  figma_link?: string;
+  design_link?: string;
   branch?: string;
   pull_request?: string;
   // Originators/Requesters (user ids). At least one; the backend defaults to the
@@ -250,7 +250,7 @@ export interface UpdateTaskRequest {
   start_date?: string | null;
   due_date?: string | null;
   // Omit to leave unchanged; send an empty string to clear.
-  figma_link?: string;
+  design_link?: string;
   branch?: string;
   pull_request?: string;
 }

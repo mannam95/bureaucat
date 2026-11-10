@@ -147,7 +147,7 @@ const form = ref({
   assignees: [] as string[],
   labels: [] as string[],
   areas: [] as string[],
-  figma_link: "",
+  design_link: "",
   branch: "",
   pull_request: "",
   // Originators/Requesters (user ids). Defaults to the current user (self-raised),
@@ -238,7 +238,7 @@ function resetForm() {
     assignees: [],
     labels: [],
     areas: [],
-    figma_link: "",
+    design_link: "",
     branch: "",
     pull_request: "",
     // Self-raised by default: pre-fill the requester with the current user.
@@ -451,7 +451,7 @@ async function handleSubmit() {
     assignees: form.value.assignees.length > 0 ? form.value.assignees : undefined,
     labels: form.value.labels.length > 0 ? form.value.labels : undefined,
     areas: form.value.areas.length > 0 ? form.value.areas : undefined,
-    figma_link: form.value.figma_link.trim() || undefined,
+    design_link: form.value.design_link.trim() || undefined,
     branch: form.value.branch.trim() || undefined,
     pull_request: form.value.pull_request.trim() || undefined,
     originators: form.value.originators.length > 0 ? form.value.originators : undefined,
@@ -1125,11 +1125,11 @@ function removeLabel(labelId: string) {
           </div>
 
           <div class="space-y-2">
-            <Label for="figma_link">Figma Link</Label>
+            <Label for="design_link">Design link</Label>
             <Input
-              id="figma_link"
-              v-model="form.figma_link"
-              placeholder="https://figma.com/..."
+              id="design_link"
+              v-model="form.design_link"
+              placeholder="https://design.com/..."
               :disabled="loading"
             />
           </div>

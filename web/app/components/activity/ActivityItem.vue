@@ -86,7 +86,9 @@ const fieldLabel = computed(() => {
     effort: "effort",
     start_date: "start date",
     due_date: "due date",
-    figma_link: "Figma link",
+    design_link: "Design link",
+    // Legacy field name: activity rows logged before the rename keep it.
+    figma_link: "Design link",
     branch: "branch",
     pull_request: "pull request",
     parent: "parent task",

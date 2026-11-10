@@ -163,7 +163,7 @@ type TaskResponse struct {
 	CycleID        *uuid.UUID       `json:"cycle_id,omitempty"`
 	CycleTitle     *string          `json:"cycle_title,omitempty"`
 	Modules        []TaskModuleInfo `json:"modules,omitempty"`
-	FigmaLink      *string          `json:"figma_link,omitempty"`
+	DesignLink      *string          `json:"design_link,omitempty"`
 	Branch         *string          `json:"branch,omitempty"`
 	PullRequest    *string          `json:"pull_request,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
@@ -336,7 +336,7 @@ type CreateTaskRequest struct {
 	Assignees   []string   `json:"assignees"`
 	Labels      []string   `json:"labels"`
 	Areas       []string   `json:"areas"`
-	FigmaLink   *string    `json:"figma_link"`
+	DesignLink   *string    `json:"design_link"`
 	Branch      *string    `json:"branch"`
 	PullRequest *string    `json:"pull_request"`
 	// Originators/Requesters (user ids). Optional over the wire — defaults to the
@@ -367,7 +367,7 @@ type UpdateTaskRequest struct {
 	DueDate    NullableTime `json:"due_date"`
 	// Custom fields. Omitted (nil) means "leave unchanged"; send an empty
 	// string to clear one.
-	FigmaLink   *string `json:"figma_link"`
+	DesignLink   *string `json:"design_link"`
 	Branch      *string `json:"branch"`
 	PullRequest *string `json:"pull_request"`
 }
@@ -845,7 +845,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StartDate:      timePtrToTimestamptz(req.StartDate),
 		DueDate:        timePtrToTimestamptz(req.DueDate),
 		ParentTaskID:   parentTaskID,
-		FigmaLink:      stringToPgtypeText(req.FigmaLink),
+		DesignLink:      stringToPgtypeText(req.DesignLink),
 		Branch:         stringToPgtypeText(req.Branch),
 		PullRequest:    stringToPgtypeText(req.PullRequest),
 	})
@@ -1173,7 +1173,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
 		SubtaskCount:        int(fullTask.SubtaskCount),
-		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		DesignLink:           textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,
@@ -1273,7 +1273,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
-		FigmaLink:           textToStringPtr(task.FigmaLink),
+		DesignLink:           textToStringPtr(task.DesignLink),
 		Branch:              textToStringPtr(task.Branch),
 		PullRequest:         textToStringPtr(task.PullRequest),
 		CreatedAt:           task.CreatedAt.Time,
@@ -1441,7 +1441,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StartDate:       startDateArg,
 		UpdateDueDate:   req.DueDate.Set,
 		DueDate:         dueDateArg,
-		FigmaLink:       stringToPgtypeText(req.FigmaLink),
+		DesignLink:       stringToPgtypeText(req.DesignLink),
 		Branch:          stringToPgtypeText(req.Branch),
 		PullRequest:     stringToPgtypeText(req.PullRequest),
 	})
@@ -1558,11 +1558,11 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 			NewValue:     *req.Effort,
 		})
 	}
-	oldFigma := textToStringPtr(oldTask.FigmaLink)
-	if req.FigmaLink != nil && (oldFigma == nil || *req.FigmaLink != *oldFigma) {
+	oldDesign := textToStringPtr(oldTask.DesignLink)
+	if req.DesignLink != nil && (oldDesign == nil || *req.DesignLink != *oldDesign) {
 		h.activityService.LogActivity(ctx, activity.LogActivityParams{
 			TaskID: task.ID, ActivityType: activity.TaskUpdated, ActorID: userID,
-			FieldName: activity.StringPtr("figma_link"), OldValue: oldFigma, NewValue: *req.FigmaLink,
+			FieldName: activity.StringPtr("design_link"), OldValue: oldDesign, NewValue: *req.DesignLink,
 		})
 	}
 	oldBranch := textToStringPtr(oldTask.Branch)
@@ -1683,7 +1683,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
-		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		DesignLink:           textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,
@@ -2185,7 +2185,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		CreatedBy:      userID,
 		StartDate:      src.StartDate,
 		DueDate:        src.DueDate,
-		FigmaLink:      src.FigmaLink,
+		DesignLink:      src.DesignLink,
 		Branch:         src.Branch,
 		PullRequest:    src.PullRequest,
 		PriorityRating: pgtype.Int4{Int32: src.PriorityRating, Valid: true},
@@ -2321,7 +2321,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 				StartDate:      full.StartDate,
 				DueDate:        full.DueDate,
 				ParentTaskID:   pgtype.UUID{Bytes: copyTask.ID, Valid: true},
-				FigmaLink:      full.FigmaLink,
+				DesignLink:      full.DesignLink,
 				Branch:         full.Branch,
 				PullRequest:    full.PullRequest,
 				PriorityRating: pgtype.Int4{Int32: full.PriorityRating, Valid: true},
@@ -3996,7 +3996,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		Contributors:        h.contributorsForTask(ctx, fullTask.ID),
 		Labels:              labels,
 		Areas:               areas,
-		FigmaLink:           textToStringPtr(fullTask.FigmaLink),
+		DesignLink:           textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,

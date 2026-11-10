@@ -342,6 +342,16 @@ function getFieldLabel(fieldName?: string): string | null {
   const labels: Record<string, string> = {
     title: "title",
     description: "description",
+    design_link: "design link",
+    // Legacy field name from before the rename; old rows keep it.
+    figma_link: "design link",
+    branch: "branch",
+    pull_request: "pull request",
+    priority_rating: "priority rating",
+    start_date: "start date",
+    due_date: "due date",
+    difficulty: "difficulty",
+    effort: "effort",
     state: "state",
     priority: "priority",
     assignees: "assignees",

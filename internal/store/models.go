@@ -610,7 +610,7 @@ type Task struct {
 	StartDate      pgtype.Timestamptz `json:"start_date"`
 	DueDate        pgtype.Timestamptz `json:"due_date"`
 	ParentTaskID   pgtype.UUID        `json:"parent_task_id"`
-	FigmaLink      pgtype.Text        `json:"figma_link"`
+	DesignLink     pgtype.Text        `json:"design_link"`
 	Branch         pgtype.Text        `json:"branch"`
 	PullRequest    pgtype.Text        `json:"pull_request"`
 	PriorityRating int32              `json:"priority_rating"`

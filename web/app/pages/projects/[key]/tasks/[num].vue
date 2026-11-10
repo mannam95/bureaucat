@@ -519,16 +519,16 @@ async function onSubtaskCreated() {
   await Promise.all([loadSubtasks(), refreshTask()]);
 }
 
-// ---- Custom fields (Figma link / branch / pull request) ----
+// ---- Custom fields (Design link / branch / pull request) ----
 // Edited one at a time, inline: the edit button swaps the value for a text
 // field with explicit save and cancel. Sub-tasks are tasks, so this works on
 // them unchanged.
 const CUSTOM_FIELDS = [
   {
-    key: "figma_link",
-    label: "Figma Link",
+    key: "design_link",
+    label: "Design link",
     hint: "The origin of the design",
-    placeholder: "https://figma.com/...",
+    placeholder: "https://design.com/...",
   },
   {
     key: "branch",
@@ -568,8 +568,8 @@ async function saveField(key: CustomFieldKey) {
   // An empty string clears the field; the API treats omitted as "unchanged".
   const value = customDraft.value.trim();
   const payload =
-    key === "figma_link"
-      ? { figma_link: value }
+    key === "design_link"
+      ? { design_link: value }
       : key === "branch"
         ? { branch: value }
         : { pull_request: value };
