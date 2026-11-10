@@ -210,8 +210,10 @@ const assignedTo = computed<Person[]>(() =>
       <span v-if="parentCrumb" class="truncate text-[11px] text-muted-foreground">↳ {{ parentCrumb }}</span>
       </span>
 
-      <!-- Col 3: State badge (editable for members) -->
-      <div class="justify-self-end" @click.stop.prevent>
+      <!-- Col 3: State badge (editable for members). min-w-0 + max-w-full keep
+           a long state name truncating inside its own track instead of
+           overflowing left into the title. -->
+      <div class="min-w-0 max-w-full justify-self-end overflow-hidden" @click.stop.prevent>
         <TaskStateSelector
           v-if="canEditState"
           :states="states"
@@ -224,14 +226,14 @@ const assignedTo = computed<Person[]>(() =>
         />
         <div
           v-else
-          class="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit"
+          class="flex max-w-full items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 w-fit"
         >
           <component
             :is="stateIcon"
             class="size-3.5 shrink-0 stroke-[2.5]"
             :style="{ color: task.state_color }"
           />
-          <span class="text-xs text-muted-foreground whitespace-nowrap">{{ task.state_name }}</span>
+          <span class="truncate text-xs text-muted-foreground">{{ task.state_name }}</span>
         </div>
       </div>
 

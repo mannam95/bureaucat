@@ -383,7 +383,8 @@
 /* Columns: [select] [workspace] ID · Title · State · Priority · Created Date · Assigned */
 .task-row {
   grid-template-columns: 6rem 1fr 10rem 7rem 7rem 6rem;
-  column-gap: 0.375rem;
+  /* Wide enough that a truncated title never reads into the state chip. */
+  column-gap: 0.875rem;
 }
 .task-row.selectable {
   grid-template-columns: 1.5rem 6rem 1fr 10rem 7rem 7rem 6rem;

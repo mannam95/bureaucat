@@ -82,18 +82,19 @@ const groupedStates = computed(() => {
         :title="currentState?.description || undefined"
         :variant="compact ? 'ghost' : 'outline'"
         :class="[
-          compact ? 'h-auto gap-1.5 px-0 py-0 font-medium hover:bg-transparent' : 'justify-between',
+          compact ? 'h-auto max-w-full gap-1.5 px-0 py-0 font-medium hover:bg-transparent' : 'justify-between',
           dense && 'gap-1 text-xs',
         ]"
         :disabled="disabled"
       >
-        <span class="flex items-center" :class="dense ? 'gap-1' : 'gap-1.5'">
+        <span class="flex min-w-0 items-center" :class="dense ? 'gap-1' : 'gap-1.5'">
           <component
             :is="getStateIcon(currentState?.state_type || 'backlog')"
+            class="shrink-0"
             :class="dense ? 'size-3.5 stroke-[2.5]' : compact ? 'size-5 stroke-[2.5]' : 'size-4'"
             :style="{ color: currentState?.color }"
           />
-          {{ currentState?.name || "Select state" }}
+          <span class="truncate">{{ currentState?.name || "Select state" }}</span>
         </span>
         <ChevronDown :class="dense ? 'size-3 opacity-50' : 'size-3.5 opacity-50'" />
       </Button>
