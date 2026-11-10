@@ -80,8 +80,9 @@ type Querier interface {
 	CountProjectMembers(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectModules(ctx context.Context, arg CountProjectModulesParams) (int64, error)
 	CountProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)
-	// Count-only sibling of ListProjectTasksInNoModule, for the backlog card badge.
-	CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (int64, error)
+	// Count sibling of ListProjectTasksInNoModule with per-lifecycle-type buckets,
+	// so the backlog card can show the real spread, not a bare total.
+	CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (CountProjectTasksInNoModuleRow, error)
 	CountProjects(ctx context.Context) (int64, error)
 	CountSearchUsers(ctx context.Context, dollar_1 pgtype.Text) (int64, error)
 	CountSubtasks(ctx context.Context) (int64, error)
@@ -91,8 +92,9 @@ type Querier interface {
 	CountTasksInPriority(ctx context.Context, priorityID uuid.UUID) (int64, error)
 	CountTasksInState(ctx context.Context, stateID uuid.UUID) (int64, error)
 	CountTopLevelTasks(ctx context.Context) (int64, error)
-	// Count-only sibling of ListUnassignedProjectTasks, for the backlog card badge.
-	CountUnassignedProjectTasks(ctx context.Context, projectID uuid.UUID) (int64, error)
+	// Count sibling of ListUnassignedProjectTasks with per-lifecycle-type buckets,
+	// so the backlog card can show the real spread, not a bare total.
+	CountUnassignedProjectTasks(ctx context.Context, projectID uuid.UUID) (CountUnassignedProjectTasksRow, error)
 	CountUnreadNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountUserActivity(ctx context.Context, actorID uuid.UUID) (int64, error)
 	CountUserProjects(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -480,7 +482,6 @@ type Querier interface {
 	// ==================== PROJECT STATS ====================
 	// Blocked/blocking only count links where neither task is completed or cancelled.
 	ProjectStatsTotals(ctx context.Context, projectID uuid.UUID) (ProjectStatsTotalsRow, error)
-	ProjectTasksByPriority(ctx context.Context, projectID uuid.UUID) ([]ProjectTasksByPriorityRow, error)
 	// Top-level tasks per project state, in the project's state order.
 	ProjectTasksByState(ctx context.Context, projectID uuid.UUID) ([]ProjectTasksByStateRow, error)
 	ProjectViewSlugExists(ctx context.Context, arg ProjectViewSlugExistsParams) (bool, error)

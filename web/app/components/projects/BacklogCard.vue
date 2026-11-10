@@ -3,17 +3,32 @@
 // Without a Cycle / Epic" backlog view, the same way a cycle or epic card opens
 // its detail page.
 import { Inbox, ArrowRight } from "lucide-vue-next";
+import type { BacklogCounts } from "~/composables/useCycles";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     title: string;
     subtitle: string;
     count: number;
     to: string;
+    // Per-lifecycle-type buckets; with them the card shows the real spread
+    // (done, verifying, in progress, todo) instead of a bare total.
+    counts?: BacklogCounts | null;
     // "card" is the grid tile; "row" is a compact banner for the list view.
     variant?: "card" | "row";
   }>(),
-  { variant: "card" }
+  { counts: null, variant: "card" }
+);
+
+// Same rules as the cycle cards: archived counts as done, cancelled leaves
+// the denominator.
+const doneCount = computed(() =>
+  props.counts ? props.counts.completed + props.counts.archived : 0
+);
+const openCount = computed(() =>
+  props.counts
+    ? props.counts.todo + props.counts.in_progress + props.counts.in_verification
+    : 0
 );
 </script>
 
@@ -35,9 +50,20 @@ withDefaults(
         </p>
       </div>
     </div>
-    <span class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
-      Open <ArrowRight class="size-3.5" />
-    </span>
+    <div class="flex shrink-0 items-center gap-3">
+      <LifecycleBar
+        v-if="counts"
+        class="w-28"
+        :done="counts.completed"
+        :archived="counts.archived"
+        :verification="counts.in_verification"
+        :in-progress="counts.in_progress"
+        :todo="counts.todo"
+      />
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
+        Open <ArrowRight class="size-3.5" />
+      </span>
+    </div>
   </NuxtLink>
 
   <NuxtLink v-else :to="to">
@@ -67,12 +93,24 @@ withDefaults(
       <CardContent class="pt-0">
         <div class="flex items-center justify-between text-xs">
           <span class="text-muted-foreground">
-            {{ count }} task{{ count === 1 ? "" : "s" }}
+            <template v-if="counts && doneCount > 0">
+              {{ doneCount }} done · {{ openCount }} open · {{ count }} total
+            </template>
+            <template v-else>{{ count }} task{{ count === 1 ? "" : "s" }}</template>
           </span>
           <span class="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-500">
             Open <ArrowRight class="size-3.5" />
           </span>
         </div>
+        <LifecycleBar
+          v-if="counts"
+          class="mt-2"
+          :done="counts.completed"
+          :archived="counts.archived"
+          :verification="counts.in_verification"
+          :in-progress="counts.in_progress"
+          :todo="counts.todo"
+        />
       </CardContent>
     </Card>
   </NuxtLink>

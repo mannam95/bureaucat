@@ -319,9 +319,17 @@ ORDER BY t.created_at DESC
 LIMIT $2;
 
 -- name: CountProjectTasksInNoModule :one
--- Count-only sibling of ListProjectTasksInNoModule, for the backlog card badge.
-SELECT COUNT(*)
+-- Count sibling of ListProjectTasksInNoModule with per-lifecycle-type buckets,
+-- so the backlog card can show the real spread, not a bare total.
+SELECT COUNT(*)::int                                                          AS total,
+       COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int              AS completed,
+       COUNT(*) FILTER (WHERE ps.state_type = 'started')::int                AS in_progress,
+       COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int          AS in_verification,
+       COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
+       COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int              AS cancelled,
+       COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int               AS archived
 FROM tasks t
+JOIN project_states ps ON t.state_id = ps.id
 WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id);
 

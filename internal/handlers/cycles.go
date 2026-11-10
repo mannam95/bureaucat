@@ -901,18 +901,27 @@ func (h *CycleHandler) ListUnassignedTasks(c *echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
-// CountUnassignedTasks returns only how many top-level tasks are in no cycle,
-// for the backlog card badge — the overview tabs don't need the rows.
+// CountUnassignedTasks returns how many top-level tasks are in no cycle, with
+// per-lifecycle-type buckets, for the backlog card — the overview tabs don't
+// need the rows.
 func (h *CycleHandler) CountUnassignedTasks(c *echo.Context) error {
 	projectID, err := uuid.Parse(c.Request().Header.Get(auth.HeaderProjectID))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "invalid project ID in context")
 	}
-	count, err := h.store.CountUnassignedProjectTasks(c.Request().Context(), projectID)
+	m, err := h.store.CountUnassignedProjectTasks(c.Request().Context(), projectID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tasks")
 	}
-	return c.JSON(http.StatusOK, map[string]int64{"count": count})
+	return c.JSON(http.StatusOK, map[string]int{
+		"count":           int(m.Total),
+		"completed":       int(m.Completed),
+		"in_progress":     int(m.InProgress),
+		"in_verification": int(m.InVerification),
+		"todo":            int(m.Todo),
+		"cancelled":       int(m.Cancelled),
+		"archived":        int(m.Archived),
+	})
 }
 
 // ActiveCycleResponse is the shape for the workspace active cycles dashboard.

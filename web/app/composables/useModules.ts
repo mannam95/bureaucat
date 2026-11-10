@@ -9,6 +9,7 @@ import type {
   UpdateModuleRequest,
   DuplicateModuleRequest,
 } from "~/types";
+import type { BacklogCounts } from "~/composables/useCycles";
 
 interface ModulesState {
   modules: Module[];
@@ -403,10 +404,11 @@ export function useModules() {
 
   // Backlog source for the Modules tab: project top-level tasks that are in no
   // module at all. Kept out of the paginated `modules` state.
-  // Count-only sibling of listTasksInNoModule, for the backlog card badge.
+  // Count sibling of listTasksInNoModule with per-lifecycle-type buckets, for
+  // the backlog card.
   async function countTasksInNoModule(
     projectKey: string
-  ): Promise<{ success: boolean; count?: number; error?: string }> {
+  ): Promise<{ success: boolean; counts?: BacklogCounts; error?: string }> {
     try {
       const response = await fetch(
         `/api/v1/projects/${projectKey}/modules/no-module-tasks/count`,
@@ -417,7 +419,7 @@ export function useModules() {
         return { success: false, error: error.message || "Failed to count tasks" };
       }
       const data = await response.json();
-      return { success: true, count: data.count ?? 0 };
+      return { success: true, counts: { count: 0, completed: 0, in_progress: 0, in_verification: 0, todo: 0, cancelled: 0, archived: 0, ...data } };
     } catch {
       return { success: false, error: "Network error" };
     }

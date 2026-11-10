@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BacklogCounts } from "~/composables/useCycles";
 import { Plus, Repeat, Loader2, ChevronLeft, ChevronRight } from "lucide-vue-next";
 
 const props = defineProps<{
@@ -28,10 +29,14 @@ watch(statusGroup, () => fetchPage(1));
 // How many top-level tasks aren't in any cycle, for the backlog card that opens
 // the "Tasks Without a Cycle" view. Only shown to admins (adding is admin-only).
 const backlogCount = ref(0);
+const backlogCounts = ref<BacklogCounts | null>(null);
 async function loadBacklogCount() {
   if (!props.isAdmin) return;
   const r = await countUnassignedTasks(props.projectKey);
-  if (r.success) backlogCount.value = r.count ?? 0;
+  if (r.success && r.counts) {
+    backlogCount.value = r.counts.count;
+    backlogCounts.value = r.counts;
+  }
 }
 const showBacklogCard = computed(
   () => props.isAdmin && backlogCount.value > 0 && statusGroup.value === "active"
@@ -140,6 +145,7 @@ watch(
           title="Tasks Without a Cycle"
           subtitle="Top-level tasks not in any cycle yet."
           :count="backlogCount"
+            :counts="backlogCounts"
           :to="`/projects/${projectKey}/cycles/backlog`"
         />
         <CycleCard
@@ -157,6 +163,7 @@ watch(
             title="Tasks Without a Cycle"
             subtitle="not in any cycle yet"
             :count="backlogCount"
+            :counts="backlogCounts"
             :to="`/projects/${projectKey}/cycles/backlog`"
           />
         </div>

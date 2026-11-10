@@ -224,39 +224,6 @@ func (q *Queries) ProjectStatsTotals(ctx context.Context, projectID uuid.UUID) (
 	return i, err
 }
 
-const projectTasksByPriority = `-- name: ProjectTasksByPriority :many
-SELECT t.priority AS priority, COUNT(*)::int AS count
-FROM tasks t
-WHERE t.project_id = $1::uuid AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
-GROUP BY t.priority
-ORDER BY t.priority ASC
-`
-
-type ProjectTasksByPriorityRow struct {
-	Priority int32 `json:"priority"`
-	Count    int32 `json:"count"`
-}
-
-func (q *Queries) ProjectTasksByPriority(ctx context.Context, projectID uuid.UUID) ([]ProjectTasksByPriorityRow, error) {
-	rows, err := q.db.Query(ctx, projectTasksByPriority, projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ProjectTasksByPriorityRow{}
-	for rows.Next() {
-		var i ProjectTasksByPriorityRow
-		if err := rows.Scan(&i.Priority, &i.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const projectTasksByState = `-- name: ProjectTasksByState :many
 SELECT ps.name, ps.state_type, ps.color, COUNT(t.id)::int AS count
 FROM project_states ps

@@ -36,6 +36,16 @@ const state = reactive<CyclesState>({
   totalPages: 0,
 });
 
+export interface BacklogCounts {
+  count: number;
+  completed: number;
+  in_progress: number;
+  in_verification: number;
+  todo: number;
+  cancelled: number;
+  archived: number;
+}
+
 export function useCycles() {
   const { getAuthHeader } = useAuth();
 
@@ -240,10 +250,11 @@ export function useCycles() {
     }
   }
 
-  // Count-only sibling of listUnassignedTasks, for the backlog card badge.
+  // Count sibling of listUnassignedTasks with per-lifecycle-type buckets, for
+  // the backlog card.
   async function countUnassignedTasks(
     projectKey: string
-  ): Promise<{ success: boolean; count?: number; error?: string }> {
+  ): Promise<{ success: boolean; counts?: BacklogCounts; error?: string }> {
     try {
       const response = await fetch(
         `/api/v1/projects/${projectKey}/cycles/unassigned-tasks/count`,
@@ -254,7 +265,7 @@ export function useCycles() {
         return { success: false, error: error.message || "Failed to count tasks" };
       }
       const data = await response.json();
-      return { success: true, count: data.count ?? 0 };
+      return { success: true, counts: { count: 0, completed: 0, in_progress: 0, in_verification: 0, todo: 0, cancelled: 0, archived: 0, ...data } };
     } catch {
       return { success: false, error: "Network error" };
     }

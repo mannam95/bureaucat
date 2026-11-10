@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BacklogCounts } from "~/composables/useCycles";
 import { Plus, Layers, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-vue-next";
 import type { ModuleListFilters, ModuleStatus } from "~/types";
 import { MODULE_STATUSES } from "~/types";
@@ -63,10 +64,14 @@ watch(statusGroup, () => {
 // How many top-level tasks aren't in any module, for the backlog card that opens
 // the "Tasks Without an Epic" view. Only shown to admins (adding is admin-only).
 const backlogCount = ref(0);
+const backlogCounts = ref<BacklogCounts | null>(null);
 async function loadBacklogCount() {
   if (!props.isAdmin) return;
   const r = await countTasksInNoModule(props.projectKey);
-  if (r.success) backlogCount.value = r.count ?? 0;
+  if (r.success && r.counts) {
+    backlogCount.value = r.counts.count;
+    backlogCounts.value = r.counts;
+  }
 }
 const showBacklogCard = computed(
   () => props.isAdmin && backlogCount.value > 0 && statusGroup.value === "active"
@@ -203,6 +208,7 @@ watch(
           title="Tasks Without an Epic"
           subtitle="Top-level tasks not in any epic yet."
           :count="backlogCount"
+            :counts="backlogCounts"
           :to="`/projects/${projectKey}/modules/backlog`"
         />
         <ModuleCard
@@ -220,6 +226,7 @@ watch(
             title="Tasks Without an Epic"
             subtitle="not in any epic yet"
             :count="backlogCount"
+            :counts="backlogCounts"
             :to="`/projects/${projectKey}/modules/backlog`"
           />
         </div>

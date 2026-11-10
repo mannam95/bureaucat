@@ -109,18 +109,44 @@ func (q *Queries) CountProjectModules(ctx context.Context, arg CountProjectModul
 }
 
 const countProjectTasksInNoModule = `-- name: CountProjectTasksInNoModule :one
-SELECT COUNT(*)
+SELECT COUNT(*)::int                                                          AS total,
+       COUNT(*) FILTER (WHERE ps.state_type = 'completed')::int              AS completed,
+       COUNT(*) FILTER (WHERE ps.state_type = 'started')::int                AS in_progress,
+       COUNT(*) FILTER (WHERE ps.state_type = 'verification')::int          AS in_verification,
+       COUNT(*) FILTER (WHERE ps.state_type IN ('backlog', 'unstarted'))::int AS todo,
+       COUNT(*) FILTER (WHERE ps.state_type = 'cancelled')::int              AS cancelled,
+       COUNT(*) FILTER (WHERE ps.state_type = 'archived')::int               AS archived
 FROM tasks t
+JOIN project_states ps ON t.state_id = ps.id
 WHERE t.project_id = $1 AND t.deleted_at IS NULL AND t.parent_task_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM module_tasks mt WHERE mt.task_id = t.id)
 `
 
-// Count-only sibling of ListProjectTasksInNoModule, for the backlog card badge.
-func (q *Queries) CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (int64, error) {
+type CountProjectTasksInNoModuleRow struct {
+	Total          int32 `json:"total"`
+	Completed      int32 `json:"completed"`
+	InProgress     int32 `json:"in_progress"`
+	InVerification int32 `json:"in_verification"`
+	Todo           int32 `json:"todo"`
+	Cancelled      int32 `json:"cancelled"`
+	Archived       int32 `json:"archived"`
+}
+
+// Count sibling of ListProjectTasksInNoModule with per-lifecycle-type buckets,
+// so the backlog card can show the real spread, not a bare total.
+func (q *Queries) CountProjectTasksInNoModule(ctx context.Context, projectID uuid.UUID) (CountProjectTasksInNoModuleRow, error) {
 	row := q.db.QueryRow(ctx, countProjectTasksInNoModule, projectID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+	var i CountProjectTasksInNoModuleRow
+	err := row.Scan(
+		&i.Total,
+		&i.Completed,
+		&i.InProgress,
+		&i.InVerification,
+		&i.Todo,
+		&i.Cancelled,
+		&i.Archived,
+	)
+	return i, err
 }
 
 const createModule = `-- name: CreateModule :one
