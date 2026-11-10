@@ -104,6 +104,23 @@ PAGES = [
      "5. Tag, deploy, and watch the dashboards for 30 minutes\n"),
 ]
 
+CSV_SAMPLE = (
+    "week,signups,activated,conversion\n"
+    "2026-W41,418,236,56.5%\n"
+    "2026-W42,455,261,57.4%\n"
+    "2026-W43,512,318,62.1%\n"
+    "2026-W44,540,352,65.2%\n")
+
+MD_SAMPLE = (
+    "# Rollout notes\n\n"
+    "Staged rollout for the checkout change.\n\n"
+    "## Plan\n\n"
+    "1. 5% of traffic for two days\n"
+    "2. 25% if error budget holds\n"
+    "3. Full rollout with the Friday freeze lifted\n\n"
+    "- [ ] dashboards linked\n"
+    "- [x] alerts tuned\n")
+
 TEMPLATES = [
     ("Bug report", "Bug: summary",
      "Steps to reproduce:\n1. \n2. \n\nExpected:\n\nActual:\n\nEnvironment:"),
@@ -665,6 +682,9 @@ def main():
     signin()
     admin_id = api("GET", "/me")["id"]
 
+    print("→ branding: custom app name (toggle off in Admin → Branding)")
+    api("PUT", "/admin/settings/branding", {"enabled": True, "app_name": "Nova Tracker"})
+
     print(f"→ creating {NUM_USERS} users")
     users = []
     used = set()
@@ -731,9 +751,14 @@ def main():
             p.labels[lname] = l["id"]
             total["labels"] += 1
 
-        for tname, ttitle, tdesc in TEMPLATES:
-            api("POST", f"/projects/{key}/templates",
-                {"name": tname, "title": ttitle, "description": tdesc})
+        for ti, (tname, ttitle, tdesc) in enumerate(TEMPLATES):
+            tmpl = api("POST", f"/projects/{key}/templates",
+                       {"name": tname, "title": ttitle, "description": tdesc})
+            # The sprints project pins its bug template as mandatory: the
+            # create-task dialog opens pre-filled with it (a guide, not a lock).
+            if pi == 0 and ti == 0:
+                api("PATCH", f"/projects/{key}/templates/{tmpl['id']}",
+                    {"is_mandatory": True})
         for ptitle, pcontent in PAGES:
             api("POST", f"/projects/{key}/pages", {"title": ptitle, "content": pcontent})
             total["pages"] += 1
@@ -750,6 +775,48 @@ def main():
         total["delivered"] += p.counts["delivered"]
         story_projects.append(p)
 
+        if pi == 0:
+            # A drawn workflow, saved but NOT enforced: flip it on in the
+            # project's Workflow tab to try the engine. Most moves are free;
+            # only QA (two named people) may move work from Testing to Done,
+            # and entering Testing auto-assigns the tester.
+            print("   saving a workflow graph (disabled - enable it to test)")
+            s = p.states
+            tester = team[1]["id"]
+            qa = [team[1]["id"], team[2]["id"]]
+            def node(name, x, y, entry=False, add=None):
+                return {"state_id": s[name], "is_entry": entry, "pos_x": x, "pos_y": y,
+                        "add_assignees": add or [], "remove_assignees": []}
+            def edge(a, b, assignees=False, creator=False, movers=None):
+                return {"from_state_id": s[a], "to_state_id": s[b],
+                        "allow_assignees": assignees, "allow_creator": creator,
+                        "mover_ids": movers or []}
+            api("PUT", f"/projects/{key}/workflow", {
+                "states": [
+                    node("Backlog", 0, 120, entry=True),
+                    node("Todo", 220, 120, entry=True),
+                    node("Approval Pending", 220, 320),
+                    node("In Progress", 440, 120),
+                    node("Blocked", 440, 320),
+                    node("Testing", 660, 120, add=[tester]),
+                    node("Done", 880, 120),
+                    node("Cancelled", 880, 320),
+                ],
+                "transitions": [
+                    edge("Backlog", "Todo"),
+                    edge("Todo", "Approval Pending"),
+                    edge("Approval Pending", "Todo"),
+                    edge("Todo", "In Progress", assignees=True, creator=True),
+                    edge("In Progress", "Blocked", assignees=True),
+                    edge("Blocked", "In Progress", assignees=True),
+                    edge("In Progress", "Testing", assignees=True),
+                    edge("Testing", "In Progress", assignees=True),
+                    edge("Testing", "Done", movers=qa),
+                    edge("Todo", "Cancelled", creator=True),
+                    edge("In Progress", "Cancelled", creator=True),
+                ],
+            })
+
         created, default_slug = seed_views(key, p.prio, make_default=(pi == 0))
         total["views"] += created
         if default_slug:
@@ -762,6 +829,34 @@ def main():
     # ------------------------------------- uncounted extras (real-time now)
     # Blockers and epics come after the retime pass: their rows keep "now"
     # timestamps, which is fine — they are not insights inputs.
+    def upload(filename, content, mime):
+        boundary = "seedboundary7391"
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
+                f"filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n"
+                f"{content}\r\n--{boundary}--\r\n").encode()
+        r = urllib.request.Request(BASE + "/uploads", data=body, method="POST")
+        r.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        r.add_header("Authorization", "Bearer " + TOKEN[0])
+        with urllib.request.urlopen(r) as resp:
+            return json.loads(resp.read())
+
+    # In-browser preview material: a CSV and a markdown file on a story task.
+    print("→ preview attachments (CSV + markdown)")
+    p0 = story_projects[0]
+    preview_task = p0.tasks.get("n3") or next(iter(p0.tasks.values()))
+    csv_up = upload("conversion-metrics.csv", CSV_SAMPLE, "text/csv")
+    md_up = upload("rollout-notes.md", MD_SAMPLE, "text/markdown")
+    for up in (csv_up, md_up):
+        api("POST", f"/projects/{p0.key}/tasks/{preview_task['num']}/attachments",
+            {"upload_id": up["id"]})
+
+    # A few tasks carry start dates, so the date fields and filters have data.
+    print("→ start dates on a few tasks")
+    for handle in list(p0.tasks)[:3]:
+        tk = p0.tasks[handle]
+        api("PATCH", f"/projects/{p0.key}/tasks/{tk['num']}",
+            {"start_date": (date.today() - timedelta(days=random.randint(2, 12))).isoformat()})
+
     print("→ blockers and epics")
     for p in story_projects:
         if "n3" in p.tasks and "n1" in p.tasks:
@@ -828,6 +923,9 @@ def main():
     print("             OPS as the no-cycles date-range report")
     print("   dashboard: the admin's plate spans WEB (parent + subtasks, a crumb),")
     print("              MOBILE and OPS — the grouped Assigned-to-You demo")
+    print("   new in this seed: custom branding (Nova Tracker), a saved-but-disabled")
+    print(f"   workflow graph on the first project, a mandatory 'Bug report' template,")
+    print(f"   CSV/markdown preview attachments on {p0.key}-{preview_task['num']}, start dates")
     print(f"   admin login: {ADMIN_EMAIL} / {ADMIN_PW}")
     print(f"   users: password '{USER_PW}', e.g. " + ", ".join(u["name"] for u in users[:3]) + ", …")
 
