@@ -1,10 +1,171 @@
 basePath: /api/v1
 definitions:
+  assistant.ActionView:
+    properties:
+      args:
+        type: object
+      id:
+        type: string
+      result:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      tool:
+        type: string
+      tool_call_id:
+        type: string
+    type: object
+  assistant.Attachment:
+    properties:
+      filename:
+        type: string
+      mime_type:
+        type: string
+      size_bytes:
+        type: integer
+      upload_id:
+        type: string
+    type: object
+  assistant.ChatContext:
+    properties:
+      messages:
+        items:
+          $ref: '#/definitions/assistant.ChatMessage'
+        type: array
+      where:
+        description: channel | thread
+        type: string
+    type: object
+  assistant.ChatMessage:
+    properties:
+      author:
+        type: string
+      bureaucat_user:
+        type: string
+      is_assistant:
+        type: boolean
+      post_id:
+        type: string
+      text:
+        type: string
+    type: object
+  assistant.ConversationDetail:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/assistant.ActionView'
+        type: array
+      id:
+        type: string
+      messages:
+        items:
+          $ref: '#/definitions/assistant.MessageView'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  assistant.ConversationView:
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  assistant.MessageView:
+    properties:
+      attachments:
+        items:
+          $ref: '#/definitions/assistant.Attachment'
+        type: array
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      meta:
+        $ref: '#/definitions/assistant.Meta'
+      role:
+        type: string
+      tool_calls:
+        items:
+          $ref: '#/definitions/assistant.ToolCallView'
+        type: array
+    type: object
+  assistant.Meta:
+    properties:
+      chat:
+        $ref: '#/definitions/assistant.ChatContext'
+      page:
+        $ref: '#/definitions/assistant.PageContext'
+    type: object
+  assistant.PageContext:
+    properties:
+      cycle_id:
+        type: string
+      kind:
+        type: string
+      module_id:
+        type: string
+      page_number:
+        type: integer
+      project_key:
+        type: string
+      tab:
+        type: string
+      task_number:
+        type: integer
+      user_id:
+        type: string
+    type: object
+  assistant.Settings:
+    properties:
+      api_key:
+        type: string
+      aws_region:
+        type: string
+      enabled:
+        type: boolean
+      model:
+        type: string
+      provider:
+        type: string
+    type: object
+  assistant.ToolCallView:
+    properties:
+      args:
+        type: object
+      has_output:
+        type: boolean
+      id:
+        type: string
+      is_error:
+        type: boolean
+      name:
+        type: string
+    type: object
+  handlers.AIDayCount:
+    properties:
+      day:
+        type: string
+      mattermost:
+        type: integer
+      web:
+        type: integer
+    type: object
   handlers.ActivityLogResponse:
     properties:
       activity_type:
         type: string
       actor_id:
+        type: string
+      avatar_url:
         type: string
       created_at:
         type: string
@@ -22,15 +183,24 @@ definitions:
         type: string
       username:
         type: string
+      via:
+        description: web | assistant | pat | workflow | mcp
+        type: string
     type: object
   handlers.AddAssigneeRequest:
     properties:
       user_id:
         type: string
     type: object
-  handlers.AddLabelRequest:
+  handlers.AddContributorRequest:
+    description: Add a project label to a task.
     properties:
-      label_id:
+      user_id:
+        type: string
+    type: object
+  handlers.AddFeatureGrantRequest:
+    properties:
+      user_id:
         type: string
     type: object
   handlers.AddMemberRequest:
@@ -40,8 +210,199 @@ definitions:
       user_id:
         type: string
     type: object
+  handlers.AddOriginatorRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  handlers.AddTaskBlockersRequest:
+    properties:
+      relation:
+        type: string
+      task_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.AddWatcherRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  handlers.AddWorkspaceMemberRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  handlers.AdminStatsResponse:
+    properties:
+      projects_per_workspace:
+        items:
+          $ref: '#/definitions/handlers.WorkspaceStat'
+        type: array
+      series:
+        properties:
+          activity:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          ai_conversations:
+            items:
+              $ref: '#/definitions/handlers.AIDayCount'
+            type: array
+          attachments:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          comments:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          cycles:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          days:
+            type: integer
+          from:
+            type: string
+          modules:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          pages:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          subtasks:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          tasks:
+            items:
+              $ref: '#/definitions/handlers.DayCount'
+            type: array
+          to:
+            type: string
+          views:
+            items:
+              $ref: '#/definitions/handlers.ViewDayCount'
+            type: array
+        type: object
+      tasks_by_priority:
+        items:
+          $ref: '#/definitions/handlers.StatCount'
+        type: array
+      tasks_by_state:
+        items:
+          $ref: '#/definitions/handlers.StatCount'
+        type: array
+      top_projects:
+        items:
+          $ref: '#/definitions/handlers.ProjectStat'
+        type: array
+      totals:
+        properties:
+          ai_conversations:
+            type: integer
+          ai_mattermost_conversations:
+            type: integer
+          ai_users:
+            type: integer
+          attachments:
+            type: integer
+          attachments_bytes:
+            type: integer
+          blocked_tasks:
+            type: integer
+          blocking_tasks:
+            type: integer
+          pages:
+            type: integer
+          projects:
+            type: integer
+          subtasks:
+            type: integer
+          tasks:
+            type: integer
+          users:
+            type: integer
+          workflow_projects:
+            type: integer
+          workspaces:
+            type: integer
+        type: object
+    type: object
+  handlers.AdminUserDetailResponse:
+    properties:
+      active_sessions:
+        type: integer
+      active_tokens:
+        type: integer
+      auth_provider:
+        type: string
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      has_password:
+        type: boolean
+      id:
+        type: string
+      last_name:
+        type: string
+      projects:
+        items:
+          $ref: '#/definitions/handlers.AdminUserProject'
+        type: array
+      updated_at:
+        type: string
+      user_type:
+        type: string
+      username:
+        type: string
+      workspaces:
+        items:
+          $ref: '#/definitions/handlers.AdminUserWorkspace'
+        type: array
+    type: object
+  handlers.AdminUserProject:
+    properties:
+      name:
+        type: string
+      project_key:
+        type: string
+      role:
+        type: string
+      workspace_name:
+        type: string
+    type: object
+  handlers.AdminUserWorkspace:
+    properties:
+      name:
+        type: string
+      workspace_key:
+        type: string
+    type: object
+  handlers.AreaResponse:
+    properties:
+      color:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   handlers.AssigneeResponse:
     properties:
+      avatar_url:
+        type: string
       email:
         type: string
       first_name:
@@ -53,6 +414,41 @@ definitions:
       user_id:
         type: string
       username:
+        type: string
+    type: object
+  handlers.AssistantActionRequest:
+    properties:
+      approve:
+        type: boolean
+    type: object
+  handlers.AssistantMessageRequest:
+    properties:
+      meta:
+        $ref: '#/definitions/assistant.Meta'
+      text:
+        type: string
+      upload_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.AssistantRenameRequest:
+    properties:
+      title:
+        type: string
+    type: object
+  handlers.AssistantStatusResponse:
+    properties:
+      enabled:
+        type: boolean
+      model:
+        type: string
+      provider:
+        type: string
+    type: object
+  handlers.AssistantToolOutputResponse:
+    properties:
+      output:
         type: string
     type: object
   handlers.AuthResponse:
@@ -71,6 +467,10 @@ definitions:
         type: string
       enabled:
         type: boolean
+      favicon_url:
+        type: string
+      logo_url:
+        type: string
     type: object
   handlers.CleanupResponse:
     properties:
@@ -81,6 +481,8 @@ definitions:
     type: object
   handlers.CommentResponse:
     properties:
+      avatar_url:
+        type: string
       content:
         type: string
       created_at:
@@ -102,6 +504,51 @@ definitions:
       version:
         type: integer
     type: object
+  handlers.ContributorResponse:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      source:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.CopyTaskRequest:
+    properties:
+      assignees:
+        items:
+          type: string
+        type: array
+      cycle_id:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      priority_id:
+        type: string
+      state_id:
+        type: string
+      target_project_key:
+        type: string
+    type: object
+  handlers.CreateAreaRequest:
+    properties:
+      color:
+        type: string
+      name:
+        type: string
+    type: object
   handlers.CreateCommentRequest:
     properties:
       content:
@@ -112,6 +559,13 @@ definitions:
       color:
         type: string
       name:
+        type: string
+    type: object
+  handlers.CreatePageRequest:
+    properties:
+      content:
+        type: string
+      title:
         type: string
     type: object
   handlers.CreateProjectRequest:
@@ -126,10 +580,14 @@ definitions:
         type: string
       project_key:
         type: string
+      workspace_id:
+        type: string
     type: object
   handlers.CreateStateRequest:
     properties:
       color:
+        type: string
+      description:
         type: string
       name:
         type: string
@@ -140,22 +598,67 @@ definitions:
     type: object
   handlers.CreateTaskRequest:
     properties:
+      areas:
+        items:
+          type: string
+        type: array
       assignees:
         items:
           type: string
         type: array
+      branch:
+        type: string
       description:
+        type: string
+      difficulty:
+        description: DEV estimation inputs, 1-5 each (0 = not assessed).
+        type: integer
+      due_date:
+        type: string
+      effort:
+        type: integer
+      figma_link:
         type: string
       labels:
         items:
           type: string
         type: array
-      priority:
+      originators:
+        description: |-
+          Originators/Requesters (user ids). Optional over the wire — defaults to the
+          creator when empty — so there is always at least one.
+        items:
+          type: string
+        type: array
+      parent_task_number:
+        description: |-
+          ParentTaskNumber, when set, creates this task as a subtask of the given
+          (project-local) parent task. One level only: the parent must not itself
+          be a subtask.
         type: integer
+      priority:
+        description: |-
+          Priority is rejected: priorities are per-project entities now. Clients
+          send priority_id instead; a non-nil value here fails the whole request.
+        type: integer
+      priority_id:
+        type: string
+      priority_rating:
+        type: integer
+      pull_request:
+        type: string
+      start_date:
+        type: string
       state_id:
         type: string
       title:
         type: string
+      watchers:
+        description: Watchers (user ids) who will follow the task. Optional; zero
+          or more.
+        items:
+          type: string
+        type: array
     type: object
   handlers.CreateTemplateRequest:
     properties:
@@ -181,9 +684,262 @@ definitions:
       username:
         type: string
     type: object
+  handlers.CreateViewRequest:
+    properties:
+      default_tab:
+        description: '"tasks" or "board"'
+        type: string
+      description:
+        type: string
+      filter_tree:
+        type: object
+      group_by:
+        type: string
+      name:
+        type: string
+      sort_by:
+        type: string
+      sort_dir:
+        type: string
+      visibility:
+        description: '"private" or "shared"'
+        type: string
+    type: object
+  handlers.CreateWorkspaceRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      workspace_key:
+        type: string
+    type: object
+  handlers.DayCount:
+    properties:
+      count:
+        type: integer
+      day:
+        type: string
+    type: object
+  handlers.DeleteTaskResult:
+    properties:
+      error:
+        type: string
+      success:
+        type: boolean
+      task_number:
+        type: integer
+    type: object
+  handlers.DeleteTasksRequest:
+    properties:
+      task_numbers:
+        items:
+          type: integer
+        type: array
+    type: object
+  handlers.DeleteTasksResponse:
+    properties:
+      deleted:
+        type: integer
+      failed:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/handlers.DeleteTaskResult'
+        type: array
+    type: object
+  handlers.DeletedProjectResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator_name:
+        type: string
+      creator_username:
+        type: string
+      deleted_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      project_key:
+        type: string
+      workspace_id:
+        type: string
+      workspace_name:
+        type: string
+    type: object
+  handlers.EmailStatusResponse:
+    properties:
+      configured:
+        type: boolean
+      from:
+        type: string
+    type: object
   handlers.ErrorResponse:
     properties:
       message:
+        type: string
+    type: object
+  handlers.FeatureGateResponse:
+    properties:
+      description:
+        type: string
+      feature:
+        type: string
+      grants:
+        items:
+          $ref: '#/definitions/handlers.FeatureGrantInfo'
+        type: array
+      mode:
+        type: string
+    type: object
+  handlers.FeatureGrantInfo:
+    properties:
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.FeedbackItem:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      source_origin:
+        type: string
+      user_agent:
+        type: string
+    type: object
+  handlers.FeedbackPublicSettings:
+    properties:
+      send_to_main_enabled:
+        type: boolean
+      store_sent_locally:
+        type: boolean
+    type: object
+  handlers.FeedbackSettings:
+    properties:
+      receive_enabled:
+        description: |-
+          ReceiveEnabled gates POST /api/v1/feedback on this instance.
+          Defaults to false — admins (including on the main instance) must opt in
+          before any feedback is accepted.
+        type: boolean
+      send_to_main_enabled:
+        description: |-
+          SendToMainEnabled toggles the feedback button in the sidebar for users
+          on *this* instance. Defaults to false so self-hosted admins must opt in.
+        type: boolean
+      store_sent_locally:
+        description: |-
+          StoreSentLocally mirrors outbound submissions into this instance's own
+          feedback table. On by default so admins can see what their users are
+          saying even when the main instance is the ultimate recipient.
+        type: boolean
+    type: object
+  handlers.GraphBlockerEdge:
+    properties:
+      blocked_id:
+        type: string
+      blocker_id:
+        type: string
+    type: object
+  handlers.GraphEdge:
+    properties:
+      task_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.GraphProjectOption:
+    properties:
+      key:
+        type: string
+      name:
+        type: string
+      workspace_key:
+        type: string
+    type: object
+  handlers.GraphTask:
+    properties:
+      creator_id:
+        type: string
+      id:
+        type: string
+      is_subtask:
+        type: boolean
+      parent_id:
+        type: string
+      project_key:
+        type: string
+      project_name:
+        type: string
+      state_color:
+        type: string
+      state_name:
+        type: string
+      state_type:
+        type: string
+      task_number:
+        type: integer
+      title:
+        type: string
+      workspace_id:
+        type: string
+      workspace_key:
+        type: string
+      workspace_name:
+        type: string
+    type: object
+  handlers.GraphUser:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.GraphUserOption:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.GraphWorkspaceOption:
+    properties:
+      key:
+        type: string
+      name:
         type: string
     type: object
   handlers.LabelResponse:
@@ -197,8 +953,36 @@ definitions:
       name:
         type: string
     type: object
+  handlers.MattermostResponse:
+    properties:
+      app_url:
+        type: string
+      assistant_enabled:
+        type: boolean
+      bot_token:
+        type: string
+      enabled:
+        type: boolean
+      server_url:
+        type: string
+    type: object
+  handlers.MattermostSettings:
+    properties:
+      app_url:
+        type: string
+      assistant_enabled:
+        type: boolean
+      bot_token:
+        type: string
+      enabled:
+        type: boolean
+      server_url:
+        type: string
+    type: object
   handlers.MemberResponse:
     properties:
+      avatar_url:
+        type: string
       email:
         type: string
       first_name:
@@ -216,10 +1000,208 @@ definitions:
       username:
         type: string
     type: object
+  handlers.MergeUserRequest:
+    properties:
+      target_user_id:
+        type: string
+    type: object
+  handlers.MergeUserResponse:
+    properties:
+      assignments:
+        type: integer
+      contributions:
+        type: integer
+      modules:
+        type: integer
+      projects:
+        type: integer
+      views:
+        type: integer
+      watched_tasks:
+        type: integer
+      workspaces:
+        type: integer
+    type: object
   handlers.MessageResponse:
     properties:
       message:
         type: string
+    type: object
+  handlers.MoveImpactMember:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.MoveProjectImpactResponse:
+    properties:
+      count:
+        type: integer
+      members:
+        items:
+          $ref: '#/definitions/handlers.MoveImpactMember'
+        type: array
+    type: object
+  handlers.MoveProjectToWorkspaceRequest:
+    properties:
+      add_members:
+        description: |-
+          AddMembers, when true, also adds the project's members to the destination
+          workspace so they keep seeing the project in that workspace's list.
+        type: boolean
+      workspace_key:
+        type: string
+    type: object
+  handlers.MoveTaskRequest:
+    properties:
+      target_project_key:
+        type: string
+    type: object
+  handlers.MoveTaskResult:
+    properties:
+      error:
+        type: string
+      new_task_id:
+        type: string
+      new_task_number:
+        type: integer
+      success:
+        type: boolean
+      task_number:
+        type: integer
+    type: object
+  handlers.MoveTasksRequest:
+    properties:
+      target_project_key:
+        type: string
+      task_numbers:
+        items:
+          type: integer
+        type: array
+    type: object
+  handlers.MoveTasksResponse:
+    properties:
+      failed:
+        type: integer
+      moved:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/handlers.MoveTaskResult'
+        type: array
+    type: object
+  handlers.NullableTime:
+    properties:
+      set:
+        type: boolean
+      value:
+        type: string
+    type: object
+  handlers.OriginatorResponse:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.PageListItem:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator_avatar_url:
+        type: string
+      creator_first_name:
+        type: string
+      creator_last_name:
+        type: string
+      creator_username:
+        type: string
+      id:
+        type: string
+      page_number:
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handlers.PageResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator_avatar_url:
+        type: string
+      creator_first_name:
+        type: string
+      creator_last_name:
+        type: string
+      creator_username:
+        type: string
+      id:
+        type: string
+      page_number:
+        type: integer
+      project_key:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handlers.PaginatedDeletedProjectsResponse:
+    properties:
+      page:
+        type: integer
+      per_page:
+        type: integer
+      projects:
+        items:
+          $ref: '#/definitions/handlers.DeletedProjectResponse'
+        type: array
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  handlers.PaginatedFeedback:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/handlers.FeedbackItem'
+        type: array
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
     type: object
   handlers.PaginatedProjectsResponse:
     properties:
@@ -241,6 +1223,11 @@ definitions:
       page:
         type: integer
       per_page:
+        type: integer
+      subtask_total:
+        description: |-
+          SubtaskTotal counts the subtasks matching the filter (subtasks modes
+          only) — the honest "+ N subtasks" next to the task total.
         type: integer
       tasks:
         items:
@@ -268,6 +1255,8 @@ definitions:
     type: object
   handlers.PaginatedUsersResponse:
     properties:
+      counts:
+        $ref: '#/definitions/handlers.UserStateCounts'
       page:
         type: integer
       per_page:
@@ -281,6 +1270,21 @@ definitions:
           $ref: '#/definitions/handlers.UserResponse'
         type: array
     type: object
+  handlers.PaginatedWorkspacesResponse:
+    properties:
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+      workspaces:
+        items:
+          $ref: '#/definitions/handlers.WorkspaceResponse'
+        type: array
+    type: object
   handlers.ProjectResponse:
     properties:
       cover_url:
@@ -291,6 +1295,8 @@ definitions:
         type: string
       description:
         type: string
+      disabled:
+        type: boolean
       icon_url:
         type: string
       id:
@@ -303,6 +1309,126 @@ definitions:
         type: string
       updated_at:
         type: string
+      workspace_id:
+        type: string
+    type: object
+  handlers.ProjectStat:
+    properties:
+      name:
+        type: string
+      project_key:
+        type: string
+      task_count:
+        type: integer
+    type: object
+  handlers.ProjectStateStat:
+    properties:
+      color:
+        type: string
+      count:
+        type: integer
+      name:
+        type: string
+      state_type:
+        type: string
+    type: object
+  handlers.ProjectStatsDay:
+    properties:
+      activity:
+        type: integer
+      attachments:
+        type: integer
+      comments:
+        type: integer
+      completed:
+        type: integer
+      cycles:
+        type: integer
+      day:
+        type: string
+      modules:
+        type: integer
+      pages:
+        type: integer
+      subtasks:
+        type: integer
+      tasks:
+        type: integer
+    type: object
+  handlers.ProjectStatsResponse:
+    properties:
+      series:
+        properties:
+          days:
+            items:
+              $ref: '#/definitions/handlers.ProjectStatsDay'
+            type: array
+          from:
+            type: string
+          to:
+            type: string
+        type: object
+      tasks_by_state:
+        items:
+          $ref: '#/definitions/handlers.ProjectStateStat'
+        type: array
+      totals:
+        properties:
+          attachments:
+            type: integer
+          attachments_bytes:
+            type: integer
+          blocked_tasks:
+            type: integer
+          blocking_tasks:
+            type: integer
+          cycles:
+            type: integer
+          members:
+            type: integer
+          modules:
+            type: integer
+          pages:
+            type: integer
+          subtasks:
+            type: integer
+          tasks:
+            type: integer
+          unassigned_open:
+            type: integer
+        type: object
+      workload:
+        items:
+          $ref: '#/definitions/handlers.WorkloadStat'
+        type: array
+    type: object
+  handlers.ReorderProjectItem:
+    properties:
+      id:
+        type: string
+      position:
+        type: integer
+    type: object
+  handlers.ReorderProjectsRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/handlers.ReorderProjectItem'
+        type: array
+    type: object
+  handlers.ReorderViewItem:
+    properties:
+      id:
+        type: string
+      position:
+        type: integer
+    type: object
+  handlers.ReorderViewsRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/handlers.ReorderViewItem'
+        type: array
     type: object
   handlers.ResetUserPasswordRequest:
     properties:
@@ -329,6 +1455,8 @@ definitions:
         type: boolean
       zitadel:
         type: boolean
+      zitadel_url:
+        type: string
     type: object
   handlers.SSOSettings:
     properties:
@@ -336,6 +1464,116 @@ definitions:
         $ref: '#/definitions/handlers.SSOProviderConfig'
       zitadel:
         $ref: '#/definitions/handlers.SSOProviderConfig'
+    type: object
+  handlers.SaveWorkflowRequest:
+    properties:
+      states:
+        items:
+          $ref: '#/definitions/handlers.WorkflowStateConfig'
+        type: array
+      transitions:
+        items:
+          $ref: '#/definitions/handlers.WorkflowTransitionConfig'
+        type: array
+    type: object
+  handlers.SearchCycleResult:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: string
+      project_id:
+        type: string
+      project_key:
+        type: string
+      project_name:
+        type: string
+      start_date:
+        type: string
+      title:
+        type: string
+    type: object
+  handlers.SearchProjectResult:
+    properties:
+      description:
+        type: string
+      icon_url:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      project_key:
+        type: string
+    type: object
+  handlers.SearchResponse:
+    properties:
+      cycles:
+        items:
+          $ref: '#/definitions/handlers.SearchCycleResult'
+        type: array
+      projects:
+        items:
+          $ref: '#/definitions/handlers.SearchProjectResult'
+        type: array
+      tasks:
+        items:
+          $ref: '#/definitions/handlers.SearchTaskResult'
+        type: array
+    type: object
+  handlers.SearchTaskResult:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      project_id:
+        type: string
+      project_key:
+        type: string
+      project_name:
+        type: string
+      state_color:
+        type: string
+      state_name:
+        type: string
+      state_type:
+        type: string
+      task_key:
+        type: string
+      task_number:
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handlers.SendTestEmailRequest:
+    properties:
+      event:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.SetFeatureGateRequest:
+    properties:
+      mode:
+        type: string
+    type: object
+  handlers.SetProjectDisabledRequest:
+    properties:
+      disabled:
+        type: boolean
+    type: object
+  handlers.SetUserActiveRequest:
+    properties:
+      active:
+        type: boolean
+    type: object
+  handlers.SetWorkflowEnabledRequest:
+    properties:
+      enabled:
+        type: boolean
     type: object
   handlers.SigninRequest:
     properties:
@@ -358,11 +1596,23 @@ definitions:
       username:
         type: string
     type: object
+  handlers.StatCount:
+    properties:
+      count:
+        type: integer
+      label:
+        type: string
+    type: object
   handlers.StateResponse:
     properties:
       color:
         type: string
       created_at:
+        type: string
+      description:
+        description: |-
+          Description explains when the state applies (e.g. why work sits in an
+          "On hold" state); shown as a tooltip wherever the state appears.
         type: string
       id:
         type: string
@@ -374,40 +1624,30 @@ definitions:
         type: integer
       state_type:
         type: string
+      task_count:
+        description: |-
+          TaskCount is how many (non-deleted) tasks sit in this state. Only filled
+          on the list endpoint, where the settings UI uses it to warn what a state
+          edit touches.
+        type: integer
     type: object
-  handlers.TaskLabelInfo:
+  handlers.SubmitFeedbackRequest:
     properties:
-      color:
+      message:
         type: string
+    type: object
+  handlers.SubtaskCandidateResponse:
+    properties:
       id:
         type: string
-      name:
+      parent_task_id:
+        description: |-
+          ParentTaskID/ParentTitle are set when the task is already a subtask
+          elsewhere; attaching it re-parents it under this task. The UI surfaces the
+          current parent so the move is explicit.
         type: string
-    type: object
-  handlers.TaskResponse:
-    properties:
-      assignees:
-        items:
-          $ref: '#/definitions/handlers.AssigneeResponse'
-        type: array
-      created_at:
+      parent_title:
         type: string
-      created_by:
-        type: string
-      creator_first_name:
-        type: string
-      creator_last_name:
-        type: string
-      creator_username:
-        type: string
-      description:
-        type: string
-      id:
-        type: string
-      labels:
-        items:
-          $ref: '#/definitions/handlers.TaskLabelInfo'
-        type: array
       priority:
         type: integer
       project_key:
@@ -421,6 +1661,240 @@ definitions:
       state_type:
         type: string
       task_id:
+        type: string
+      task_number:
+        type: integer
+      title:
+        type: string
+    type: object
+  handlers.SubtaskResponse:
+    properties:
+      assignees:
+        items:
+          $ref: '#/definitions/handlers.AssigneeResponse'
+        type: array
+      created_by:
+        type: string
+      creator_avatar_url:
+        type: string
+      creator_first_name:
+        type: string
+      creator_last_name:
+        type: string
+      id:
+        type: string
+      priority:
+        type: integer
+      project_key:
+        type: string
+      state_color:
+        type: string
+      state_id:
+        type: string
+      state_name:
+        type: string
+      state_type:
+        type: string
+      task_id:
+        type: string
+      task_number:
+        type: integer
+      title:
+        type: string
+    type: object
+  handlers.TaskAreaInfo:
+    properties:
+      color:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  handlers.TaskBlockersResponse:
+    properties:
+      blocked_by:
+        items:
+          $ref: '#/definitions/handlers.SubtaskResponse'
+        type: array
+      blocking:
+        items:
+          $ref: '#/definitions/handlers.SubtaskResponse'
+        type: array
+    type: object
+  handlers.TaskGraphFiltersResponse:
+    properties:
+      projects:
+        items:
+          $ref: '#/definitions/handlers.GraphProjectOption'
+        type: array
+      users:
+        items:
+          $ref: '#/definitions/handlers.GraphUserOption'
+        type: array
+      workspaces:
+        items:
+          $ref: '#/definitions/handlers.GraphWorkspaceOption'
+        type: array
+    type: object
+  handlers.TaskGraphResponse:
+    properties:
+      blocker_edges:
+        items:
+          $ref: '#/definitions/handlers.GraphBlockerEdge'
+        type: array
+      edges:
+        items:
+          $ref: '#/definitions/handlers.GraphEdge'
+        type: array
+      tasks:
+        items:
+          $ref: '#/definitions/handlers.GraphTask'
+        type: array
+      users:
+        items:
+          $ref: '#/definitions/handlers.GraphUser'
+        type: array
+    type: object
+  handlers.TaskLabelInfo:
+    properties:
+      color:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  handlers.TaskModuleInfo:
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+    type: object
+  handlers.TaskResponse:
+    properties:
+      areas:
+        items:
+          $ref: '#/definitions/handlers.TaskAreaInfo'
+        type: array
+      assignees:
+        items:
+          $ref: '#/definitions/handlers.AssigneeResponse'
+        type: array
+      branch:
+        type: string
+      comment_count:
+        type: integer
+      complexity_score:
+        type: integer
+      context_only:
+        description: |-
+          Tree-mode list annotations: a parent kept only because a subtask matched
+          the filter, how many of its children the filter hides, and the matching
+          children embedded one level deep.
+        type: boolean
+      contributors:
+        items:
+          $ref: '#/definitions/handlers.ContributorResponse'
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator_avatar_url:
+        type: string
+      creator_first_name:
+        type: string
+      creator_last_name:
+        type: string
+      creator_username:
+        type: string
+      cycle_id:
+        type: string
+      cycle_title:
+        type: string
+      description:
+        type: string
+      difficulty:
+        description: |-
+          DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).
+          All 0 while not assessed; the score is computed on read, never stored.
+        type: integer
+      due_date:
+        type: string
+      effort:
+        type: integer
+      figma_link:
+        type: string
+      hidden_subtasks:
+        type: integer
+      id:
+        type: string
+      labels:
+        items:
+          $ref: '#/definitions/handlers.TaskLabelInfo'
+        type: array
+      modules:
+        items:
+          $ref: '#/definitions/handlers.TaskModuleInfo'
+        type: array
+      originators:
+        description: |-
+          Originators/Requesters: whose need the task represents (distinct from the
+          creator). At least one; defaults to the creator. Populated on the
+          detail/create/update responses; omitted in list responses.
+        items:
+          $ref: '#/definitions/handlers.OriginatorResponse'
+        type: array
+      parent_task_id:
+        type: string
+      parent_task_number:
+        type: integer
+      parent_task_title:
+        type: string
+      priority_color:
+        type: string
+      priority_description:
+        type: string
+      priority_id:
+        description: Priority is a per-project entity; the id plus resolved display
+          fields.
+        type: string
+      priority_name:
+        type: string
+      priority_rank:
+        type: integer
+      priority_rating:
+        type: integer
+      project_key:
+        type: string
+      pull_request:
+        type: string
+      start_date:
+        type: string
+      state_color:
+        type: string
+      state_id:
+        type: string
+      state_name:
+        type: string
+      state_type:
+        type: string
+      subtask_cancelled_count:
+        type: integer
+      subtask_count:
+        type: integer
+      subtask_done_count:
+        description: |-
+          Children by state type (list responses only), for the board card's subtask
+          fraction. Cancelled children never count as done.
+        type: integer
+      subtasks:
+        items:
+          $ref: '#/definitions/handlers.TaskResponse'
+        type: array
+      task_id:
         description: e.g., "DEVOP-123"
         type: string
       task_number:
@@ -429,6 +1903,13 @@ definitions:
         type: string
       updated_at:
         type: string
+      watchers:
+        description: |-
+          Watchers follow the task to receive its updates (in-app notifications),
+          without being an assignee or originator. Detail-only, like originators.
+        items:
+          $ref: '#/definitions/handlers.WatcherResponse'
+        type: array
     type: object
   handlers.TemplateResponse:
     properties:
@@ -440,6 +1921,11 @@ definitions:
         type: string
       id:
         type: string
+      is_mandatory:
+        description: |-
+          IsMandatory marks the project's one mandatory template: the create-task
+          dialog opens pre-filled with it. A guide, not a lock.
+        type: boolean
       name:
         type: string
       title:
@@ -460,6 +1946,18 @@ definitions:
       user_id:
         type: string
       username:
+        type: string
+    type: object
+  handlers.UpdateAreaRequest:
+    properties:
+      color:
+        type: string
+      name:
+        type: string
+    type: object
+  handlers.UpdateAvatarRequest:
+    properties:
+      avatar_url:
         type: string
     type: object
   handlers.UpdateBrandingRequest:
@@ -486,6 +1984,13 @@ definitions:
       role:
         type: string
     type: object
+  handlers.UpdatePageRequest:
+    properties:
+      content:
+        type: string
+      title:
+        type: string
+    type: object
   handlers.UpdateProjectRequest:
     properties:
       cover_id:
@@ -501,17 +2006,50 @@ definitions:
     properties:
       color:
         type: string
+      description:
+        type: string
       name:
         type: string
       position:
         type: integer
+      state_type:
+        description: |-
+          StateType re-categorises the state (and so every task in it) across
+          progress metrics, grouping and filters. Tasks reference states by id, so
+          no task data changes — the category of the state row does.
+        type: string
     type: object
   handlers.UpdateTaskRequest:
     properties:
+      branch:
+        type: string
       description:
         type: string
-      priority:
+      difficulty:
+        description: DEV estimation inputs, 1-5 each (0 = not assessed).
         type: integer
+      due_date:
+        $ref: '#/definitions/handlers.NullableTime'
+      effort:
+        type: integer
+      figma_link:
+        description: |-
+          Custom fields. Omitted (nil) means "leave unchanged"; send an empty
+          string to clear one.
+        type: string
+      priority:
+        description: |-
+          Priority is rejected: priorities are per-project entities now. Clients
+          send priority_id instead; a non-nil value here fails the whole request.
+        type: integer
+      priority_id:
+        type: string
+      priority_rating:
+        type: integer
+      pull_request:
+        type: string
+      start_date:
+        $ref: '#/definitions/handlers.NullableTime'
       state_id:
         type: string
       title:
@@ -521,14 +2059,57 @@ definitions:
     properties:
       description:
         type: string
+      is_mandatory:
+        description: Setting true demotes any previously mandatory template of the
+          project.
+        type: boolean
       name:
         type: string
       title:
         type: string
     type: object
+  handlers.UpdateUserProfileRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      username:
+        type: string
+    type: object
   handlers.UpdateUserRoleRequest:
     properties:
       user_type:
+        type: string
+    type: object
+  handlers.UpdateViewRequest:
+    properties:
+      default_tab:
+        type: string
+      description:
+        type: string
+      filter_tree:
+        type: object
+      group_by:
+        type: string
+      name:
+        type: string
+      position:
+        type: integer
+      sort_by:
+        type: string
+      sort_dir:
+        type: string
+      visibility:
+        type: string
+    type: object
+  handlers.UpdateWorkspaceRequest:
+    properties:
+      description:
+        type: string
+      name:
         type: string
     type: object
   handlers.UploadResponse:
@@ -546,7 +2127,121 @@ definitions:
     type: object
   handlers.UserResponse:
     properties:
+      avatar_url:
+        type: string
       created_at:
+        type: string
+      deactivated_at:
+        type: string
+      deactivated_by_name:
+        type: string
+      deleted_at:
+        type: string
+      deleted_by_name:
+        type: string
+      email:
+        type: string
+      features:
+        description: |-
+          Features lists the gated features this user can use (feature gates are
+          super-admin managed). Set on /me and on every auth response (signin,
+          signup, SSO, token refresh), so a gate change reaches live sessions on
+          their next refresh. The UI reads it to decide which gated surfaces to
+          show; the API routes enforce the gates regardless.
+        items:
+          type: string
+        type: array
+      first_name:
+        type: string
+      id:
+        type: string
+      is_deactivated:
+        description: |-
+          IsDeactivated is true when an admin has disabled the account. Only set on
+          admin listings; omitted (false = active) everywhere else. Expressed as the
+          negative so active accounts serialize nothing.
+        type: boolean
+      is_deleted:
+        description: |-
+          Soft-delete / deactivation audit, populated only on admin listings so the
+          Deactivated and Deleted tabs can show when and by whom.
+        type: boolean
+      is_super_admin:
+        description: |-
+          IsSuperAdmin marks the protected break-glass account so the UI can hide
+          its delete/demote/reset controls. Only set on admin listings; omitted
+          (false) everywhere else.
+        type: boolean
+      last_name:
+        type: string
+      user_type:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.UserStateCounts:
+    properties:
+      active:
+        type: integer
+      deactivated:
+        type: integer
+      deleted:
+        type: integer
+    type: object
+  handlers.VerifyActivityResponse:
+    properties:
+      message:
+        type: string
+      valid:
+        type: boolean
+    type: object
+  handlers.ViewDayCount:
+    properties:
+      day:
+        type: string
+      private:
+        type: integer
+      shared:
+        type: integer
+    type: object
+  handlers.ViewResponse:
+    properties:
+      created_at:
+        type: string
+      default_tab:
+        type: string
+      description:
+        type: string
+      filter_tree:
+        type: object
+      group_by:
+        type: string
+      id:
+        type: string
+      is_default:
+        type: boolean
+      name:
+        type: string
+      owner_id:
+        type: string
+      position:
+        type: integer
+      project_id:
+        type: string
+      slug:
+        type: string
+      sort_by:
+        type: string
+      sort_dir:
+        type: string
+      updated_at:
+        type: string
+      visibility:
+        type: string
+    type: object
+  handlers.WatcherResponse:
+    properties:
+      avatar_url:
         type: string
       email:
         type: string
@@ -556,17 +2251,718 @@ definitions:
         type: string
       last_name:
         type: string
-      user_type:
+      user_id:
         type: string
       username:
         type: string
     type: object
-  handlers.VerifyActivityResponse:
+  handlers.WorkflowResponse:
     properties:
-      message:
-        type: string
-      valid:
+      bypass:
         type: boolean
+      configured:
+        type: boolean
+      enabled:
+        type: boolean
+      states:
+        items:
+          $ref: '#/definitions/handlers.WorkflowStateConfig'
+        type: array
+      transitions:
+        items:
+          $ref: '#/definitions/handlers.WorkflowTransitionConfig'
+        type: array
+    type: object
+  handlers.WorkflowStateConfig:
+    properties:
+      add_assignees:
+        items:
+          type: string
+        type: array
+      is_entry:
+        type: boolean
+      pos_x:
+        type: number
+      pos_y:
+        type: number
+      remove_assignees:
+        items:
+          type: string
+        type: array
+      state_id:
+        type: string
+    type: object
+  handlers.WorkflowTransitionConfig:
+    properties:
+      allow_assignees:
+        type: boolean
+      allow_creator:
+        type: boolean
+      from_state_id:
+        type: string
+      mover_ids:
+        items:
+          type: string
+        type: array
+      to_state_id:
+        type: string
+    type: object
+  handlers.WorkloadStat:
+    properties:
+      avatar_url:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      open_tasks:
+        type: integer
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.WorkspaceMemberResponse:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      joined_at:
+        type: string
+      last_name:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.WorkspaceResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+      workspace_key:
+        type: string
+    type: object
+  handlers.WorkspaceStat:
+    properties:
+      name:
+        type: string
+      project_count:
+        type: integer
+      workspace_key:
+        type: string
+    type: object
+  insights.AgingRow:
+    properties:
+      assignee:
+        $ref: '#/definitions/insights.UserRef'
+      days:
+        type: integer
+      key:
+        type: string
+      state:
+        $ref: '#/definitions/insights.StateRef'
+      title:
+        type: string
+    type: object
+  insights.BandCount:
+    properties:
+      band:
+        description: '"1-4", "5-9", "10-16", "17+", "not_assessed"'
+        type: string
+      count:
+        type: integer
+    type: object
+  insights.ComplexitySum:
+    properties:
+      assessed:
+        type: integer
+      not_assessed:
+        type: integer
+      of:
+        type: integer
+      sum:
+        type: integer
+    type: object
+  insights.CycleCount:
+    properties:
+      count:
+        type: integer
+      cycle:
+        $ref: '#/definitions/insights.CycleRef'
+    type: object
+  insights.CycleRef:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: string
+      start_date:
+        type: string
+      status:
+        description: upcoming | active | completed
+        type: string
+      title:
+        type: string
+    type: object
+  insights.CycleSection:
+    properties:
+      added:
+        $ref: '#/definitions/insights.Tile'
+      archived:
+        $ref: '#/definitions/insights.Tile'
+      at_close:
+        type: integer
+      bands:
+        items:
+          $ref: '#/definitions/insights.BandCount'
+        type: array
+      cancelled:
+        $ref: '#/definitions/insights.Tile'
+      carried_over:
+        $ref: '#/definitions/insights.Tile'
+      days:
+        items:
+          $ref: '#/definitions/insights.DayPoint'
+        type: array
+      delivered:
+        $ref: '#/definitions/insights.Tile'
+      identity:
+        description: |-
+          Identity is the reconciliation line: planned + added - removed = at
+          close = completed + in verification + open + cancelled + archived.
+        type: string
+      in_verification:
+        allOf:
+        - $ref: '#/definitions/insights.Tile'
+        description: |-
+          InVerification/Cancelled/Archived are nil when the project defines no
+          state of that type — the tile is absent, not zero.
+      original_plan_delivered:
+        allOf:
+        - $ref: '#/definitions/insights.Tile'
+        description: delivered items that were planned at start
+      planned_at_start:
+        $ref: '#/definitions/insights.Tile'
+      removed:
+        $ref: '#/definitions/insights.Tile'
+    type: object
+  insights.DayPoint:
+    properties:
+      added:
+        type: integer
+      cancelled:
+        type: integer
+      completed:
+        type: integer
+      completed_cum:
+        type: integer
+      date:
+        description: YYYY-MM-DD in the reporting timezone
+        type: string
+      removed:
+        type: integer
+      scope:
+        type: integer
+      weekend:
+        type: boolean
+    type: object
+  insights.DueRow:
+    properties:
+      assignee:
+        $ref: '#/definitions/insights.UserRef'
+      due:
+        type: string
+      key:
+        type: string
+      late_days:
+        description: negative = due in N days
+        type: integer
+      title:
+        type: string
+    type: object
+  insights.Evidence:
+    properties:
+      chips:
+        items:
+          type: string
+        type: array
+      count:
+        type: integer
+      cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      how_computed:
+        type: string
+      metric:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/insights.EvidenceRow'
+        type: array
+      scope:
+        $ref: '#/definitions/insights.Scope'
+      source_events:
+        type: string
+      task_list_query:
+        description: |-
+          TaskListQuery is set only when the population is expressible as task
+          list filters; empty means link/CSV only. No fake equivalence.
+        type: string
+      title:
+        type: string
+    type: object
+  insights.EvidenceRow:
+    properties:
+      age_days:
+        type: integer
+      assessed:
+        type: boolean
+      assignees:
+        items:
+          $ref: '#/definitions/insights.UserRef'
+        type: array
+      completed_at:
+        type: string
+      complexity:
+        type: integer
+      credits:
+        items:
+          $ref: '#/definitions/insights.UserRef'
+        type: array
+      due:
+        type: string
+      entered_cycle:
+        description: '"planned" or "added YYYY-MM-DD"'
+        type: string
+      key:
+        type: string
+      marked_complete_by:
+        $ref: '#/definitions/insights.UserRef'
+      parent_key:
+        type: string
+      parent_title:
+        type: string
+      priority:
+        $ref: '#/definitions/insights.PriorityRef'
+      state:
+        $ref: '#/definitions/insights.StateRef'
+      title:
+        type: string
+    type: object
+  insights.Health:
+    properties:
+      aging:
+        items:
+          $ref: '#/definitions/insights.AgingRow'
+        type: array
+      blocked:
+        type: integer
+      due:
+        items:
+          $ref: '#/definitions/insights.DueRow'
+        type: array
+      in_started:
+        type: integer
+      in_verification:
+        type: integer
+      open:
+        type: integer
+      open_by_state:
+        items:
+          $ref: '#/definitions/insights.StateCount'
+        type: array
+      overdue:
+        type: integer
+      priority_mix:
+        items:
+          $ref: '#/definitions/insights.RankCount'
+        type: array
+      weekly:
+        items:
+          $ref: '#/definitions/insights.WeekPoint'
+        type: array
+    type: object
+  insights.PersonProjectRow:
+    properties:
+      comments:
+        type: integer
+      created:
+        type: integer
+      cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      delivered:
+        type: integer
+      open_now:
+        type: integer
+      project_key:
+        type: string
+      project_name:
+        type: string
+      top_rank_handled:
+        type: integer
+    type: object
+  insights.PersonReport:
+    properties:
+      bands:
+        items:
+          $ref: '#/definitions/insights.BandCount'
+        type: array
+      by_cycle:
+        items:
+          $ref: '#/definitions/insights.CycleCount'
+        type: array
+      comments:
+        type: integer
+      created:
+        type: integer
+      credit_rule:
+        type: string
+      delivered:
+        $ref: '#/definitions/insights.Tile'
+      open_now:
+        type: integer
+      scope:
+        $ref: '#/definitions/insights.Scope'
+      top_rank_handled:
+        type: integer
+      user:
+        $ref: '#/definitions/insights.UserRef'
+      weekly:
+        items:
+          $ref: '#/definitions/insights.WeekPoint'
+        type: array
+      worked_with:
+        description: |-
+          WorkedWith lists the people who shared credit on this person's delivered
+          items over the window.
+        items:
+          $ref: '#/definitions/insights.UserCount'
+        type: array
+    type: object
+  insights.PersonRow:
+    properties:
+      comments:
+        type: integer
+      created:
+        type: integer
+      cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      delivered:
+        type: integer
+      has_activity:
+        type: boolean
+      open_at_end:
+        type: integer
+      shared:
+        description: of Delivered, items credited to >1 person
+        type: integer
+      top_rank_handled:
+        description: delivered at the project's top two ranks
+        type: integer
+      user:
+        $ref: '#/definitions/insights.UserRef'
+    type: object
+  insights.PersonTable:
+    properties:
+      credit_rule:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/insights.PersonRow'
+        type: array
+      total_cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      total_delivered:
+        description: distinct items
+        type: integer
+    type: object
+  insights.Portfolio:
+    properties:
+      delivered:
+        $ref: '#/definitions/insights.PortfolioDelivered'
+      rows:
+        items:
+          $ref: '#/definitions/insights.PortfolioRow'
+        type: array
+      rule:
+        description: the attention rule, shown, not hidden
+        type: string
+      scope:
+        $ref: '#/definitions/insights.Scope'
+    type: object
+  insights.PortfolioDelivered:
+    properties:
+      by_project:
+        items:
+          $ref: '#/definitions/insights.ProjectCount'
+        type: array
+      cancelled:
+        type: integer
+      cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      total:
+        type: integer
+    type: object
+  insights.PortfolioRow:
+    properties:
+      active_cycle:
+        $ref: '#/definitions/insights.CycleRef'
+      active_people:
+        type: integer
+      archived:
+        type: integer
+      attention:
+        type: boolean
+      attention_why:
+        type: string
+      blocked:
+        type: integer
+      cancelled:
+        type: integer
+      completed:
+        type: integer
+      created:
+        type: integer
+      has_cycles:
+        type: boolean
+      history_days:
+        type: integer
+      icon_url:
+        type: string
+      low_history:
+        type: boolean
+      members:
+        type: integer
+      oldest:
+        $ref: '#/definitions/insights.AgingRow'
+      open:
+        type: integer
+      overdue:
+        type: integer
+      project_key:
+        type: string
+      project_name:
+        type: string
+      top_rank_name:
+        type: string
+      top_rank_open:
+        type: integer
+      trend:
+        description: filling | draining | steady | no_history
+        type: string
+      weekly:
+        items:
+          $ref: '#/definitions/insights.WeekPoint'
+        type: array
+    type: object
+  insights.PriorityRef:
+    properties:
+      active:
+        type: boolean
+      color:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      rank:
+        type: integer
+    type: object
+  insights.ProjectCount:
+    properties:
+      count:
+        type: integer
+      project_key:
+        type: string
+    type: object
+  insights.ProjectReport:
+    properties:
+      cycle:
+        $ref: '#/definitions/insights.CycleSection'
+      cycles:
+        items:
+          $ref: '#/definitions/insights.CycleRef'
+        type: array
+      has_areas:
+        description: |-
+          Vocabularies the frontend needs for panels that are conditional on their
+          existence.
+        type: boolean
+      has_labels:
+        type: boolean
+      health:
+        $ref: '#/definitions/insights.Health'
+      people:
+        $ref: '#/definitions/insights.PersonTable'
+      range:
+        $ref: '#/definitions/insights.RangeSection'
+      scope:
+        $ref: '#/definitions/insights.Scope'
+    type: object
+  insights.RangeSection:
+    properties:
+      bands:
+        items:
+          $ref: '#/definitions/insights.BandCount'
+        type: array
+      cancelled:
+        $ref: '#/definitions/insights.Tile'
+      completed:
+        $ref: '#/definitions/insights.Tile'
+      created:
+        $ref: '#/definitions/insights.Tile'
+      days:
+        items:
+          $ref: '#/definitions/insights.DayPoint'
+        type: array
+      has_cycles:
+        description: |-
+          HasCycles says whether the project could run cycle reports at all; false
+          renders the quiet "create a cycle" hint.
+        type: boolean
+    type: object
+  insights.RankCount:
+    properties:
+      count:
+        type: integer
+      priority:
+        $ref: '#/definitions/insights.PriorityRef'
+    type: object
+  insights.Scope:
+    properties:
+      counting_rule:
+        description: CountingRule is the plain-language line shown under the scope.
+        type: string
+      cutoff:
+        type: string
+      cycle_id:
+        type: string
+      cycle_title:
+        type: string
+      from:
+        type: string
+      generated_at:
+        type: string
+      project_key:
+        type: string
+      project_name:
+        type: string
+      timezone:
+        type: string
+      to:
+        description: inclusive end of the window's last day
+        type: string
+    type: object
+  insights.StateCount:
+    properties:
+      count:
+        type: integer
+      state:
+        $ref: '#/definitions/insights.StateRef'
+    type: object
+  insights.StateRef:
+    properties:
+      color:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  insights.Tile:
+    properties:
+      count:
+        type: integer
+      cx:
+        $ref: '#/definitions/insights.ComplexitySum'
+      metric:
+        type: string
+    type: object
+  insights.UserCount:
+    properties:
+      count:
+        type: integer
+      user:
+        $ref: '#/definitions/insights.UserRef'
+    type: object
+  insights.UserRef:
+    properties:
+      avatar_url:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      username:
+        type: string
+    type: object
+  insights.WeekPoint:
+    properties:
+      completed:
+        type: integer
+      created:
+        type: integer
+      week_start:
+        description: YYYY-MM-DD (Monday, reporting timezone)
+        type: string
+    type: object
+  insights.WorkspacePersonReport:
+    properties:
+      comments:
+        type: integer
+      created:
+        type: integer
+      credit_rule:
+        type: string
+      delivered:
+        $ref: '#/definitions/insights.Tile'
+      open_now:
+        type: integer
+      projects:
+        description: |-
+          Projects holds one row per project that contributed anything (membership
+          or windowed activity), most delivered first.
+        items:
+          $ref: '#/definitions/insights.PersonProjectRow'
+        type: array
+      projects_considered:
+        description: |-
+          ProjectsConsidered counts the viewer's projects the sums ran over, so the
+          scope line can be honest about coverage.
+        type: integer
+      scope:
+        $ref: '#/definitions/insights.Scope'
+      top_rank_handled:
+        type: integer
+      user:
+        $ref: '#/definitions/insights.UserRef'
+      weekly:
+        items:
+          $ref: '#/definitions/insights.WeekPoint'
+        type: array
+      worked_with:
+        items:
+          $ref: '#/definitions/insights.UserCount'
+        type: array
     type: object
 host: localhost:1341
 info:
@@ -575,6 +2971,302 @@ info:
   title: Bureaucat API
   version: "1.0"
 paths:
+  /admin/email:
+    get:
+      description: Whether env-configured SMTP is usable, and the From address. Super
+        admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.EmailStatusResponse'
+      security:
+      - BearerAuth: []
+      summary: Email status
+      tags:
+      - Admin - Email
+  /admin/email/test:
+    post:
+      consumes:
+      - application/json
+      description: Send a notification template with sample data to a chosen user.
+        Super admin only.
+      parameters:
+      - description: Recipient and template
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SendTestEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send test email
+      tags:
+      - Admin - Email
+  /admin/features:
+    get:
+      description: Every registered gated feature with its mode and specific-user
+        grants. Super admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.FeatureGateResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List feature gates
+      tags:
+      - Admin - Features
+  /admin/features/{feature}:
+    put:
+      consumes:
+      - application/json
+      description: 'Sets who can use a feature: disabled, admins or everyone. Grants
+        stay and remain additive. Super admin only.'
+      parameters:
+      - description: Feature key
+        in: path
+        name: feature
+        required: true
+        type: string
+      - description: Mode
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SetFeatureGateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeatureGateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set feature gate mode
+      tags:
+      - Admin - Features
+  /admin/features/{feature}/grants:
+    post:
+      consumes:
+      - application/json
+      description: Adds a specific-user grant on a feature gate; additive on top of
+        the mode. Super admin only.
+      parameters:
+      - description: Feature key
+        in: path
+        name: feature
+        required: true
+        type: string
+      - description: User to grant
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddFeatureGrantRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeatureGateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Grant a feature to a user
+      tags:
+      - Admin - Features
+  /admin/features/{feature}/grants/{userId}:
+    delete:
+      description: Removes a specific-user grant from a feature gate. The user keeps
+        access the mode gives them. Super admin only.
+      parameters:
+      - description: Feature key
+        in: path
+        name: feature
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeatureGateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke a feature grant
+      tags:
+      - Admin - Features
+  /admin/feedback:
+    get:
+      parameters:
+      - description: Page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 50, max 200)
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PaginatedFeedback'
+      security:
+      - BearerAuth: []
+      summary: List received feedback
+      tags:
+      - Admin - Feedback
+  /admin/feedback/{id}:
+    delete:
+      parameters:
+      - description: Feedback ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a feedback entry
+      tags:
+      - Admin - Feedback
+  /admin/graph:
+    get:
+      description: Returns task nodes (assigned or not), user nodes and assignment
+        edges for the admin graph view.
+      parameters:
+      - description: Workspace key
+        in: query
+        name: workspace
+        type: string
+      - description: Comma-separated project keys
+        in: query
+        name: projects
+        type: string
+      - description: Comma-separated state types
+        in: query
+        name: state_types
+        type: string
+      - description: Comma-separated usernames
+        in: query
+        name: users
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskGraphResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin task graph
+      tags:
+      - Admin - Stats
+  /admin/graph/filters:
+    get:
+      description: Returns workspace, project and user options for the admin graph
+        view filters.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskGraphFiltersResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin task graph filters
+      tags:
+      - Admin - Stats
   /admin/import/plane:
     post:
       consumes:
@@ -607,6 +3299,124 @@ paths:
       summary: Import from Plane.so
       tags:
       - Admin - Import
+  /admin/projects/{id}/restore:
+    post:
+      description: Clears the soft-delete flag on a project, making it accessible
+        again.
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore deleted project
+      tags:
+      - Admin - Projects
+  /admin/projects/deleted:
+    get:
+      description: Returns a paginated list of soft-deleted projects across all workspaces.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PaginatedDeletedProjectsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List deleted projects
+      tags:
+      - Admin - Projects
+  /admin/settings/assistant:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/assistant.Settings'
+      security:
+      - BearerAuth: []
+      summary: Get assistant settings
+      tags:
+      - Admin - Settings
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Assistant configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/assistant.Settings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/assistant.Settings'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update assistant settings
+      tags:
+      - Admin - Settings
+  /admin/settings/assistant/test:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Test assistant settings
+      tags:
+      - Admin - Settings
   /admin/settings/branding:
     put:
       consumes:
@@ -637,6 +3447,166 @@ paths:
       security:
       - BearerAuth: []
       summary: Update branding
+      tags:
+      - Admin - Settings
+  /admin/settings/branding/{asset}:
+    delete:
+      parameters:
+      - description: logo or favicon
+        in: path
+        name: asset
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.BrandingResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove branding logo or favicon
+      tags:
+      - Admin - Settings
+    put:
+      consumes:
+      - multipart/form-data
+      description: 'Multipart upload in field "file". Logo: PNG up to 256 KB. Favicon:
+        PNG or ICO up to 64 KB. Requires admin role.'
+      parameters:
+      - description: logo or favicon
+        in: path
+        name: asset
+        required: true
+        type: string
+      - description: Image file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.BrandingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload branding logo or favicon
+      tags:
+      - Admin - Settings
+  /admin/settings/feedback:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeedbackSettings'
+      security:
+      - BearerAuth: []
+      summary: Get feedback settings
+      tags:
+      - Admin - Feedback
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Settings
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.FeedbackSettings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeedbackSettings'
+      security:
+      - BearerAuth: []
+      summary: Update feedback settings
+      tags:
+      - Admin - Feedback
+  /admin/settings/mattermost:
+    get:
+      description: Returns Mattermost integration configuration with bot token masked.
+        Requires admin role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MattermostResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Mattermost settings
+      tags:
+      - Admin - Settings
+    put:
+      consumes:
+      - application/json
+      description: Update Mattermost integration configuration. Masked tokens are
+        preserved. Requires admin role.
+      parameters:
+      - description: Mattermost configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MattermostSettings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MattermostResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Mattermost settings
+      tags:
+      - Admin - Settings
+  /admin/settings/mattermost/test:
+    post:
+      description: Tests the Mattermost bot connection using the saved settings. Requires
+        admin role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Test Mattermost connection
       tags:
       - Admin - Settings
   /admin/settings/sso:
@@ -687,6 +3657,34 @@ paths:
       summary: Update SSO settings
       tags:
       - Admin - Settings
+  /admin/stats:
+    get:
+      description: Returns system-wide totals, breakdowns, and per-day activity series.
+      parameters:
+      - description: Start date (YYYY-MM-DD) for per-day series
+        in: query
+        name: from
+        type: string
+      - description: End date (YYYY-MM-DD) for per-day series
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AdminStatsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin stats
+      tags:
+      - Admin - Stats
   /admin/tokens:
     get:
       description: Returns a paginated list of active refresh tokens with user info.
@@ -843,7 +3841,8 @@ paths:
       - Admin - Users
   /admin/users/{id}:
     delete:
-      description: Delete a user by their ID. Cannot delete yourself.
+      description: 'Soft-delete a user: the account is hidden and can no longer sign
+        in, but is kept and can be restored. Cannot delete yourself.'
       parameters:
       - description: User ID
         in: path
@@ -872,6 +3871,176 @@ paths:
       security:
       - BearerAuth: []
       summary: Delete user
+      tags:
+      - Admin - Users
+    get:
+      description: Get a user's profile, SSO/password status, active sessions/tokens,
+        workspaces and projects.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AdminUserDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user details
+      tags:
+      - Admin - Users
+    patch:
+      consumes:
+      - application/json
+      description: Admin edit of username, email, first and last name.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateUserProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a user's profile
+      tags:
+      - Admin - Users
+  /admin/users/{id}/active:
+    put:
+      consumes:
+      - application/json
+      description: Enable or disable a user account without deleting it.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Active flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SetUserActiveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Activate or deactivate a user
+      tags:
+      - Admin - Users
+  /admin/users/{id}/merge:
+    post:
+      consumes:
+      - application/json
+      description: Additively copies the source user's workspace/project/module memberships,
+        task assignments and private views to the target user, and makes the target
+        watch tasks the source created, watched, or commented on. The source user
+        is left unchanged.
+      parameters:
+      - description: Source user ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target user
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MergeUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MergeUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Merge user
       tags:
       - Admin - Users
   /admin/users/{id}/password:
@@ -915,6 +4084,40 @@ paths:
       summary: Reset user password
       tags:
       - Admin - Users
+  /admin/users/{id}/restore:
+    post:
+      description: Restore a soft-deleted user; the account becomes active again and
+        can sign in with its existing password.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore user
+      tags:
+      - Admin - Users
   /admin/users/{id}/role:
     put:
       consumes:
@@ -956,6 +4159,215 @@ paths:
       summary: Update user role
       tags:
       - Admin - Users
+  /assistant/conversations:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/assistant.ConversationView'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List assistant conversations
+      tags:
+      - Assistant
+    post:
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/assistant.ConversationView'
+      security:
+      - BearerAuth: []
+      summary: Create assistant conversation
+      tags:
+      - Assistant
+  /assistant/conversations/{id}:
+    delete:
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete assistant conversation
+      tags:
+      - Assistant
+    get:
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/assistant.ConversationDetail'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get assistant conversation
+      tags:
+      - Assistant
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New title
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssistantRenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AssistantRenameRequest'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename assistant conversation
+      tags:
+      - Assistant
+  /assistant/conversations/{id}/actions/{actionId}:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Action ID
+        in: path
+        name: actionId
+        required: true
+        type: string
+      - description: Decision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssistantActionRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Resolve assistant action
+      tags:
+      - Assistant
+  /assistant/conversations/{id}/messages:
+    post:
+      consumes:
+      - application/json
+      description: Streams events (step, message, pending, action, error, done) as
+        text/event-stream.
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Message
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssistantMessageRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Send assistant message
+      tags:
+      - Assistant
+  /assistant/conversations/{id}/tool-calls/{callId}/output:
+    get:
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tool call ID
+        in: path
+        name: callId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AssistantToolOutputResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get assistant tool call output
+      tags:
+      - Assistant
+  /assistant/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AssistantStatusResponse'
+      security:
+      - BearerAuth: []
+      summary: Assistant status
+      tags:
+      - Assistant
   /auth/sso/{provider}:
     get:
       description: Initiates the OAuth2/OIDC flow. Redirects to the identity provider.
@@ -1003,6 +4415,152 @@ paths:
       summary: SSO callback
       tags:
       - SSO
+  /feedback:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Feedback
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SubmitFeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+      summary: Submit anonymous feedback
+      tags:
+      - Feedback
+  /graph:
+    get:
+      description: Returns task nodes (assigned or not), user nodes and assignment
+        edges, limited to projects the caller is a member of.
+      parameters:
+      - description: Workspace key
+        in: query
+        name: workspace
+        type: string
+      - description: Comma-separated project keys
+        in: query
+        name: projects
+        type: string
+      - description: Comma-separated state types
+        in: query
+        name: state_types
+        type: string
+      - description: Comma-separated usernames
+        in: query
+        name: users
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskGraphResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get task graph
+      tags:
+      - Graph
+  /graph/filters:
+    get:
+      description: Returns workspace, project and user options for the graph view,
+        limited to projects the caller is a member of.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskGraphFiltersResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get task graph filters
+      tags:
+      - Graph
+  /insights/person/{userId}:
+    get:
+      description: One person's delivered work and load across the projects the viewer
+        may see.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Window start (YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Window end (YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      - description: Limit to one workspace; absent means all the viewer's workspaces
+        in: query
+        name: workspace_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.WorkspacePersonReport'
+      security:
+      - BearerAuth: []
+      summary: Insights person across projects
+      tags:
+      - Insights
+  /insights/portfolio:
+    get:
+      description: Attention table and delivery overview across the viewer's projects.
+      parameters:
+      - description: Window start (YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Window end (YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      - description: Limit to one workspace; absent means all the viewer's workspaces
+        in: query
+        name: workspace_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.Portfolio'
+      security:
+      - BearerAuth: []
+      summary: Insights portfolio
+      tags:
+      - Insights
   /logout:
     post:
       description: Revoke all refresh tokens for the current user and clear cookies.
@@ -1039,6 +4597,50 @@ paths:
       summary: Get current user
       tags:
       - Auth
+  /me/avatar:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Avatar
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAvatarRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my avatar
+      tags:
+      - Auth
+  /me/feedback:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Feedback
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SubmitFeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+      security:
+      - BearerAuth: []
+      summary: Store a local copy of outbound feedback
+      tags:
+      - Feedback
   /og-image:
     get:
       description: Generates a dynamic PNG Open Graph image with the app's branding.
@@ -1125,6 +4727,39 @@ paths:
       summary: Create project
       tags:
       - Projects
+  /projects/{key}/tasks/delete:
+    post:
+      consumes:
+      - application/json
+      description: Soft-deletes the given tasks and their subtasks. Admin only.
+      parameters:
+      - description: Project key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Task numbers to delete
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.DeleteTasksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DeleteTasksResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete multiple tasks
+      tags:
+      - Tasks
   /projects/{projectKey}:
     delete:
       description: Soft-delete a project. Requires project admin role.
@@ -1210,6 +4845,275 @@ paths:
       summary: Update project
       tags:
       - Projects
+  /projects/{projectKey}/areas:
+    get:
+      description: Returns all areas for a project.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.AreaResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List areas
+      tags:
+      - Project Areas
+    post:
+      consumes:
+      - application/json
+      description: Create a new project area.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Area details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAreaRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.AreaResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create area
+      tags:
+      - Project Areas
+  /projects/{projectKey}/areas/{areaId}:
+    delete:
+      description: Delete a project area.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Area ID
+        in: path
+        name: areaId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete area
+      tags:
+      - Project Areas
+    patch:
+      consumes:
+      - application/json
+      description: Update a project area. Requires project admin role.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Area ID
+        in: path
+        name: areaId
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAreaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AreaResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update area
+      tags:
+      - Project Areas
+  /projects/{projectKey}/disabled:
+    patch:
+      consumes:
+      - application/json
+      description: Toggle a project's disabled (read-only) state. Requires project
+        admin role.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Disabled flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SetProjectDisabledRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProjectResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Enable/disable project
+      tags:
+      - Projects
+  /projects/{projectKey}/insights:
+    get:
+      description: 'The project report: cycle or date-range delivery, people, health.'
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Cycle to report on; omitted means date range
+        in: query
+        name: cycle_id
+        type: string
+      - description: Window start (YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Window end (YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.ProjectReport'
+      security:
+      - BearerAuth: []
+      summary: Insights project report
+      tags:
+      - Insights
+  /projects/{projectKey}/insights/evidence:
+    get:
+      description: The exact population behind one reported number, with its computation
+        rule.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Metric key (delivered, planned, added, descoped, carried, verification,
+          cancelled, archived, completed, created, original_plan, person_delivered,
+          person_open, open_state, priority_rank, aging, overdue, due_soon, blocked,
+          day)
+        in: query
+        name: metric
+        required: true
+        type: string
+      - description: csv for a CSV export of the rows
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.Evidence'
+      security:
+      - BearerAuth: []
+      summary: Insights evidence
+      tags:
+      - Insights
+  /projects/{projectKey}/insights/person/{userId}:
+    get:
+      description: One member's delivered work and current load inside the project.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.PersonReport'
+      security:
+      - BearerAuth: []
+      summary: Insights person report
+      tags:
+      - Insights
   /projects/{projectKey}/labels:
     get:
       description: Returns all labels for a project.
@@ -1495,6 +5399,219 @@ paths:
       summary: Update member role
       tags:
       - Project Members
+  /projects/{projectKey}/members/search:
+    get:
+      description: Search users by name/username/email. Requires project admin role.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search users for membership
+      tags:
+      - Project Members
+  /projects/{projectKey}/pages:
+    get:
+      description: Returns all documentation pages for a project (newest updated first).
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Search over page title and content
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.PageListItem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List pages
+      tags:
+      - Pages
+    post:
+      consumes:
+      - application/json
+      description: Create a new documentation page in the project.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Page details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreatePageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.PageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create page
+      tags:
+      - Pages
+  /projects/{projectKey}/pages/{pageNum}:
+    delete:
+      description: Soft-delete a page.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Page number
+        in: path
+        name: pageNum
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete page
+      tags:
+      - Pages
+    get:
+      description: Returns page details by page number.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Page number
+        in: path
+        name: pageNum
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get page
+      tags:
+      - Pages
+    patch:
+      consumes:
+      - application/json
+      description: Update a page's title and/or content.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Page number
+        in: path
+        name: pageNum
+        required: true
+        type: integer
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdatePageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update page
+      tags:
+      - Pages
   /projects/{projectKey}/states:
     get:
       description: Returns all workflow states for a project.
@@ -1638,9 +5755,83 @@ paths:
       summary: Update state
       tags:
       - Project States
+  /projects/{projectKey}/states/{stateId}/default:
+    post:
+      description: Marks a workflow state as the project default, clearing the previous
+        one. Requires project admin role.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: State ID
+        in: path
+        name: stateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.StateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set default state
+      tags:
+      - Project States
+  /projects/{projectKey}/stats:
+    get:
+      description: Returns project totals, task breakdowns, open-task workload per
+        member and per-day series for the date range.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Start date (YYYY-MM-DD), defaults to 29 days before to
+        in: query
+        name: from
+        type: string
+      - description: End date (YYYY-MM-DD), defaults to today
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProjectStatsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get project stats
+      tags:
+      - Projects
   /projects/{projectKey}/tasks:
     get:
-      description: Returns a paginated list of tasks with optional filters.
+      description: Returns a paginated list of tasks. Filters are expressed as a base64url(JSON)
+        FilterTree in ?f=. Legacy scalar params are translated server-side.
       parameters:
       - description: Project key
         in: path
@@ -1657,25 +5848,28 @@ paths:
         in: query
         name: per_page
         type: integer
-      - description: Filter by state ID
+      - description: FilterTree as base64url(JSON)
         in: query
-        name: state_id
+        name: f
         type: string
-      - description: Filter by state type
+      - description: Saved view slug; used when f is omitted
         in: query
-        name: state_type
+        name: view
         type: string
-      - description: Filter by creator ID
+      - description: 'One of: created_at, updated_at, priority, priority_rating, due_date,
+          start_date, title, state'
         in: query
-        name: created_by
+        name: sort_by
         type: string
-      - description: Filter by priority
+      - description: asc or desc
         in: query
-        name: priority
-        type: integer
-      - description: Search by title
+        name: sort_dir
+        type: string
+      - description: 'Subtask handling: expandable (a matching subtask brings its
+          parent; matching children embedded) or flat (subtasks are ordinary rows).
+          Absent: parents only.'
         in: query
-        name: q
+        name: subtasks
         type: string
       produces:
       - application/json
@@ -1684,6 +5878,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handlers.PaginatedTasksResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -1731,7 +5929,7 @@ paths:
       - Tasks
   /projects/{projectKey}/tasks/{taskNum}:
     delete:
-      description: Soft-delete a task. Requires project admin role.
+      description: Soft-delete a task. Requires project admin role or task creator.
       parameters:
       - description: Project key
         in: path
@@ -2016,6 +6214,150 @@ paths:
       summary: Remove assignee
       tags:
       - Task Assignees
+  /projects/{projectKey}/tasks/{taskNum}/blockers:
+    get:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskBlockersResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List task blockers
+      tags:
+      - Task Blockers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Tasks and relation
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddTaskBlockersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add task blockers
+      tags:
+      - Task Blockers
+  /projects/{projectKey}/tasks/{taskNum}/blockers/{taskId}:
+    delete:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Linked task UUID
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove task blocker
+      tags:
+      - Task Blockers
+  /projects/{projectKey}/tasks/{taskNum}/blockers/candidates:
+    get:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Title search
+        in: query
+        name: search
+        type: string
+      - description: Max results (default 50, max 200)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.SubtaskCandidateResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List blocker candidates
+      tags:
+      - Task Blockers
   /projects/{projectKey}/tasks/{taskNum}/comments:
     get:
       description: Returns all comments for a task.
@@ -2203,11 +6545,12 @@ paths:
       summary: Update comment
       tags:
       - Comments
-  /projects/{projectKey}/tasks/{taskNum}/labels:
+  /projects/{projectKey}/tasks/{taskNum}/contributors:
     post:
       consumes:
       - application/json
-      description: Add a project label to a task.
+      description: Record a user as a contributor on a task (someone who did the work,
+        independent of current assignment).
       parameters:
       - description: Project key
         in: path
@@ -2219,12 +6562,12 @@ paths:
         name: taskNum
         required: true
         type: integer
-      - description: Label details
+      - description: User to add
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/handlers.AddLabelRequest'
+          $ref: '#/definitions/handlers.AddContributorRequest'
       produces:
       - application/json
       responses:
@@ -2250,9 +6593,85 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Add label to task
+      summary: Add contributor
       tags:
-      - Task Labels
+      - Task Contributors
+  /projects/{projectKey}/tasks/{taskNum}/contributors/{userId}:
+    delete:
+      description: Remove a user from a task's contributors.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove contributor
+      tags:
+      - Task Contributors
+  /projects/{projectKey}/tasks/{taskNum}/copy:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Source project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Target and project-specific fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CopyTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.TaskResponse'
+      security:
+      - BearerAuth: []
+      summary: Copy a task to another project
+      tags:
+      - Tasks
   /projects/{projectKey}/tasks/{taskNum}/labels/{labelId}:
     delete:
       description: Remove a label from a task.
@@ -2296,6 +6715,350 @@ paths:
       summary: Remove label from task
       tags:
       - Task Labels
+  /projects/{projectKey}/tasks/{taskNum}/move:
+    post:
+      consumes:
+      - application/json
+      description: Move a task to a different project, assigning a new task number
+        and remapping state/labels.
+      parameters:
+      - description: Source project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Target project
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MoveTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TaskResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move task
+      tags:
+      - Tasks
+  /projects/{projectKey}/tasks/{taskNum}/originators:
+    post:
+      consumes:
+      - application/json
+      description: Add a user to a task's requesters/originators.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: User to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddOriginatorRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add originator
+      tags:
+      - Task Originators
+  /projects/{projectKey}/tasks/{taskNum}/originators/{userId}:
+    delete:
+      description: Remove a user from a task's requesters/originators. The last one
+        cannot be removed.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove originator
+      tags:
+      - Task Originators
+  /projects/{projectKey}/tasks/{taskNum}/parent-candidates:
+    get:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: Title search
+        in: query
+        name: search
+        type: string
+      - description: Max results (default 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.SubtaskCandidateResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List parent candidates for a sub-task
+      tags:
+      - Tasks
+  /projects/{projectKey}/tasks/{taskNum}/subtasks:
+    get:
+      description: Returns the direct child tasks of the given task, ordered by task
+        number.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Parent task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.SubtaskResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List subtasks
+      tags:
+      - Tasks
+  /projects/{projectKey}/tasks/{taskNum}/watchers:
+    post:
+      consumes:
+      - application/json
+      description: Add a user to a task's watchers (they receive its updates).
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: User to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddWatcherRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add watcher
+      tags:
+      - Task Watchers
+  /projects/{projectKey}/tasks/{taskNum}/watchers/{userId}:
+    delete:
+      description: Remove a user from a task's watchers.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Task number
+        in: path
+        name: taskNum
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove watcher
+      tags:
+      - Task Watchers
+  /projects/{projectKey}/tasks/move:
+    post:
+      consumes:
+      - application/json
+      description: Move multiple tasks to a different project. Each task is moved
+        independently; failures do not roll back successful moves.
+      parameters:
+      - description: Source project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Target project and task numbers
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MoveTasksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MoveTasksResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Bulk move tasks
+      tags:
+      - Tasks
   /projects/{projectKey}/templates:
     get:
       description: Returns all task templates for a project.
@@ -2434,6 +7197,428 @@ paths:
       summary: Update template
       tags:
       - Project Templates
+  /projects/{projectKey}/views:
+    get:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ViewResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List project views
+      tags:
+      - Views
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateViewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.ViewResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a saved view
+      tags:
+      - Views
+  /projects/{projectKey}/views/{slug}:
+    delete:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a saved view
+      tags:
+      - Views
+    get:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ViewResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a saved view
+      tags:
+      - Views
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateViewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ViewResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a saved view
+      tags:
+      - Views
+  /projects/{projectKey}/views/{slug}/default:
+    delete:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Clear the project's default view
+      tags:
+      - Views
+    put:
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: View slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Set the project's default view
+      tags:
+      - Views
+  /projects/{projectKey}/views/reorder:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Ordered list
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReorderViewsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Reorder saved views
+      tags:
+      - Views
+  /projects/{projectKey}/workflow:
+    get:
+      description: Get the project's workflow states, transitions and rules.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkflowResponse'
+      security:
+      - BearerAuth: []
+      summary: Get workflow
+      tags:
+      - Workflow
+    put:
+      consumes:
+      - application/json
+      description: Replace the project's workflow states, transitions and rules. Enforcement
+        is unchanged.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Workflow graph
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SaveWorkflowRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkflowResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save workflow
+      tags:
+      - Workflow
+  /projects/{projectKey}/workflow/enabled:
+    put:
+      consumes:
+      - application/json
+      description: Enable or disable workflow enforcement. A workflow must be saved
+        before it can be enabled.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Enabled flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SetWorkflowEnabledRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkflowResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Toggle workflow
+      tags:
+      - Workflow
+  /projects/{projectKey}/workspace:
+    patch:
+      consumes:
+      - application/json
+      description: Reassign a project to another workspace by key. Admin only.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Target workspace key
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MoveProjectToWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProjectResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move project to workspace
+      tags:
+      - Projects
+  /projects/{projectKey}/workspace/move-impact:
+    get:
+      description: Lists project members not in the destination workspace. Admin only.
+      parameters:
+      - description: Project key
+        in: path
+        name: projectKey
+        required: true
+        type: string
+      - description: Destination workspace key
+        in: query
+        name: workspace_key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MoveProjectImpactResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Preview project move impact
+      tags:
+      - Projects
+  /projects/reorder:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Ordered list
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReorderProjectsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Reorder project cards
+      tags:
+      - Projects
+  /search:
+    get:
+      description: Search across tasks, cycles, and projects the user has access to.
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SearchResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Global search
+      tags:
+      - Search
   /settings/branding:
     get:
       description: Returns the current branding settings. Public endpoint.
@@ -2445,6 +7630,39 @@ paths:
           schema:
             $ref: '#/definitions/handlers.BrandingResponse'
       summary: Get branding
+      tags:
+      - Settings
+  /settings/branding/{asset}:
+    get:
+      description: Serves the uploaded logo or favicon image. Public endpoint.
+      parameters:
+      - description: logo or favicon
+        in: path
+        name: asset
+        required: true
+        type: string
+      produces:
+      - image/png
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get branding logo or favicon
+      tags:
+      - Settings
+  /settings/feedback:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FeedbackPublicSettings'
+      summary: Get public feedback settings
       tags:
       - Settings
   /settings/sso:
@@ -2553,7 +7771,7 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload an image file (jpeg, png, gif, webp). Max 5MB.
+      description: Upload a file (images, PDFs, documents). Max 10MB.
       parameters:
       - description: File to upload
         in: formData
@@ -2582,7 +7800,8 @@ paths:
       - Uploads
   /uploads/{id}:
     get:
-      description: Serve a previously uploaded file by its ID.
+      description: Serve a previously uploaded file by its ID. Accepts a Bearer token
+        or the access_token cookie.
       parameters:
       - description: Upload ID
         in: path
@@ -2598,10 +7817,16 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
         "404":
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Serve uploaded file
       tags:
       - Uploads
@@ -2634,6 +7859,293 @@ paths:
       summary: Get user profile
       tags:
       - Auth
+  /workspaces:
+    get:
+      description: Returns a paginated list of workspaces. Admins see all; others
+        see only their memberships.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      - description: Search by name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PaginatedWorkspacesResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List workspaces
+      tags:
+      - Workspaces
+    post:
+      consumes:
+      - application/json
+      description: Create a new workspace. Creator is added as a member. Requires
+        admin.
+      parameters:
+      - description: Workspace details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create workspace
+      tags:
+      - Workspaces
+  /workspaces/{workspaceKey}:
+    delete:
+      description: Soft-delete a workspace. Requires admin.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete workspace
+      tags:
+      - Workspaces
+    get:
+      description: Returns workspace details by key.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get workspace
+      tags:
+      - Workspaces
+    patch:
+      consumes:
+      - application/json
+      description: Update workspace details. Requires admin.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update workspace
+      tags:
+      - Workspaces
+  /workspaces/{workspaceKey}/members:
+    get:
+      description: Returns all members of a workspace.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.WorkspaceMemberResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List workspace members
+      tags:
+      - Workspace Members
+    post:
+      consumes:
+      - application/json
+      description: Add a user as a member of the workspace. Requires admin.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      - description: Member details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddWorkspaceMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceMemberResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add workspace member
+      tags:
+      - Workspace Members
+  /workspaces/{workspaceKey}/members/{userId}:
+    delete:
+      description: Remove a member from the workspace. Requires admin.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove workspace member
+      tags:
+      - Workspace Members
+  /workspaces/{workspaceKey}/members/search:
+    get:
+      description: Search users by name/username/email. Requires admin.
+      parameters:
+      - description: Workspace key
+        in: path
+        name: workspaceKey
+        required: true
+        type: string
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search users for workspace membership
+      tags:
+      - Workspace Members
 securityDefinitions:
   BearerAuth:
     description: 'Enter your bearer token in the format: Bearer {token}'

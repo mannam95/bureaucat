@@ -17,6 +17,9 @@ COPY . .
 COPY --from=frontend /app/web/.output/public ./cmd/bureaucat/dist
 # Copy migrations to embed location
 RUN cp -r migrations/* ./cmd/bureaucat/migrations/
+# Regenerate the OpenAPI spec from the handler annotations, so /docs and
+# /api/v1/openapi.json can never ship stale (version pinned to go.mod).
+RUN go run github.com/swaggo/swag/cmd/swag init -g cmd/bureaucat/main.go -o docs --parseDependency=false
 RUN go build -ldflags "-X main.Version=${VERSION}" -o bureaucat ./cmd/bureaucat
 
 # Runtime

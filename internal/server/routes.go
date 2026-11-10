@@ -44,6 +44,10 @@ func (s *Server) registerRoutes() {
 
 	// OpenAPI spec consumed by the /docs page (Scalar)
 	api.GET("/openapi.json", openAPISpec)
+	// /api/v1/docs is the guessable address; the Scalar page lives at /docs.
+	api.GET("/docs", func(c *echo.Context) error {
+		return c.Redirect(http.StatusFound, "/docs")
+	})
 
 	api.GET("/health", healthCheck)
 

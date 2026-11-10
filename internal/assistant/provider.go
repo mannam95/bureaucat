@@ -29,7 +29,7 @@ const maxOutputTokens = 4096
 type ToolCall struct {
 	ID   string          `json:"id"`
 	Name string          `json:"name"`
-	Args json.RawMessage `json:"args"`
+	Args json.RawMessage `json:"args" swaggertype:"object"`
 }
 
 // ToolResult is the output of a tool call fed back to the model.

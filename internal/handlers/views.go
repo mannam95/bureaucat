@@ -37,7 +37,7 @@ type ViewResponse struct {
 	Description *string         `json:"description,omitempty"`
 	Visibility  string          `json:"visibility"`
 	OwnerID     uuid.UUID       `json:"owner_id"`
-	FilterTree  json.RawMessage `json:"filter_tree"`
+	FilterTree  json.RawMessage `json:"filter_tree" swaggertype:"object"`
 	GroupBy     string          `json:"group_by"`
 	SortBy      string          `json:"sort_by"`
 	SortDir     string          `json:"sort_dir"`
@@ -53,7 +53,7 @@ type CreateViewRequest struct {
 	Name        string          `json:"name"`
 	Description *string         `json:"description,omitempty"`
 	Visibility  string          `json:"visibility"` // "private" or "shared"
-	FilterTree  json.RawMessage `json:"filter_tree"`
+	FilterTree  json.RawMessage `json:"filter_tree" swaggertype:"object"`
 	GroupBy     string          `json:"group_by"`
 	SortBy      string          `json:"sort_by"`
 	SortDir     string          `json:"sort_dir"`
@@ -65,7 +65,7 @@ type UpdateViewRequest struct {
 	Name        *string          `json:"name"`
 	Description *string          `json:"description"`
 	Visibility  *string          `json:"visibility"`
-	FilterTree  *json.RawMessage `json:"filter_tree"`
+	FilterTree  *json.RawMessage `json:"filter_tree" swaggertype:"object"`
 	GroupBy     *string          `json:"group_by"`
 	SortBy      *string          `json:"sort_by"`
 	SortDir     *string          `json:"sort_dir"`

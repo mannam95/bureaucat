@@ -30,6 +30,7 @@ var nonCatalogRoutes = map[string]bool{
 	"GET /api/v1/health":               true,
 	"GET /api/v1/ht/":                  true,
 	"GET /api/v1/openapi.json":         true,
+	"GET /api/v1/docs":                 true,
 	"GET /api/v1/og-image":             true,
 	"GET /api/v1/releases":             true,
 	"GET /api/v1/settings/branding":    true,

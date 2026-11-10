@@ -15,6 +15,465 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/admin/email": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Whether env-configured SMTP is usable, and the From address. Super admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Email"
+                ],
+                "summary": "Email status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.EmailStatusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/email/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Send a notification template with sample data to a chosen user. Super admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Email"
+                ],
+                "summary": "Send test email",
+                "parameters": [
+                    {
+                        "description": "Recipient and template",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SendTestEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/features": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every registered gated feature with its mode and specific-user grants. Super admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Features"
+                ],
+                "summary": "List feature gates",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.FeatureGateResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/features/{feature}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets who can use a feature: disabled, admins or everyone. Grants stay and remain additive. Super admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Features"
+                ],
+                "summary": "Set feature gate mode",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature key",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Mode",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SetFeatureGateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeatureGateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/features/{feature}/grants": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a specific-user grant on a feature gate; additive on top of the mode. Super admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Features"
+                ],
+                "summary": "Grant a feature to a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature key",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User to grant",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddFeatureGrantRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeatureGateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/features/{feature}/grants/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a specific-user grant from a feature gate. The user keeps access the mode gives them. Super admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Features"
+                ],
+                "summary": "Revoke a feature grant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature key",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeatureGateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/feedback": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Feedback"
+                ],
+                "summary": "List received feedback",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 50, max 200)",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PaginatedFeedback"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/feedback/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Feedback"
+                ],
+                "summary": "Delete a feedback entry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feedback ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/graph": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns task nodes (assigned or not), user nodes and assignment edges for the admin graph view.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Stats"
+                ],
+                "summary": "Get admin task graph",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated project keys",
+                        "name": "projects",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated state types",
+                        "name": "state_types",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated usernames",
+                        "name": "users",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskGraphResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/graph/filters": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns workspace, project and user options for the admin graph view filters.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Stats"
+                ],
+                "summary": "Get admin task graph filters",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskGraphFiltersResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/import/plane": {
             "post": {
                 "security": [
@@ -64,6 +523,195 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/projects/deleted": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of soft-deleted projects across all workspaces.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Projects"
+                ],
+                "summary": "List deleted projects",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PaginatedDeletedProjectsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/projects/{id}/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Clears the soft-delete flag on a project, making it accessible again.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Projects"
+                ],
+                "summary": "Restore deleted project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/assistant": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Get assistant settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/assistant.Settings"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Update assistant settings",
+                "parameters": [
+                    {
+                        "description": "Assistant configuration",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/assistant.Settings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/assistant.Settings"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/assistant/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Test assistant settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/settings/branding": {
             "put": {
                 "security": [
@@ -98,6 +746,258 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/branding/{asset}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Multipart upload in field \"file\". Logo: PNG up to 256 KB. Favicon: PNG or ICO up to 64 KB. Requires admin role.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Upload branding logo or favicon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "logo or favicon",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Image file",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Remove branding logo or favicon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "logo or favicon",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BrandingResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/feedback": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Feedback"
+                ],
+                "summary": "Get feedback settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeedbackSettings"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Feedback"
+                ],
+                "summary": "Update feedback settings",
+                "parameters": [
+                    {
+                        "description": "Settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeedbackSettings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeedbackSettings"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/mattermost": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns Mattermost integration configuration with bot token masked. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Get Mattermost settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MattermostResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update Mattermost integration configuration. Masked tokens are preserved. Requires admin role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Update Mattermost settings",
+                "parameters": [
+                    {
+                        "description": "Mattermost configuration",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MattermostSettings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MattermostResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/mattermost/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tests the Mattermost bot connection using the saved settings. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Settings"
+                ],
+                "summary": "Test Mattermost connection",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     },
                     "400": {
@@ -178,6 +1078,51 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns system-wide totals, breakdowns, and per-day activity series.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Stats"
+                ],
+                "summary": "Get admin stats",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD) for per-day series",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD) for per-day series",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AdminStatsResponse"
                         }
                     },
                     "500": {
@@ -431,13 +1376,63 @@ const docTemplate = `{
             }
         },
         "/admin/users/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a user's profile, SSO/password status, active sessions/tokens, workspaces and projects.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Get user details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AdminUserDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete a user by their ID. Cannot delete yourself.",
+                "description": "Soft-delete a user: the account is hidden and can no longer sign in, but is kept and can be restored. Cannot delete yourself.",
                 "produces": [
                     "application/json"
                 ],
@@ -459,6 +1454,214 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Admin edit of username, email, first and last name.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Update a user's profile",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateUserProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/active": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Enable or disable a user account without deleting it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Activate or deactivate a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Active flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SetUserActiveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/merge": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Additively copies the source user's workspace/project/module memberships, task assignments and private views to the target user, and makes the target watch tasks the source created, watched, or commented on. The source user is left unchanged.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Merge user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source user ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target user",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MergeUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MergeUserResponse"
                         }
                     },
                     "400": {
@@ -516,6 +1719,58 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ResetUserPasswordRequest"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Restore a soft-deleted user; the account becomes active again and can sign in with its existing password.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Restore user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -610,6 +1865,342 @@ const docTemplate = `{
                 }
             }
         },
+        "/assistant/conversations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "List assistant conversations",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/assistant.ConversationView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Create assistant conversation",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/assistant.ConversationView"
+                        }
+                    }
+                }
+            }
+        },
+        "/assistant/conversations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Get assistant conversation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/assistant.ConversationDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Delete assistant conversation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Rename assistant conversation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New title",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantRenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantRenameRequest"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/assistant/conversations/{id}/actions/{actionId}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Resolve assistant action",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action ID",
+                        "name": "actionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Decision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantActionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/assistant/conversations/{id}/messages": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams events (step, message, pending, action, error, done) as text/event-stream.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Send assistant message",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/assistant/conversations/{id}/tool-calls/{callId}/output": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Get assistant tool call output",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Conversation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tool call ID",
+                        "name": "callId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantToolOutputResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/assistant/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistant"
+                ],
+                "summary": "Assistant status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssistantStatusResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/sso/{provider}": {
             "get": {
                 "description": "Initiates the OAuth2/OIDC flow. Redirects to the identity provider.",
@@ -680,6 +2271,233 @@ const docTemplate = `{
                 }
             }
         },
+        "/feedback": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Feedback"
+                ],
+                "summary": "Submit anonymous feedback",
+                "parameters": [
+                    {
+                        "description": "Feedback",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SubmitFeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    }
+                }
+            }
+        },
+        "/graph": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns task nodes (assigned or not), user nodes and assignment edges, limited to projects the caller is a member of.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Graph"
+                ],
+                "summary": "Get task graph",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated project keys",
+                        "name": "projects",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated state types",
+                        "name": "state_types",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated usernames",
+                        "name": "users",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskGraphResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/graph/filters": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns workspace, project and user options for the graph view, limited to projects the caller is a member of.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Graph"
+                ],
+                "summary": "Get task graph filters",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskGraphFiltersResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/insights/person/{userId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One person's delivered work and load across the projects the viewer may see.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Insights"
+                ],
+                "summary": "Insights person across projects",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Window start (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Window end (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Limit to one workspace; absent means all the viewer's workspaces",
+                        "name": "workspace_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/insights.WorkspacePersonReport"
+                        }
+                    }
+                }
+            }
+        },
+        "/insights/portfolio": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Attention table and delivery overview across the viewer's projects.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Insights"
+                ],
+                "summary": "Insights portfolio",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Window start (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Window end (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Limit to one workspace; absent means all the viewer's workspaces",
+                        "name": "workspace_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/insights.Portfolio"
+                        }
+                    }
+                }
+            }
+        },
         "/logout": {
             "post": {
                 "description": "Revoke all refresh tokens for the current user and clear cookies.",
@@ -733,6 +2551,79 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    }
+                }
+            }
+        },
+        "/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Update my avatar",
+                "parameters": [
+                    {
+                        "description": "Avatar",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateAvatarRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/feedback": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Feedback"
+                ],
+                "summary": "Store a local copy of outbound feedback",
+                "parameters": [
+                    {
+                        "description": "Feedback",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SubmitFeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
                     }
                 }
             }
@@ -861,6 +2752,96 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/reorder": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Reorder project cards",
+                "parameters": [
+                    {
+                        "description": "Ordered list",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ReorderProjectsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{key}/tasks/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-deletes the given tasks and their subtasks. Admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Delete multiple tasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Task numbers to delete",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeleteTasksRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeleteTasksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -997,6 +2978,419 @@ const docTemplate = `{
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/areas": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all areas for a project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project Areas"
+                ],
+                "summary": "List areas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.AreaResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new project area.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project Areas"
+                ],
+                "summary": "Create area",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Area details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateAreaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AreaResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/areas/{areaId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a project area.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project Areas"
+                ],
+                "summary": "Delete area",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Area ID",
+                        "name": "areaId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a project area. Requires project admin role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project Areas"
+                ],
+                "summary": "Update area",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Area ID",
+                        "name": "areaId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateAreaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AreaResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/disabled": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Toggle a project's disabled (read-only) state. Requires project admin role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Enable/disable project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Disabled flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SetProjectDisabledRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProjectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/insights": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The project report: cycle or date-range delivery, people, health.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Insights"
+                ],
+                "summary": "Insights project report",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cycle to report on; omitted means date range",
+                        "name": "cycle_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Window start (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Window end (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/insights.ProjectReport"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/insights/evidence": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The exact population behind one reported number, with its computation rule.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Insights"
+                ],
+                "summary": "Insights evidence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric key (delivered, planned, added, descoped, carried, verification, cancelled, archived, completed, created, original_plan, person_delivered, person_open, open_state, priority_rank, aging, overdue, due_soon, blocked, day)",
+                        "name": "metric",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "csv for a CSV export of the rows",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/insights.Evidence"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/insights/person/{userId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One member's delivered work and current load inside the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Insights"
+                ],
+                "summary": "Insights person report",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/insights.PersonReport"
                         }
                     }
                 }
@@ -1322,6 +3716,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{projectKey}/members/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Search users by name/username/email. Requires project admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project Members"
+                ],
+                "summary": "Search users for membership",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{projectKey}/members/{userId}": {
             "delete": {
                 "security": [
@@ -1421,6 +3862,290 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/pages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all documentation pages for a project (newest updated first).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pages"
+                ],
+                "summary": "List pages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search over page title and content",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.PageListItem"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new documentation page in the project.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pages"
+                ],
+                "summary": "Create page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Page details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreatePageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/pages/{pageNum}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns page details by page number.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pages"
+                ],
+                "summary": "Get page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "pageNum",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-delete a page.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pages"
+                ],
+                "summary": "Delete page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "pageNum",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a page's title and/or content.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pages"
+                ],
+                "summary": "Update page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "pageNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdatePageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PageResponse"
                         }
                     },
                     "400": {
@@ -1665,6 +4390,117 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{projectKey}/states/{stateId}/default": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks a workflow state as the project default, clearing the previous one. Requires project admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project States"
+                ],
+                "summary": "Set default state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "State ID",
+                        "name": "stateId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns project totals, task breakdowns, open-task workload per member and per-day series for the date range.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get project stats",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD), defaults to 29 days before to",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD), defaults to today",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProjectStatsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{projectKey}/tasks": {
             "get": {
                 "security": [
@@ -1672,7 +4508,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns a paginated list of tasks with optional filters.",
+                "description": "Returns a paginated list of tasks. Filters are expressed as a base64url(JSON) FilterTree in ?f=. Legacy scalar params are translated server-side.",
                 "produces": [
                     "application/json"
                 ],
@@ -1704,32 +4540,32 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by state ID",
-                        "name": "state_id",
+                        "description": "FilterTree as base64url(JSON)",
+                        "name": "f",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by state type",
-                        "name": "state_type",
+                        "description": "Saved view slug; used when f is omitted",
+                        "name": "view",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by creator ID",
-                        "name": "created_by",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Filter by priority",
-                        "name": "priority",
+                        "description": "One of: created_at, updated_at, priority, priority_rating, due_date, start_date, title, state",
+                        "name": "sort_by",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Search by title",
-                        "name": "q",
+                        "description": "asc or desc",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Subtask handling: expandable (a matching subtask brings its parent; matching children embedded) or flat (subtasks are ordinary rows). Absent: parents only.",
+                        "name": "subtasks",
                         "in": "query"
                     }
                 ],
@@ -1738,6 +4574,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.PaginatedTasksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
@@ -1805,6 +4647,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{projectKey}/tasks/move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Move multiple tasks to a different project. Each task is moved independently; failures do not roll back successful moves.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Bulk move tasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target project and task numbers",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MoveTasksRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MoveTasksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{projectKey}/tasks/{taskNum}": {
             "get": {
                 "security": [
@@ -1863,7 +4763,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Soft-delete a task. Requires project admin role.",
+                "description": "Soft-delete a task. Requires project admin role or task creator.",
                 "produces": [
                     "application/json"
                 ],
@@ -2248,6 +5148,231 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Blockers"
+                ],
+                "summary": "List task blockers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskBlockersResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Blockers"
+                ],
+                "summary": "Add task blockers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tasks and relation",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddTaskBlockersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers/candidates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Blockers"
+                ],
+                "summary": "List blocker candidates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Title search",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 50, max 200)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.SubtaskCandidateResponse"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers/{taskId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Blockers"
+                ],
+                "summary": "Remove task blocker",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Linked task UUID",
+                        "name": "taskId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{projectKey}/tasks/{taskNum}/comments": {
             "get": {
                 "security": [
@@ -2533,14 +5658,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/projects/{projectKey}/tasks/{taskNum}/labels": {
+        "/projects/{projectKey}/tasks/{taskNum}/contributors": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Add a project label to a task.",
+                "description": "Record a user as a contributor on a task (someone who did the work, independent of current assignment).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2548,9 +5673,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Task Labels"
+                    "Task Contributors"
                 ],
-                "summary": "Add label to task",
+                "summary": "Add contributor",
                 "parameters": [
                     {
                         "type": "string",
@@ -2567,12 +5692,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Label details",
+                        "description": "User to add",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.AddLabelRequest"
+                            "$ref": "#/definitions/handlers.AddContributorRequest"
                         }
                     }
                 ],
@@ -2605,6 +5730,124 @@ const docTemplate = `{
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/contributors/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove a user from a task's contributors.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Contributors"
+                ],
+                "summary": "Remove contributor",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/copy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Copy a task to another project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target and project-specific fields",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CopyTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskResponse"
                         }
                     }
                 }
@@ -2644,6 +5887,474 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Label ID",
                         "name": "labelId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Move a task to a different project, assigning a new task number and remapping state/labels.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Move task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target project",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MoveTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TaskResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/originators": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Add a user to a task's requesters/originators.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Originators"
+                ],
+                "summary": "Add originator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User to add",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddOriginatorRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/originators/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove a user from a task's requesters/originators. The last one cannot be removed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Originators"
+                ],
+                "summary": "Remove originator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/parent-candidates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "List parent candidates for a sub-task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Title search",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 50)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.SubtaskCandidateResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/subtasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the direct child tasks of the given task, ordered by task number.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "List subtasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Parent task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.SubtaskResponse"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/watchers": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Add a user to a task's watchers (they receive its updates).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Watchers"
+                ],
+                "summary": "Add watcher",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User to add",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddWatcherRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/watchers/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove a user from a task's watchers.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task Watchers"
+                ],
+                "summary": "Remove watcher",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task number",
+                        "name": "taskNum",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
                         "in": "path",
                         "required": true
                     }
@@ -2891,6 +6602,635 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{projectKey}/views": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "List project views",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.ViewResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Create a saved view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "View",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateViewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ViewResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/views/reorder": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Reorder saved views",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ordered list",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ReorderViewsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/views/{slug}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Get a saved view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ViewResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Delete a saved view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Update a saved view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateViewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ViewResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/views/{slug}/default": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Set the project's default view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Views"
+                ],
+                "summary": "Clear the project's default view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/workflow": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get the project's workflow states, transitions and rules.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workflow"
+                ],
+                "summary": "Get workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkflowResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replace the project's workflow states, transitions and rules. Enforcement is unchanged.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workflow"
+                ],
+                "summary": "Save workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Workflow graph",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SaveWorkflowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkflowResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/workflow/enabled": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Enable or disable workflow enforcement. A workflow must be saved before it can be enabled.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workflow"
+                ],
+                "summary": "Toggle workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Enabled flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SetWorkflowEnabledRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkflowResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/workspace": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reassign a project to another workspace by key. Admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Move project to workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target workspace key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MoveProjectToWorkspaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProjectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{projectKey}/workspace/move-impact": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists project members not in the destination workspace. Admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Preview project move impact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "projectKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Destination workspace key",
+                        "name": "workspace_key",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MoveProjectImpactResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Search across tasks, cycles, and projects the user has access to.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Search"
+                ],
+                "summary": "Global search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SearchResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/settings/branding": {
             "get": {
                 "description": "Returns the current branding settings. Public endpoint.",
@@ -2906,6 +7246,57 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.BrandingResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/branding/{asset}": {
+            "get": {
+                "description": "Serves the uploaded logo or favicon image. Public endpoint.",
+                "produces": [
+                    "image/png"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get branding logo or favicon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "logo or favicon",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/feedback": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get public feedback settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeedbackPublicSettings"
                         }
                     }
                 }
@@ -3068,7 +7459,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload an image file (jpeg, png, gif, webp). Max 5MB.",
+                "description": "Upload a file (images, PDFs, documents). Max 10MB.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3112,7 +7503,12 @@ const docTemplate = `{
         },
         "/uploads/{id}": {
             "get": {
-                "description": "Serve a previously uploaded file by its ID.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Serve a previously uploaded file by its ID. Accepts a Bearer token or the access_token cookie.",
                 "produces": [
                     "application/octet-stream"
                 ],
@@ -3135,6 +7531,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3193,9 +7595,700 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/workspaces": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of workspaces. Admins see all; others see only their memberships.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "List workspaces",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "per_page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by name",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PaginatedWorkspacesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new workspace. Creator is added as a member. Requires admin.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "Create workspace",
+                "parameters": [
+                    {
+                        "description": "Workspace details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateWorkspaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkspaceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspaceKey}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns workspace details by key.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "Get workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkspaceResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-delete a workspace. Requires admin.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "Delete workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update workspace details. Requires admin.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "Update workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateWorkspaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkspaceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspaceKey}/members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all members of a workspace.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Members"
+                ],
+                "summary": "List workspace members",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.WorkspaceMemberResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Add a user as a member of the workspace. Requires admin.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Members"
+                ],
+                "summary": "Add workspace member",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Member details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddWorkspaceMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkspaceMemberResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspaceKey}/members/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Search users by name/username/email. Requires admin.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Members"
+                ],
+                "summary": "Search users for workspace membership",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspaceKey}/members/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove a member from the workspace. Requires admin.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Members"
+                ],
+                "summary": "Remove workspace member",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace key",
+                        "name": "workspaceKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "assistant.ActionView": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "tool": {
+                    "type": "string"
+                },
+                "tool_call_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.Attachment": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string"
+                },
+                "mime_type": {
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                },
+                "upload_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.ChatContext": {
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/assistant.ChatMessage"
+                    }
+                },
+                "where": {
+                    "description": "channel | thread",
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.ChatMessage": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "bureaucat_user": {
+                    "type": "string"
+                },
+                "is_assistant": {
+                    "type": "boolean"
+                },
+                "post_id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.ConversationDetail": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/assistant.ActionView"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/assistant.MessageView"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.ConversationView": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.MessageView": {
+            "type": "object",
+            "properties": {
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/assistant.Attachment"
+                    }
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/assistant.Meta"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "tool_calls": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/assistant.ToolCallView"
+                    }
+                }
+            }
+        },
+        "assistant.Meta": {
+            "type": "object",
+            "properties": {
+                "chat": {
+                    "$ref": "#/definitions/assistant.ChatContext"
+                },
+                "page": {
+                    "$ref": "#/definitions/assistant.PageContext"
+                }
+            }
+        },
+        "assistant.PageContext": {
+            "type": "object",
+            "properties": {
+                "cycle_id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "module_id": {
+                    "type": "string"
+                },
+                "page_number": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "tab": {
+                    "type": "string"
+                },
+                "task_number": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.Settings": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "aws_region": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistant.ToolCallView": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "type": "object"
+                },
+                "has_output": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_error": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AIDayCount": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string"
+                },
+                "mattermost": {
+                    "type": "integer"
+                },
+                "web": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.ActivityLogResponse": {
             "type": "object",
             "properties": {
@@ -3203,6 +8296,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "actor_id": {
+                    "type": "string"
+                },
+                "avatar_url": {
                     "type": "string"
                 },
                 "created_at": {
@@ -3227,6 +8323,10 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                },
+                "via": {
+                    "description": "web | assistant | pat | workflow | mcp",
+                    "type": "string"
                 }
             }
         },
@@ -3238,10 +8338,19 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.AddLabelRequest": {
+        "handlers.AddContributorRequest": {
+            "description": "Add a project label to a task.",
             "type": "object",
             "properties": {
-                "label_id": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AddFeatureGrantRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
                     "type": "string"
                 }
             }
@@ -3257,9 +8366,301 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.AddOriginatorRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AddTaskBlockersRequest": {
+            "type": "object",
+            "properties": {
+                "relation": {
+                    "type": "string"
+                },
+                "task_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handlers.AddWatcherRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AddWorkspaceMemberRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AdminStatsResponse": {
+            "type": "object",
+            "properties": {
+                "projects_per_workspace": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkspaceStat"
+                    }
+                },
+                "series": {
+                    "type": "object",
+                    "properties": {
+                        "activity": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "ai_conversations": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.AIDayCount"
+                            }
+                        },
+                        "attachments": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "comments": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "cycles": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "days": {
+                            "type": "integer"
+                        },
+                        "from": {
+                            "type": "string"
+                        },
+                        "modules": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "pages": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "subtasks": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.DayCount"
+                            }
+                        },
+                        "to": {
+                            "type": "string"
+                        },
+                        "views": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.ViewDayCount"
+                            }
+                        }
+                    }
+                },
+                "tasks_by_priority": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.StatCount"
+                    }
+                },
+                "tasks_by_state": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.StatCount"
+                    }
+                },
+                "top_projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ProjectStat"
+                    }
+                },
+                "totals": {
+                    "type": "object",
+                    "properties": {
+                        "ai_conversations": {
+                            "type": "integer"
+                        },
+                        "ai_mattermost_conversations": {
+                            "type": "integer"
+                        },
+                        "ai_users": {
+                            "type": "integer"
+                        },
+                        "attachments": {
+                            "type": "integer"
+                        },
+                        "attachments_bytes": {
+                            "type": "integer"
+                        },
+                        "blocked_tasks": {
+                            "type": "integer"
+                        },
+                        "blocking_tasks": {
+                            "type": "integer"
+                        },
+                        "pages": {
+                            "type": "integer"
+                        },
+                        "projects": {
+                            "type": "integer"
+                        },
+                        "subtasks": {
+                            "type": "integer"
+                        },
+                        "tasks": {
+                            "type": "integer"
+                        },
+                        "users": {
+                            "type": "integer"
+                        },
+                        "workflow_projects": {
+                            "type": "integer"
+                        },
+                        "workspaces": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
+        "handlers.AdminUserDetailResponse": {
+            "type": "object",
+            "properties": {
+                "active_sessions": {
+                    "type": "integer"
+                },
+                "active_tokens": {
+                    "type": "integer"
+                },
+                "auth_provider": {
+                    "type": "string"
+                },
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "has_password": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AdminUserProject"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_type": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "workspaces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AdminUserWorkspace"
+                    }
+                }
+            }
+        },
+        "handlers.AdminUserProject": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AdminUserWorkspace": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AreaResponse": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.AssigneeResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -3276,6 +8677,61 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AssistantActionRequest": {
+            "type": "object",
+            "properties": {
+                "approve": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.AssistantMessageRequest": {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "$ref": "#/definitions/assistant.Meta"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "upload_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handlers.AssistantRenameRequest": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AssistantStatusResponse": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.AssistantToolOutputResponse": {
+            "type": "object",
+            "properties": {
+                "output": {
                     "type": "string"
                 }
             }
@@ -3303,6 +8759,12 @@ const docTemplate = `{
                 },
                 "enabled": {
                     "type": "boolean"
+                },
+                "favicon_url": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
                 }
             }
         },
@@ -3320,6 +8782,9 @@ const docTemplate = `{
         "handlers.CommentResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
                 "content": {
                     "type": "string"
                 },
@@ -3352,6 +8817,75 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ContributorResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CopyTaskRequest": {
+            "type": "object",
+            "properties": {
+                "assignees": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "cycle_id": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "priority_id": {
+                    "type": "string"
+                },
+                "state_id": {
+                    "type": "string"
+                },
+                "target_project_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateAreaRequest": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.CreateCommentRequest": {
             "type": "object",
             "properties": {
@@ -3367,6 +8901,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreatePageRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "title": {
                     "type": "string"
                 }
             }
@@ -3388,6 +8933,9 @@ const docTemplate = `{
                 },
                 "project_key": {
                     "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
                 }
             }
         },
@@ -3395,6 +8943,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "color": {
+                    "type": "string"
+                },
+                "description": {
                     "type": "string"
                 },
                 "name": {
@@ -3411,13 +8962,35 @@ const docTemplate = `{
         "handlers.CreateTaskRequest": {
             "type": "object",
             "properties": {
+                "areas": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "assignees": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
+                "branch": {
+                    "type": "string"
+                },
                 "description": {
+                    "type": "string"
+                },
+                "difficulty": {
+                    "description": "DEV estimation inputs, 1-5 each (0 = not assessed).",
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "effort": {
+                    "type": "integer"
+                },
+                "figma_link": {
                     "type": "string"
                 },
                 "labels": {
@@ -3426,14 +8999,45 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "priority": {
+                "originators": {
+                    "description": "Originators/Requesters (user ids). Optional over the wire — defaults to the\ncreator when empty — so there is always at least one.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent_task_number": {
+                    "description": "ParentTaskNumber, when set, creates this task as a subtask of the given\n(project-local) parent task. One level only: the parent must not itself\nbe a subtask.",
                     "type": "integer"
+                },
+                "priority": {
+                    "description": "Priority is rejected: priorities are per-project entities now. Clients\nsend priority_id instead; a non-nil value here fails the whole request.",
+                    "type": "integer"
+                },
+                "priority_id": {
+                    "type": "string"
+                },
+                "priority_rating": {
+                    "type": "integer"
+                },
+                "pull_request": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "state_id": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
+                },
+                "watchers": {
+                    "description": "Watchers (user ids) who will follow the task. Optional; zero or more.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -3474,10 +9078,385 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.CreateViewRequest": {
+            "type": "object",
+            "properties": {
+                "default_tab": {
+                    "description": "\"tasks\" or \"board\"",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "filter_tree": {
+                    "type": "object"
+                },
+                "group_by": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_by": {
+                    "type": "string"
+                },
+                "sort_dir": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "description": "\"private\" or \"shared\"",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateWorkspaceRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DayCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "day": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DeleteTaskResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "task_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.DeleteTasksRequest": {
+            "type": "object",
+            "properties": {
+                "task_numbers": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "handlers.DeleteTasksResponse": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.DeleteTaskResult"
+                    }
+                }
+            }
+        },
+        "handlers.DeletedProjectResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator_name": {
+                    "type": "string"
+                },
+                "creator_username": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.EmailStatusResponse": {
+            "type": "object",
+            "properties": {
+                "configured": {
+                    "type": "boolean"
+                },
+                "from": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.ErrorResponse": {
             "type": "object",
             "properties": {
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.FeatureGateResponse": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "feature": {
+                    "type": "string"
+                },
+                "grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.FeatureGrantInfo"
+                    }
+                },
+                "mode": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.FeatureGrantInfo": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.FeedbackItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "source_origin": {
+                    "type": "string"
+                },
+                "user_agent": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.FeedbackPublicSettings": {
+            "type": "object",
+            "properties": {
+                "send_to_main_enabled": {
+                    "type": "boolean"
+                },
+                "store_sent_locally": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.FeedbackSettings": {
+            "type": "object",
+            "properties": {
+                "receive_enabled": {
+                    "description": "ReceiveEnabled gates POST /api/v1/feedback on this instance.\nDefaults to false — admins (including on the main instance) must opt in\nbefore any feedback is accepted.",
+                    "type": "boolean"
+                },
+                "send_to_main_enabled": {
+                    "description": "SendToMainEnabled toggles the feedback button in the sidebar for users\non *this* instance. Defaults to false so self-hosted admins must opt in.",
+                    "type": "boolean"
+                },
+                "store_sent_locally": {
+                    "description": "StoreSentLocally mirrors outbound submissions into this instance's own\nfeedback table. On by default so admins can see what their users are\nsaying even when the main instance is the ultimate recipient.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.GraphBlockerEdge": {
+            "type": "object",
+            "properties": {
+                "blocked_id": {
+                    "type": "string"
+                },
+                "blocker_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphEdge": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphProjectOption": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphTask": {
+            "type": "object",
+            "properties": {
+                "creator_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_subtask": {
+                    "type": "boolean"
+                },
+                "parent_id": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "state_color": {
+                    "type": "string"
+                },
+                "state_name": {
+                    "type": "string"
+                },
+                "state_type": {
+                    "type": "string"
+                },
+                "task_number": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                },
+                "workspace_key": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphUser": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphUserOption": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GraphWorkspaceOption": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -3499,9 +9478,52 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.MattermostResponse": {
+            "type": "object",
+            "properties": {
+                "app_url": {
+                    "type": "string"
+                },
+                "assistant_enabled": {
+                    "type": "boolean"
+                },
+                "bot_token": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "server_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MattermostSettings": {
+            "type": "object",
+            "properties": {
+                "app_url": {
+                    "type": "string"
+                },
+                "assistant_enabled": {
+                    "type": "boolean"
+                },
+                "bot_token": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "server_url": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.MemberResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -3528,11 +9550,312 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.MergeUserRequest": {
+            "type": "object",
+            "properties": {
+                "target_user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MergeUserResponse": {
+            "type": "object",
+            "properties": {
+                "assignments": {
+                    "type": "integer"
+                },
+                "contributions": {
+                    "type": "integer"
+                },
+                "modules": {
+                    "type": "integer"
+                },
+                "projects": {
+                    "type": "integer"
+                },
+                "views": {
+                    "type": "integer"
+                },
+                "watched_tasks": {
+                    "type": "integer"
+                },
+                "workspaces": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.MessageResponse": {
             "type": "object",
             "properties": {
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.MoveImpactMember": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MoveProjectImpactResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.MoveImpactMember"
+                    }
+                }
+            }
+        },
+        "handlers.MoveProjectToWorkspaceRequest": {
+            "type": "object",
+            "properties": {
+                "add_members": {
+                    "description": "AddMembers, when true, also adds the project's members to the destination\nworkspace so they keep seeing the project in that workspace's list.",
+                    "type": "boolean"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MoveTaskRequest": {
+            "type": "object",
+            "properties": {
+                "target_project_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MoveTaskResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "new_task_id": {
+                    "type": "string"
+                },
+                "new_task_number": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "task_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.MoveTasksRequest": {
+            "type": "object",
+            "properties": {
+                "target_project_key": {
+                    "type": "string"
+                },
+                "task_numbers": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "handlers.MoveTasksResponse": {
+            "type": "object",
+            "properties": {
+                "failed": {
+                    "type": "integer"
+                },
+                "moved": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.MoveTaskResult"
+                    }
+                }
+            }
+        },
+        "handlers.NullableTime": {
+            "type": "object",
+            "properties": {
+                "set": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.OriginatorResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PageListItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator_avatar_url": {
+                    "type": "string"
+                },
+                "creator_first_name": {
+                    "type": "string"
+                },
+                "creator_last_name": {
+                    "type": "string"
+                },
+                "creator_username": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "page_number": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PageResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator_avatar_url": {
+                    "type": "string"
+                },
+                "creator_first_name": {
+                    "type": "string"
+                },
+                "creator_last_name": {
+                    "type": "string"
+                },
+                "creator_username": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "page_number": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PaginatedDeletedProjectsResponse": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "per_page": {
+                    "type": "integer"
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.DeletedProjectResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.PaginatedFeedback": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.FeedbackItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "per_page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
                 }
             }
         },
@@ -3566,6 +9889,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "per_page": {
+                    "type": "integer"
+                },
+                "subtask_total": {
+                    "description": "SubtaskTotal counts the subtasks matching the filter (subtasks modes\nonly) — the honest \"+ N subtasks\" next to the task total.",
                     "type": "integer"
                 },
                 "tasks": {
@@ -3608,6 +9935,9 @@ const docTemplate = `{
         "handlers.PaginatedUsersResponse": {
             "type": "object",
             "properties": {
+                "counts": {
+                    "$ref": "#/definitions/handlers.UserStateCounts"
+                },
                 "page": {
                     "type": "integer"
                 },
@@ -3628,6 +9958,29 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.PaginatedWorkspacesResponse": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "per_page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                },
+                "workspaces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkspaceResponse"
+                    }
+                }
+            }
+        },
         "handlers.ProjectResponse": {
             "type": "object",
             "properties": {
@@ -3642,6 +9995,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "disabled": {
+                    "type": "boolean"
                 },
                 "icon_url": {
                     "type": "string"
@@ -3660,6 +10016,191 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ProjectStat": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "task_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.ProjectStateStat": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "state_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ProjectStatsDay": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "type": "integer"
+                },
+                "attachments": {
+                    "type": "integer"
+                },
+                "comments": {
+                    "type": "integer"
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "cycles": {
+                    "type": "integer"
+                },
+                "day": {
+                    "type": "string"
+                },
+                "modules": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "subtasks": {
+                    "type": "integer"
+                },
+                "tasks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.ProjectStatsResponse": {
+            "type": "object",
+            "properties": {
+                "series": {
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.ProjectStatsDay"
+                            }
+                        },
+                        "from": {
+                            "type": "string"
+                        },
+                        "to": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "tasks_by_state": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ProjectStateStat"
+                    }
+                },
+                "totals": {
+                    "type": "object",
+                    "properties": {
+                        "attachments": {
+                            "type": "integer"
+                        },
+                        "attachments_bytes": {
+                            "type": "integer"
+                        },
+                        "blocked_tasks": {
+                            "type": "integer"
+                        },
+                        "blocking_tasks": {
+                            "type": "integer"
+                        },
+                        "cycles": {
+                            "type": "integer"
+                        },
+                        "members": {
+                            "type": "integer"
+                        },
+                        "modules": {
+                            "type": "integer"
+                        },
+                        "pages": {
+                            "type": "integer"
+                        },
+                        "subtasks": {
+                            "type": "integer"
+                        },
+                        "tasks": {
+                            "type": "integer"
+                        },
+                        "unassigned_open": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "workload": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkloadStat"
+                    }
+                }
+            }
+        },
+        "handlers.ReorderProjectItem": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.ReorderProjectsRequest": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ReorderProjectItem"
+                    }
+                }
+            }
+        },
+        "handlers.ReorderViewItem": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.ReorderViewsRequest": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ReorderViewItem"
+                    }
                 }
             }
         },
@@ -3700,6 +10241,9 @@ const docTemplate = `{
                 },
                 "zitadel": {
                     "type": "boolean"
+                },
+                "zitadel_url": {
+                    "type": "string"
                 }
             }
         },
@@ -3711,6 +10255,176 @@ const docTemplate = `{
                 },
                 "zitadel": {
                     "$ref": "#/definitions/handlers.SSOProviderConfig"
+                }
+            }
+        },
+        "handlers.SaveWorkflowRequest": {
+            "type": "object",
+            "properties": {
+                "states": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkflowStateConfig"
+                    }
+                },
+                "transitions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkflowTransitionConfig"
+                    }
+                }
+            }
+        },
+        "handlers.SearchCycleResult": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SearchProjectResult": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SearchResponse": {
+            "type": "object",
+            "properties": {
+                "cycles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SearchCycleResult"
+                    }
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SearchProjectResult"
+                    }
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SearchTaskResult"
+                    }
+                }
+            }
+        },
+        "handlers.SearchTaskResult": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "state_color": {
+                    "type": "string"
+                },
+                "state_name": {
+                    "type": "string"
+                },
+                "state_type": {
+                    "type": "string"
+                },
+                "task_key": {
+                    "type": "string"
+                },
+                "task_number": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SendTestEmailRequest": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SetFeatureGateRequest": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SetProjectDisabledRequest": {
+            "type": "object",
+            "properties": {
+                "disabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.SetUserActiveRequest": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.SetWorkflowEnabledRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
                 }
             }
         },
@@ -3746,6 +10460,17 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.StatCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.StateResponse": {
             "type": "object",
             "properties": {
@@ -3753,6 +10478,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description explains when the state applies (e.g. why work sits in an\n\"On hold\" state); shown as a tooltip wherever the state appears.",
                     "type": "string"
                 },
                 "id": {
@@ -3769,58 +10498,33 @@ const docTemplate = `{
                 },
                 "state_type": {
                     "type": "string"
+                },
+                "task_count": {
+                    "description": "TaskCount is how many (non-deleted) tasks sit in this state. Only filled\non the list endpoint, where the settings UI uses it to warn what a state\nedit touches.",
+                    "type": "integer"
                 }
             }
         },
-        "handlers.TaskLabelInfo": {
+        "handlers.SubmitFeedbackRequest": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
+                "message": {
                     "type": "string"
                 }
             }
         },
-        "handlers.TaskResponse": {
+        "handlers.SubtaskCandidateResponse": {
             "type": "object",
             "properties": {
-                "assignees": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.AssigneeResponse"
-                    }
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "creator_first_name": {
-                    "type": "string"
-                },
-                "creator_last_name": {
-                    "type": "string"
-                },
-                "creator_username": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
-                "labels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.TaskLabelInfo"
-                    }
+                "parent_task_id": {
+                    "description": "ParentTaskID/ParentTitle are set when the task is already a subtask\nelsewhere; attaching it re-parents it under this task. The UI surfaces the\ncurrent parent so the move is explicit.",
+                    "type": "string"
+                },
+                "parent_title": {
+                    "type": "string"
                 },
                 "priority": {
                     "type": "integer"
@@ -3841,6 +10545,342 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "task_id": {
+                    "type": "string"
+                },
+                "task_number": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SubtaskResponse": {
+            "type": "object",
+            "properties": {
+                "assignees": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AssigneeResponse"
+                    }
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator_avatar_url": {
+                    "type": "string"
+                },
+                "creator_first_name": {
+                    "type": "string"
+                },
+                "creator_last_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "state_color": {
+                    "type": "string"
+                },
+                "state_id": {
+                    "type": "string"
+                },
+                "state_name": {
+                    "type": "string"
+                },
+                "state_type": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_number": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TaskAreaInfo": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TaskBlockersResponse": {
+            "type": "object",
+            "properties": {
+                "blocked_by": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SubtaskResponse"
+                    }
+                },
+                "blocking": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SubtaskResponse"
+                    }
+                }
+            }
+        },
+        "handlers.TaskGraphFiltersResponse": {
+            "type": "object",
+            "properties": {
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphProjectOption"
+                    }
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphUserOption"
+                    }
+                },
+                "workspaces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphWorkspaceOption"
+                    }
+                }
+            }
+        },
+        "handlers.TaskGraphResponse": {
+            "type": "object",
+            "properties": {
+                "blocker_edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphBlockerEdge"
+                    }
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphEdge"
+                    }
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphTask"
+                    }
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.GraphUser"
+                    }
+                }
+            }
+        },
+        "handlers.TaskLabelInfo": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TaskModuleInfo": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TaskResponse": {
+            "type": "object",
+            "properties": {
+                "areas": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TaskAreaInfo"
+                    }
+                },
+                "assignees": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AssigneeResponse"
+                    }
+                },
+                "branch": {
+                    "type": "string"
+                },
+                "comment_count": {
+                    "type": "integer"
+                },
+                "complexity_score": {
+                    "type": "integer"
+                },
+                "context_only": {
+                    "description": "Tree-mode list annotations: a parent kept only because a subtask matched\nthe filter, how many of its children the filter hides, and the matching\nchildren embedded one level deep.",
+                    "type": "boolean"
+                },
+                "contributors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ContributorResponse"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator_avatar_url": {
+                    "type": "string"
+                },
+                "creator_first_name": {
+                    "type": "string"
+                },
+                "creator_last_name": {
+                    "type": "string"
+                },
+                "creator_username": {
+                    "type": "string"
+                },
+                "cycle_id": {
+                    "type": "string"
+                },
+                "cycle_title": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difficulty": {
+                    "description": "DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).\nAll 0 while not assessed; the score is computed on read, never stored.",
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "effort": {
+                    "type": "integer"
+                },
+                "figma_link": {
+                    "type": "string"
+                },
+                "hidden_subtasks": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TaskLabelInfo"
+                    }
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TaskModuleInfo"
+                    }
+                },
+                "originators": {
+                    "description": "Originators/Requesters: whose need the task represents (distinct from the\ncreator). At least one; defaults to the creator. Populated on the\ndetail/create/update responses; omitted in list responses.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.OriginatorResponse"
+                    }
+                },
+                "parent_task_id": {
+                    "type": "string"
+                },
+                "parent_task_number": {
+                    "type": "integer"
+                },
+                "parent_task_title": {
+                    "type": "string"
+                },
+                "priority_color": {
+                    "type": "string"
+                },
+                "priority_description": {
+                    "type": "string"
+                },
+                "priority_id": {
+                    "description": "Priority is a per-project entity; the id plus resolved display fields.",
+                    "type": "string"
+                },
+                "priority_name": {
+                    "type": "string"
+                },
+                "priority_rank": {
+                    "type": "integer"
+                },
+                "priority_rating": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "pull_request": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "state_color": {
+                    "type": "string"
+                },
+                "state_id": {
+                    "type": "string"
+                },
+                "state_name": {
+                    "type": "string"
+                },
+                "state_type": {
+                    "type": "string"
+                },
+                "subtask_cancelled_count": {
+                    "type": "integer"
+                },
+                "subtask_count": {
+                    "type": "integer"
+                },
+                "subtask_done_count": {
+                    "description": "Children by state type (list responses only), for the board card's subtask\nfraction. Cancelled children never count as done.",
+                    "type": "integer"
+                },
+                "subtasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TaskResponse"
+                    }
+                },
+                "task_id": {
                     "description": "e.g., \"DEVOP-123\"",
                     "type": "string"
                 },
@@ -3852,6 +10892,13 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "watchers": {
+                    "description": "Watchers follow the task to receive its updates (in-app notifications),\nwithout being an assignee or originator. Detail-only, like originators.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WatcherResponse"
+                    }
                 }
             }
         },
@@ -3869,6 +10916,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
+                },
+                "is_mandatory": {
+                    "description": "IsMandatory marks the project's one mandatory template: the create-task\ndialog opens pre-filled with it. A guide, not a lock.",
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"
@@ -3900,6 +10951,25 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateAreaRequest": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateAvatarRequest": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
                     "type": "string"
                 }
             }
@@ -3942,6 +11012,17 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.UpdatePageRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.UpdateProjectRequest": {
             "type": "object",
             "properties": {
@@ -3965,22 +11046,59 @@ const docTemplate = `{
                 "color": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
                 "position": {
                     "type": "integer"
+                },
+                "state_type": {
+                    "description": "StateType re-categorises the state (and so every task in it) across\nprogress metrics, grouping and filters. Tasks reference states by id, so\nno task data changes — the category of the state row does.",
+                    "type": "string"
                 }
             }
         },
         "handlers.UpdateTaskRequest": {
             "type": "object",
             "properties": {
+                "branch": {
+                    "type": "string"
+                },
                 "description": {
                     "type": "string"
                 },
-                "priority": {
+                "difficulty": {
+                    "description": "DEV estimation inputs, 1-5 each (0 = not assessed).",
                     "type": "integer"
+                },
+                "due_date": {
+                    "$ref": "#/definitions/handlers.NullableTime"
+                },
+                "effort": {
+                    "type": "integer"
+                },
+                "figma_link": {
+                    "description": "Custom fields. Omitted (nil) means \"leave unchanged\"; send an empty\nstring to clear one.",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "Priority is rejected: priorities are per-project entities now. Clients\nsend priority_id instead; a non-nil value here fails the whole request.",
+                    "type": "integer"
+                },
+                "priority_id": {
+                    "type": "string"
+                },
+                "priority_rating": {
+                    "type": "integer"
+                },
+                "pull_request": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "$ref": "#/definitions/handlers.NullableTime"
                 },
                 "state_id": {
                     "type": "string"
@@ -3996,6 +11114,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "is_mandatory": {
+                    "description": "Setting true demotes any previously mandatory template of the project.",
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -4004,10 +11126,70 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.UpdateUserProfileRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.UpdateUserRoleRequest": {
             "type": "object",
             "properties": {
                 "user_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateViewRequest": {
+            "type": "object",
+            "properties": {
+                "default_tab": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "filter_tree": {
+                    "type": "object"
+                },
+                "group_by": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "sort_by": {
+                    "type": "string"
+                },
+                "sort_dir": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateWorkspaceRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -4035,7 +11217,159 @@ const docTemplate = `{
         "handlers.UserResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
                 "created_at": {
+                    "type": "string"
+                },
+                "deactivated_at": {
+                    "type": "string"
+                },
+                "deactivated_by_name": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "deleted_by_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "features": {
+                    "description": "Features lists the gated features this user can use (feature gates are\nsuper-admin managed). Set on /me and on every auth response (signin,\nsignup, SSO, token refresh), so a gate change reaches live sessions on\ntheir next refresh. The UI reads it to decide which gated surfaces to\nshow; the API routes enforce the gates regardless.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_deactivated": {
+                    "description": "IsDeactivated is true when an admin has disabled the account. Only set on\nadmin listings; omitted (false = active) everywhere else. Expressed as the\nnegative so active accounts serialize nothing.",
+                    "type": "boolean"
+                },
+                "is_deleted": {
+                    "description": "Soft-delete / deactivation audit, populated only on admin listings so the\nDeactivated and Deleted tabs can show when and by whom.",
+                    "type": "boolean"
+                },
+                "is_super_admin": {
+                    "description": "IsSuperAdmin marks the protected break-glass account so the UI can hide\nits delete/demote/reset controls. Only set on admin listings; omitted\n(false) everywhere else.",
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "user_type": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UserStateCounts": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "deactivated": {
+                    "type": "integer"
+                },
+                "deleted": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.VerifyActivityResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "valid": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.ViewDayCount": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string"
+                },
+                "private": {
+                    "type": "integer"
+                },
+                "shared": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.ViewResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "default_tab": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "filter_tree": {
+                    "type": "object"
+                },
+                "group_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sort_by": {
+                    "type": "string"
+                },
+                "sort_dir": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WatcherResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
                     "type": "string"
                 },
                 "email": {
@@ -4050,7 +11384,7 @@ const docTemplate = `{
                 "last_name": {
                     "type": "string"
                 },
-                "user_type": {
+                "user_id": {
                     "type": "string"
                 },
                 "username": {
@@ -4058,14 +11392,1054 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.VerifyActivityResponse": {
+        "handlers.WorkflowResponse": {
             "type": "object",
             "properties": {
-                "message": {
+                "bypass": {
+                    "type": "boolean"
+                },
+                "configured": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "states": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkflowStateConfig"
+                    }
+                },
+                "transitions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkflowTransitionConfig"
+                    }
+                }
+            }
+        },
+        "handlers.WorkflowStateConfig": {
+            "type": "object",
+            "properties": {
+                "add_assignees": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_entry": {
+                    "type": "boolean"
+                },
+                "pos_x": {
+                    "type": "number"
+                },
+                "pos_y": {
+                    "type": "number"
+                },
+                "remove_assignees": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "state_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WorkflowTransitionConfig": {
+            "type": "object",
+            "properties": {
+                "allow_assignees": {
+                    "type": "boolean"
+                },
+                "allow_creator": {
+                    "type": "boolean"
+                },
+                "from_state_id": {
                     "type": "string"
                 },
-                "valid": {
+                "mover_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "to_state_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WorkloadStat": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "open_tasks": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WorkspaceMemberResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "joined_at": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WorkspaceResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WorkspaceStat": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "project_count": {
+                    "type": "integer"
+                },
+                "workspace_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.AgingRow": {
+            "type": "object",
+            "properties": {
+                "assignee": {
+                    "$ref": "#/definitions/insights.UserRef"
+                },
+                "days": {
+                    "type": "integer"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "state": {
+                    "$ref": "#/definitions/insights.StateRef"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.BandCount": {
+            "type": "object",
+            "properties": {
+                "band": {
+                    "description": "\"1-4\", \"5-9\", \"10-16\", \"17+\", \"not_assessed\"",
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.ComplexitySum": {
+            "type": "object",
+            "properties": {
+                "assessed": {
+                    "type": "integer"
+                },
+                "not_assessed": {
+                    "type": "integer"
+                },
+                "of": {
+                    "type": "integer"
+                },
+                "sum": {
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.CycleCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "cycle": {
+                    "$ref": "#/definitions/insights.CycleRef"
+                }
+            }
+        },
+        "insights.CycleRef": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "upcoming | active | completed",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.CycleSection": {
+            "type": "object",
+            "properties": {
+                "added": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "archived": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "at_close": {
+                    "type": "integer"
+                },
+                "bands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.BandCount"
+                    }
+                },
+                "cancelled": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "carried_over": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.DayPoint"
+                    }
+                },
+                "delivered": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "identity": {
+                    "description": "Identity is the reconciliation line: planned + added - removed = at\nclose = completed + in verification + open + cancelled + archived.",
+                    "type": "string"
+                },
+                "in_verification": {
+                    "description": "InVerification/Cancelled/Archived are nil when the project defines no\nstate of that type — the tile is absent, not zero.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/insights.Tile"
+                        }
+                    ]
+                },
+                "original_plan_delivered": {
+                    "description": "delivered items that were planned at start",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/insights.Tile"
+                        }
+                    ]
+                },
+                "planned_at_start": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "removed": {
+                    "$ref": "#/definitions/insights.Tile"
+                }
+            }
+        },
+        "insights.DayPoint": {
+            "type": "object",
+            "properties": {
+                "added": {
+                    "type": "integer"
+                },
+                "cancelled": {
+                    "type": "integer"
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "completed_cum": {
+                    "type": "integer"
+                },
+                "date": {
+                    "description": "YYYY-MM-DD in the reporting timezone",
+                    "type": "string"
+                },
+                "removed": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "type": "integer"
+                },
+                "weekend": {
                     "type": "boolean"
+                }
+            }
+        },
+        "insights.DueRow": {
+            "type": "object",
+            "properties": {
+                "assignee": {
+                    "$ref": "#/definitions/insights.UserRef"
+                },
+                "due": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "late_days": {
+                    "description": "negative = due in N days",
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.Evidence": {
+            "type": "object",
+            "properties": {
+                "chips": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "how_computed": {
+                    "type": "string"
+                },
+                "metric": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.EvidenceRow"
+                    }
+                },
+                "scope": {
+                    "$ref": "#/definitions/insights.Scope"
+                },
+                "source_events": {
+                    "type": "string"
+                },
+                "task_list_query": {
+                    "description": "TaskListQuery is set only when the population is expressible as task\nlist filters; empty means link/CSV only. No fake equivalence.",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.EvidenceRow": {
+            "type": "object",
+            "properties": {
+                "age_days": {
+                    "type": "integer"
+                },
+                "assessed": {
+                    "type": "boolean"
+                },
+                "assignees": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.UserRef"
+                    }
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "complexity": {
+                    "type": "integer"
+                },
+                "credits": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.UserRef"
+                    }
+                },
+                "due": {
+                    "type": "string"
+                },
+                "entered_cycle": {
+                    "description": "\"planned\" or \"added YYYY-MM-DD\"",
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "marked_complete_by": {
+                    "$ref": "#/definitions/insights.UserRef"
+                },
+                "parent_key": {
+                    "type": "string"
+                },
+                "parent_title": {
+                    "type": "string"
+                },
+                "priority": {
+                    "$ref": "#/definitions/insights.PriorityRef"
+                },
+                "state": {
+                    "$ref": "#/definitions/insights.StateRef"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.Health": {
+            "type": "object",
+            "properties": {
+                "aging": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.AgingRow"
+                    }
+                },
+                "blocked": {
+                    "type": "integer"
+                },
+                "due": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.DueRow"
+                    }
+                },
+                "in_started": {
+                    "type": "integer"
+                },
+                "in_verification": {
+                    "type": "integer"
+                },
+                "open": {
+                    "type": "integer"
+                },
+                "open_by_state": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.StateCount"
+                    }
+                },
+                "overdue": {
+                    "type": "integer"
+                },
+                "priority_mix": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.RankCount"
+                    }
+                },
+                "weekly": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.WeekPoint"
+                    }
+                }
+            }
+        },
+        "insights.PersonProjectRow": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "delivered": {
+                    "type": "integer"
+                },
+                "open_now": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "top_rank_handled": {
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.PersonReport": {
+            "type": "object",
+            "properties": {
+                "bands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.BandCount"
+                    }
+                },
+                "by_cycle": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.CycleCount"
+                    }
+                },
+                "comments": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "credit_rule": {
+                    "type": "string"
+                },
+                "delivered": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "open_now": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/insights.Scope"
+                },
+                "top_rank_handled": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/insights.UserRef"
+                },
+                "weekly": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.WeekPoint"
+                    }
+                },
+                "worked_with": {
+                    "description": "WorkedWith lists the people who shared credit on this person's delivered\nitems over the window.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.UserCount"
+                    }
+                }
+            }
+        },
+        "insights.PersonRow": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "delivered": {
+                    "type": "integer"
+                },
+                "has_activity": {
+                    "type": "boolean"
+                },
+                "open_at_end": {
+                    "type": "integer"
+                },
+                "shared": {
+                    "description": "of Delivered, items credited to \u003e1 person",
+                    "type": "integer"
+                },
+                "top_rank_handled": {
+                    "description": "delivered at the project's top two ranks",
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/insights.UserRef"
+                }
+            }
+        },
+        "insights.PersonTable": {
+            "type": "object",
+            "properties": {
+                "credit_rule": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.PersonRow"
+                    }
+                },
+                "total_cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "total_delivered": {
+                    "description": "distinct items",
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.Portfolio": {
+            "type": "object",
+            "properties": {
+                "delivered": {
+                    "$ref": "#/definitions/insights.PortfolioDelivered"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.PortfolioRow"
+                    }
+                },
+                "rule": {
+                    "description": "the attention rule, shown, not hidden",
+                    "type": "string"
+                },
+                "scope": {
+                    "$ref": "#/definitions/insights.Scope"
+                }
+            }
+        },
+        "insights.PortfolioDelivered": {
+            "type": "object",
+            "properties": {
+                "by_project": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.ProjectCount"
+                    }
+                },
+                "cancelled": {
+                    "type": "integer"
+                },
+                "cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.PortfolioRow": {
+            "type": "object",
+            "properties": {
+                "active_cycle": {
+                    "$ref": "#/definitions/insights.CycleRef"
+                },
+                "active_people": {
+                    "type": "integer"
+                },
+                "archived": {
+                    "type": "integer"
+                },
+                "attention": {
+                    "type": "boolean"
+                },
+                "attention_why": {
+                    "type": "string"
+                },
+                "blocked": {
+                    "type": "integer"
+                },
+                "cancelled": {
+                    "type": "integer"
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "has_cycles": {
+                    "type": "boolean"
+                },
+                "history_days": {
+                    "type": "integer"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "low_history": {
+                    "type": "boolean"
+                },
+                "members": {
+                    "type": "integer"
+                },
+                "oldest": {
+                    "$ref": "#/definitions/insights.AgingRow"
+                },
+                "open": {
+                    "type": "integer"
+                },
+                "overdue": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "top_rank_name": {
+                    "type": "string"
+                },
+                "top_rank_open": {
+                    "type": "integer"
+                },
+                "trend": {
+                    "description": "filling | draining | steady | no_history",
+                    "type": "string"
+                },
+                "weekly": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.WeekPoint"
+                    }
+                }
+            }
+        },
+        "insights.PriorityRef": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "color": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rank": {
+                    "type": "integer"
+                }
+            }
+        },
+        "insights.ProjectCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "project_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.ProjectReport": {
+            "type": "object",
+            "properties": {
+                "cycle": {
+                    "$ref": "#/definitions/insights.CycleSection"
+                },
+                "cycles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.CycleRef"
+                    }
+                },
+                "has_areas": {
+                    "description": "Vocabularies the frontend needs for panels that are conditional on their\nexistence.",
+                    "type": "boolean"
+                },
+                "has_labels": {
+                    "type": "boolean"
+                },
+                "health": {
+                    "$ref": "#/definitions/insights.Health"
+                },
+                "people": {
+                    "$ref": "#/definitions/insights.PersonTable"
+                },
+                "range": {
+                    "$ref": "#/definitions/insights.RangeSection"
+                },
+                "scope": {
+                    "$ref": "#/definitions/insights.Scope"
+                }
+            }
+        },
+        "insights.RangeSection": {
+            "type": "object",
+            "properties": {
+                "bands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.BandCount"
+                    }
+                },
+                "cancelled": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "completed": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "created": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.DayPoint"
+                    }
+                },
+                "has_cycles": {
+                    "description": "HasCycles says whether the project could run cycle reports at all; false\nrenders the quiet \"create a cycle\" hint.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "insights.RankCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "$ref": "#/definitions/insights.PriorityRef"
+                }
+            }
+        },
+        "insights.Scope": {
+            "type": "object",
+            "properties": {
+                "counting_rule": {
+                    "description": "CountingRule is the plain-language line shown under the scope.",
+                    "type": "string"
+                },
+                "cutoff": {
+                    "type": "string"
+                },
+                "cycle_id": {
+                    "type": "string"
+                },
+                "cycle_title": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "project_key": {
+                    "type": "string"
+                },
+                "project_name": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "to": {
+                    "description": "inclusive end of the window's last day",
+                    "type": "string"
+                }
+            }
+        },
+        "insights.StateCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "state": {
+                    "$ref": "#/definitions/insights.StateRef"
+                }
+            }
+        },
+        "insights.StateRef": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.Tile": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "cx": {
+                    "$ref": "#/definitions/insights.ComplexitySum"
+                },
+                "metric": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.UserCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/insights.UserRef"
+                }
+            }
+        },
+        "insights.UserRef": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "insights.WeekPoint": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "week_start": {
+                    "description": "YYYY-MM-DD (Monday, reporting timezone)",
+                    "type": "string"
+                }
+            }
+        },
+        "insights.WorkspacePersonReport": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "credit_rule": {
+                    "type": "string"
+                },
+                "delivered": {
+                    "$ref": "#/definitions/insights.Tile"
+                },
+                "open_now": {
+                    "type": "integer"
+                },
+                "projects": {
+                    "description": "Projects holds one row per project that contributed anything (membership\nor windowed activity), most delivered first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.PersonProjectRow"
+                    }
+                },
+                "projects_considered": {
+                    "description": "ProjectsConsidered counts the viewer's projects the sums ran over, so the\nscope line can be honest about coverage.",
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/insights.Scope"
+                },
+                "top_rank_handled": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/insights.UserRef"
+                },
+                "weekly": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.WeekPoint"
+                    }
+                },
+                "worked_with": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.UserCount"
+                    }
                 }
             }
         }

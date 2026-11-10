@@ -32,7 +32,7 @@ func NewPreferencesHandler(s store.Querier) *PreferencesHandler {
 type PreferenceEntry struct {
 	Key          string          `json:"key"`
 	Scope        string          `json:"scope"`
-	Value        json.RawMessage `json:"value"`
+	Value        json.RawMessage `json:"value" swaggertype:"object"`
 	ValueVersion int             `json:"value_version"`
 	Revision     int64           `json:"revision"`
 	Source       string          `json:"source"`
@@ -47,7 +47,7 @@ type PreferencesResponse struct {
 // WritePreferenceRequest is the body for PUT. `expected_revision` is the
 // revision the caller last saw (0 for a first write); a mismatch yields 409.
 type WritePreferenceRequest struct {
-	Value            json.RawMessage `json:"value"`
+	Value            json.RawMessage `json:"value" swaggertype:"object"`
 	ValueVersion     int             `json:"value_version"`
 	ExpectedRevision int64           `json:"expected_revision"`
 }

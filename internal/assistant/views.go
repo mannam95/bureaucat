@@ -45,7 +45,7 @@ type ActionView struct {
 	ToolCallID string          `json:"tool_call_id"`
 	Tool       string          `json:"tool"`
 	Title      string          `json:"title"`
-	Args       json.RawMessage `json:"args"`
+	Args       json.RawMessage `json:"args" swaggertype:"object"`
 	Status     string          `json:"status"`
 	Result     string          `json:"result,omitempty"`
 }
