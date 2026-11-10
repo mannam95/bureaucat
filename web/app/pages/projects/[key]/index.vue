@@ -603,22 +603,6 @@ async function loadTasks(page = 1) {
   });
 }
 
-// The board groups tasks by state client-side, so it needs the WHOLE filtered
-// set — not one paginated page like the list. Fetch all matching tasks (walking
-// pages) into its own state, leaving the list's paginated `tasks` untouched.
-const boardTasks = ref<Task[]>([]);
-
-async function loadBoardTasks() {
-  const hasFilter = effectiveTree.value.children.length > 0;
-  const res = await fetchAllTasks(projectKey.value, {
-    tree: effectiveTree.value,
-    sortBy: sortBy.value,
-    sortDir: sortDir.value,
-    viewSlug: hasFilter ? activeViewSlug.value ?? undefined : undefined,
-  });
-  if (res.success && res.data) boardTasks.value = res.data;
-}
-
 async function handleTaskCreated() {
   if (activeTab.value === "board") {
     await loadBoardTasks();
