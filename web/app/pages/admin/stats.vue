@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChart3, Loader2, Users, LayoutGrid, ListTodo, GitBranch, FileText, Building2, Paperclip, HardDrive, Ban, Link2, UserCheck, Workflow as WorkflowIcon } from "lucide-vue-next";
+import { BarChart3, Loader2, Users, LayoutGrid, ListTodo, GitBranch, FileText, Building2, Paperclip, HardDrive, Ban, Link2, UserCheck } from "lucide-vue-next";
 import { toast } from "vue-sonner";
 import type { DateValue } from "@internationalized/date";
 import type { AdminStats } from "~/composables/useAdmin";
@@ -52,12 +52,7 @@ const totalCards = computed(() => {
     { label: "Users", value: t.users.toLocaleString(), icon: Users, color: "text-rose-400" },
     { label: "Attachments", value: t.attachments.toLocaleString(), icon: Paperclip, color: "text-cyan-400" },
     { label: "Attachments size", value: formatBytes(t.attachments_bytes), icon: HardDrive, color: "text-sky-400" },
-    {
-      label: "Workflow enforced",
-      value: `${t.workflow_projects.toLocaleString()} / ${t.projects.toLocaleString()}`,
-      icon: WorkflowIcon,
-      color: "text-blue-300",
-    },
+    // Workflow enforced card - HIDDEN (self-host): the workflow engine is hidden, so this is always 0.
   ];
 });
 

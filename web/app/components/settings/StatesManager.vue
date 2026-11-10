@@ -203,11 +203,12 @@ async function handleDelete(state: ProjectState) {
         <h3 class="font-semibold">Workflow States</h3>
         <p class="text-sm text-muted-foreground">
           Configure the states tasks can be in.
-          <button type="button" class="underline underline-offset-2 hover:text-foreground" @click="emit('openWorkflow')">
+          <!-- Workflow link - HIDDEN (self-host): the workflow engine is hidden, so there is no tab to open. -->
+          <button v-if="false" type="button" class="underline underline-offset-2 hover:text-foreground" @click="emit('openWorkflow')">
             {{ workflowEnabled ? "Workflow rules are on" : "Set up workflow rules" }}
           </button>
         </p>
-        <p v-if="workflowEnabled" class="mt-1 text-xs text-muted-foreground">
+        <p v-if="false && workflowEnabled" class="mt-1 text-xs text-muted-foreground">
           New states start with no transitions, so only admins can move tasks into them until you connect them in the
           Workflow tab.
         </p>

@@ -106,7 +106,7 @@ GET    /api/v1/projects/:key/workflow          # Graph config + enabled + bypass
 PUT    /api/v1/projects/:key/workflow          # Replace graph atomically (project admin)
 PUT    /api/v1/projects/:key/workflow/enabled  # Toggle enforcement, config kept (project admin)
 ```
-Opt-in per project. Enforced in `internal/workflow` from `CreateTask` (entry states), `UpdateTask` (edges are an allowlist, optional movers: users/assignees/creator) and on-enter assignee actions (also on cross-project move-in). Project/global admins bypass checks.
+HIDDEN on this fork: the Workflow tab and the catalog tools are disabled (v-if="false" / not exposed), so no UI or agent can save or enable a graph; the routes stay registered and dormant. Opt-in per project. Enforced in `internal/workflow` from `CreateTask` (entry states), `UpdateTask` (edges are an allowlist, optional movers: users/assignees/creator) and on-enter assignee actions (also on cross-project move-in). Project/global admins bypass checks.
 
 ### Admin Routes (requires Bearer token + admin role)
 ```

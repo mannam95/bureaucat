@@ -35,7 +35,7 @@ const router = useRouter();
 const projectKey = computed(() => route.params.key as string);
 
 // Valid tab values
-const validTabs = ["tasks", "board", "cycles", "modules", "members", "pages", "views", "workflow", "settings"] as const;
+const validTabs = ["tasks", "board", "cycles", "modules", "members", "pages", "views", "settings"] as const;
 type TabValue = (typeof validTabs)[number];
 
 const activeTab = computed({
@@ -957,7 +957,12 @@ onMounted(async () => {
                   <BarChart3 class="size-4" />
                   Stats
                 </TabsTrigger>
-                <TabsTrigger v-if="isAdmin" value="workflow" class="gap-2">
+                <!-- Workflow tab - HIDDEN (self-host): the per-project workflow
+                     engine adds more process than this team wants; re-enable by
+                     restoring v-if="isAdmin" here and on its TabsContent, and
+                     adding "workflow" back to validTabs. The engine stays dormant:
+                     no UI can save or enable a graph. -->
+                <TabsTrigger v-if="false" value="workflow" class="gap-2">
                   <WorkflowIcon class="size-4" />
                   Workflow
                 </TabsTrigger>
@@ -1332,7 +1337,7 @@ onMounted(async () => {
             </TabsContent>
 
             <!-- Workflow Tab -->
-            <TabsContent v-if="isAdmin" value="workflow" class="mt-6">
+            <TabsContent v-if="false" value="workflow" class="mt-6">
               <WorkflowEditor :project-key="projectKey" :states="states" :members="members" />
             </TabsContent>
 

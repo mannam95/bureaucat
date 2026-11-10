@@ -12,14 +12,23 @@ import (
 
 // hiddenDocPathMarkers hides routes from the served spec (and so from Scalar
 // and anything else reading /api/v1/openapi.json) while their feature is still
-// being tested. A path is hidden when it contains a marker; the matching
-// definitions go with it. The routes themselves stay registered and guarded -
-// this hides documentation, not access. Remove an entry to publish the docs.
-var hiddenDocPathMarkers = []string{"/insights"}
+// being tested or is hidden on this fork. A path is hidden when it contains a
+// marker; the matching definitions go with it. The routes themselves stay
+// registered and guarded - this hides documentation, not access. Remove an
+// entry to publish the docs.
+var hiddenDocPathMarkers = []string{
+	"/insights", // still being tested
+	"/workflow", // the workflow engine is hidden on this fork
+}
 
 // hiddenDocDefinitionPrefixes drops the schema definitions that only hidden
 // paths reference.
-var hiddenDocDefinitionPrefixes = []string{"insights."}
+var hiddenDocDefinitionPrefixes = []string{
+	"insights.",
+	"handlers.Workflow",
+	"handlers.SaveWorkflow",
+	"handlers.SetWorkflowEnabled",
+}
 
 func hiddenDocPath(path string) bool {
 	for _, m := range hiddenDocPathMarkers {

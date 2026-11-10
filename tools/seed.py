@@ -779,48 +779,6 @@ def main():
         total["delivered"] += p.counts["delivered"]
         story_projects.append(p)
 
-        if pi == 0:
-            # A drawn workflow, saved but NOT enforced: flip it on in the
-            # project's Workflow tab to try the engine. Most moves are free;
-            # only QA (two named people) may move work from Testing to Done,
-            # and entering Testing auto-assigns the tester.
-            print("   saving a workflow graph (disabled - enable it to test)")
-            s = p.states
-            tester = team[1]["id"]
-            qa = [team[1]["id"], team[2]["id"]]
-            def node(name, x, y, entry=False, add=None):
-                return {"state_id": s[name], "is_entry": entry, "pos_x": x, "pos_y": y,
-                        "add_assignees": add or [], "remove_assignees": []}
-            def edge(a, b, assignees=False, creator=False, movers=None):
-                return {"from_state_id": s[a], "to_state_id": s[b],
-                        "allow_assignees": assignees, "allow_creator": creator,
-                        "mover_ids": movers or []}
-            api("PUT", f"/projects/{key}/workflow", {
-                "states": [
-                    node("Backlog", 0, 120, entry=True),
-                    node("Todo", 220, 120, entry=True),
-                    node("Approval Pending", 220, 320),
-                    node("In Progress", 440, 120),
-                    node("Blocked", 440, 320),
-                    node("Testing", 660, 120, add=[tester]),
-                    node("Done", 880, 120),
-                    node("Cancelled", 880, 320),
-                ],
-                "transitions": [
-                    edge("Backlog", "Todo"),
-                    edge("Todo", "Approval Pending"),
-                    edge("Approval Pending", "Todo"),
-                    edge("Todo", "In Progress", assignees=True, creator=True),
-                    edge("In Progress", "Blocked", assignees=True),
-                    edge("Blocked", "In Progress", assignees=True),
-                    edge("In Progress", "Testing", assignees=True),
-                    edge("Testing", "In Progress", assignees=True),
-                    edge("Testing", "Done", movers=qa),
-                    edge("Todo", "Cancelled", creator=True),
-                    edge("In Progress", "Cancelled", creator=True),
-                ],
-            })
-
         created, default_slug = seed_views(key, p.prio, make_default=(pi == 0))
         total["views"] += created
         if default_slug:
@@ -927,9 +885,9 @@ def main():
     print("             OPS as the no-cycles date-range report")
     print("   dashboard: the admin's plate spans WEB (parent + subtasks, a crumb),")
     print("              MOBILE and OPS — the grouped Assigned-to-You demo")
-    print("   new in this seed: custom branding (Nova Tracker), a saved-but-disabled")
-    print(f"   workflow graph on the first project, a mandatory 'Bug report' template,")
-    print(f"   CSV/markdown preview attachments on {p0.key}-{preview_task['num']}, start dates")
+    print("   new in this seed: custom branding (Nova Tracker), a mandatory 'Bug")
+    print(f"   report' template, CSV/markdown preview attachments on {p0.key}-{preview_task['num']},")
+    print("   start dates")
     print(f"   admin login: {ADMIN_EMAIL} / {ADMIN_PW}")
     print(f"   users: password '{USER_PW}', e.g. " + ", ".join(u["name"] for u in users[:3]) + ", …")
 
