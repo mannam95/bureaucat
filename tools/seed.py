@@ -269,11 +269,12 @@ SELECT a.id, a.task_id, a.activity_type::text, a.actor_id, coalesce(a.field_name
        encode(convert_to(coalesce(a.old_value::text,''),'UTF8'),'hex'),
        encode(convert_to(coalesce(a.new_value::text,''),'UTF8'),'hex'),
        to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'),
-       to_char(a.created_at AT TIME ZONE 'UTC', 'US')
+       to_char(a.created_at AT TIME ZONE 'UTC', 'US'),
+       a.checksum_version, coalesce(a.via,'web')
 FROM activity_log a ORDER BY a.task_id, a.created_at ASC, a.id ASC;""")
     updates, prev_task, prev_sum = [], None, None
     seed_sum = "0" * 64
-    for rid, task_id, typ, actor, field, old_hex, new_hex, ts_sec, ts_us in rows:
+    for rid, task_id, typ, actor, field, old_hex, new_hex, ts_sec, ts_us, version, via in rows:
         if task_id != prev_task:
             prev_task, prev_sum = task_id, seed_sum
         def norm(hx):
@@ -284,6 +285,9 @@ FROM activity_log a ORDER BY a.task_id, a.created_at ASC, a.id ASC;""")
         frac = ts_us.rstrip("0")
         stamp = ts_sec + (("." + frac) if frac else "") + "Z"
         data = f"{prev_sum}|{task_id}|{typ}|{actor}|{field}|{norm(old_hex)}|{norm(new_hex)}|{stamp}"
+        # Version 2 (internal/activity.calculateChecksum) also covers via.
+        if int(version) >= 2:
+            data = "v2|" + data + "|" + via
         prev_sum = hashlib.sha256(data.encode("utf-8")).hexdigest()
         updates.append(f"UPDATE activity_log SET checksum='{prev_sum}' WHERE id='{rid}';")
     psql("BEGIN;" + "\n".join(updates) + "COMMIT;")
