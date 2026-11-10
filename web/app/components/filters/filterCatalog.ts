@@ -14,6 +14,7 @@ import {
   Flame,
   Users,
   User,
+  UserRound,
   Eye,
   Repeat,
   Calendar as CalendarIcon,
@@ -90,6 +91,19 @@ export const FILTER_CATALOG: FieldDef[] = [
       { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
       { op: "is_empty", label: "is unassigned", valueKind: "none" },
       { op: "is_set", label: "has any assignee", valueKind: "none" },
+    ],
+  },
+  {
+    field: "originators",
+    label: "Originators / Requesters",
+    icon: UserRound,
+    entityKind: "member",
+    ops: [
+      { op: "has_any", label: "include any of", valueKind: "uuid-array" },
+      { op: "has_all", label: "include all of", valueKind: "uuid-array" },
+      { op: "has_none", label: "exclude all of", valueKind: "uuid-array" },
+      { op: "is_empty", label: "has no requester", valueKind: "none" },
+      { op: "is_set", label: "has any requester", valueKind: "none" },
     ],
   },
   {

@@ -280,6 +280,7 @@ export type FilterField =
   | "state_type"
   | "priority"
   | "assignees"
+  | "originators"
   | "watchers"
   | "created_by"
   | "labels"

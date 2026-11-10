@@ -207,6 +207,13 @@ var predicateHandlers = map[predicateKey]predicateHandler{
 	{"watchers", "is_empty"}: watchersPresence(false),
 	{"watchers", "is_set"}:   watchersPresence(true),
 
+	// ---- originators / requesters (join) ----
+	{"originators", "has_any"}:  originatorsExists(false),
+	{"originators", "has_all"}:  originatorsHasAll,
+	{"originators", "has_none"}: originatorsExists(true),
+	{"originators", "is_empty"}: originatorsPresence(false),
+	{"originators", "is_set"}:   originatorsPresence(true),
+
 	// ---- labels (join) ----
 	{"labels", "has_any"}:  labelsExists(false, false),
 	{"labels", "has_none"}: labelsExists(true, false),
@@ -568,6 +575,49 @@ func watchersPresence(set bool) predicateHandler {
 			prefix = ""
 		}
 		return prefix + "EXISTS (SELECT 1 FROM task_watchers tw WHERE tw.task_id = t.id)", nil
+	}
+}
+
+func originatorsExists(negate bool) predicateHandler {
+	return func(a *argBuffer, callerID uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+		ids, err := decodeUUIDArray(v, callerID)
+		if err != nil {
+			return "", err
+		}
+		if len(ids) == 0 {
+			if negate {
+				return "TRUE", nil
+			}
+			return "FALSE", nil
+		}
+		p := a.push(ids)
+		prefix := ""
+		if negate {
+			prefix = "NOT "
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_originators tor WHERE tor.task_id = t.id AND tor.user_id = ANY(" + p + "::uuid[]))", nil
+	}
+}
+
+func originatorsHasAll(a *argBuffer, callerID uuid.UUID, _ time.Time, v json.RawMessage) (string, error) {
+	ids, err := decodeUUIDArray(v, callerID)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "TRUE", nil
+	}
+	p := a.push(ids)
+	return "(SELECT COUNT(DISTINCT tor.user_id) FROM task_originators tor WHERE tor.task_id = t.id AND tor.user_id = ANY(" + p + "::uuid[])) = " + strconv.Itoa(len(ids)), nil
+}
+
+func originatorsPresence(set bool) predicateHandler {
+	return func(*argBuffer, uuid.UUID, time.Time, json.RawMessage) (string, error) {
+		prefix := "NOT "
+		if set {
+			prefix = ""
+		}
+		return prefix + "EXISTS (SELECT 1 FROM task_originators tor WHERE tor.task_id = t.id)", nil
 	}
 }
 
