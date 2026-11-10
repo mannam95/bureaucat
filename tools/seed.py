@@ -689,6 +689,12 @@ def main():
     print("→ branding: custom app name (toggle off in Admin → Branding)")
     api("PUT", "/admin/settings/branding", {"enabled": True, "app_name": "Nova Tracker"})
 
+    # The insights gate defaults to disabled; without this the admin cannot
+    # open /insights and the showcase below is unreachable. Needs the admin to
+    # be SUPERADMIN_EMAIL (dev .env sets demo@gmail.com).
+    print("→ feature gate: insights → admins")
+    api("PUT", "/admin/features/insights", {"mode": "admins"}, ignore=(403,))
+
     print(f"→ creating {NUM_USERS} users")
     users = []
     used = set()
