@@ -2202,6 +2202,29 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		UserID:  userID,
 		AddedBy: userID,
 	})
+	// The original requesters travel with the copy: every source originator who
+	// is also a member of the destination project is carried over, so release
+	// notes credit the person who asked, not whoever copied the ticket. Anyone
+	// not in the destination project is left out, exactly as before.
+	if srcOriginators, err := h.store.ListTaskOriginators(ctx, src.ID); err == nil {
+		for _, o := range srcOriginators {
+			if o.UserID == userID {
+				continue
+			}
+			isMember, err := h.store.IsProjectMember(ctx, store.IsProjectMemberParams{
+				ProjectID: dest.ID,
+				UserID:    o.UserID,
+			})
+			if err != nil || !isMember {
+				continue
+			}
+			_, _ = h.store.AddTaskOriginator(ctx, store.AddTaskOriginatorParams{
+				TaskID:  copyTask.ID,
+				UserID:  o.UserID,
+				AddedBy: userID,
+			})
+		}
+	}
 	for _, id := range assigneeIDs {
 		_, _ = h.store.AddTaskAssignee(ctx, store.AddTaskAssigneeParams{
 			TaskID:     copyTask.ID,
