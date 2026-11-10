@@ -19,6 +19,7 @@ definePageMeta({
 useSeoMeta({ title: "Dashboard" });
 
 const { user, getAuthHeader } = useAuth();
+const { appName } = useSettings();
 const { projects, loading: projectsLoading, listProjects } = useProjects();
 const { currentWorkspace, workspaces } = useWorkspaces();
 // When off, "Your Projects" / "Assigned to You" (and the Create Task project
@@ -407,7 +408,7 @@ onBeforeUnmount(() => {
               to="/settings"
               class="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-300"
             >Settings</NuxtLink>
-            so your avatar shows up across Bureaucat.
+            so your avatar shows up across {{ appName }}.
           </span>
         </div>
 

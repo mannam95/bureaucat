@@ -11,6 +11,7 @@ definePageMeta({
 
 useSeoMeta({ title: "Settings" });
 
+const { appName } = useSettings();
 const { listTokens, createToken, updateTokenScope, deleteToken } = usePAT();
 const { user, changePassword, logout, getAuthHeader, refreshUser } = useAuth();
 
@@ -468,7 +469,7 @@ onMounted(() => {
               Notifications
             </h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Choose how Bureaucat reaches you.
+              Choose how {{ appName }} reaches you.
             </p>
           </div>
 
@@ -714,7 +715,7 @@ onMounted(() => {
               MCP Server
             </h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Connect AI coding agents to Bureaucat over the Model Context Protocol. They can read and update your projects and tasks as you, with the permissions of the token you use — a read-only token stays read-only.
+              Connect AI coding agents to {{ appName }} over the Model Context Protocol. They can read and update your projects and tasks as you, with the permissions of the token you use — a read-only token stays read-only.
             </p>
           </div>
           <McpSetup />
