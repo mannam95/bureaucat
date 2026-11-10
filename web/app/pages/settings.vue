@@ -448,7 +448,7 @@ onMounted(() => {
         </div>
 
         <!-- Personal Access Tokens Section -->
-        <div>
+        <div class="mb-10">
           <div class="mb-4">
             <h2 class="flex items-center gap-2 text-lg font-semibold">
               <Key class="size-5" />
