@@ -46,7 +46,11 @@ export type ActivityType =
   | "blocker_added"
   | "blocker_removed"
   | "contributor_added"
-  | "contributor_removed";
+  | "contributor_removed"
+  | "originator_added"
+  | "originator_removed"
+  | "watcher_added"
+  | "watcher_removed";
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   task_created: "created the task",
@@ -74,6 +78,10 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   blocker_removed: "unlinked a blocker",
   contributor_added: "added contributor",
   contributor_removed: "removed contributor",
+  originator_added: "added requester",
+  originator_removed: "removed requester",
+  watcher_added: "added watcher",
+  watcher_removed: "removed watcher",
 };
 
 // field_name holds the relation as seen from the task the entry belongs to.

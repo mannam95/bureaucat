@@ -373,42 +373,99 @@ function parseActivityValue(value: unknown): Record<string, unknown> | null {
 }
 
 // Get display text for activity details (assignee name, label name, etc.)
+// parseScalarValue returns a logged scalar (string, number, boolean) as-is;
+// JSON-encoded strings are decoded first. Objects return null - they belong
+// to parseActivityValue.
+function parseScalarValue(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  let v = value;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      // a plain string that never was JSON
+    }
+  }
+  return typeof v === "object" ? null : v;
+}
+
+// formatFieldValue renders a logged field value for the feed: dates read as
+// dates, long strings truncate, empty reads as a dash.
+function formatFieldValue(value: unknown): string | null {
+  const v = parseScalarValue(value);
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "string") {
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      }
+    }
+    return v.length > 60 ? v.slice(0, 57) + "…" : v;
+  }
+  return String(v);
+}
+
+// Activity types whose payload names a person.
+const PERSON_EVENTS = new Set<ActivityType>([
+  "assignee_added", "assignee_removed",
+  "originator_added", "originator_removed",
+  "watcher_added", "watcher_removed",
+  "contributor_added", "contributor_removed",
+]);
+
+// getActivityDetail answers "who or what, exactly" for a feed row: the person
+// added or removed, the label/area/cycle/epic/file by name, the blocker by
+// key, and for field updates the old → new values. Every answer comes from the
+// logged payload, so the feed reads the history, not today's state.
 function getActivityDetail(activity: ActivityLogEntry): string | null {
   const type = activity.activity_type;
+  const added = !type.endsWith("_removed");
+  const data = parseActivityValue(added ? activity.new_value : activity.old_value);
 
-  if (type === "assignee_added") {
-    const data = parseActivityValue(activity.new_value);
-    if (data?.first_name && data?.last_name) {
-      return `${data.first_name} ${data.last_name}`;
+  if (PERSON_EVENTS.has(type)) {
+    if (data?.first_name || data?.last_name) {
+      return `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
     }
+    if (data?.username) return data.username as string;
   }
 
-  if (type === "assignee_removed") {
-    const data = parseActivityValue(activity.old_value);
-    if (data?.first_name && data?.last_name) {
-      return `${data.first_name} ${data.last_name}`;
-    }
+  if (type === "label_added" || type === "label_removed" || type === "area_added" || type === "area_removed") {
+    if (data?.name) return data.name as string;
   }
 
-  if (type === "label_added") {
-    const data = parseActivityValue(activity.new_value);
-    if (data?.name) {
-      return data.name as string;
-    }
+  if (type === "cycle_added" || type === "cycle_removed" || type === "module_added" || type === "module_removed") {
+    if (data?.title) return data.title as string;
+  }
+
+  if (type === "attachment_added" || type === "attachment_removed") {
+    if (data?.filename) return data.filename as string;
   }
 
   if (type === "blocker_added" || type === "blocker_removed") {
-    const data = parseActivityValue(type === "blocker_added" ? activity.new_value : activity.old_value);
     if (data?.task_id) {
       return data.title ? `${data.task_id} ${data.title}` : (data.task_id as string);
     }
   }
 
-  if (type === "label_removed") {
-    const data = parseActivityValue(activity.old_value);
-    if (data?.name) {
-      return data.name as string;
-    }
+  if (type === "task_created" && data?.copied_from) {
+    return `copied from ${data.copied_from}`;
+  }
+
+  if (type === "task_moved") {
+    const from = parseActivityValue(activity.old_value)?.project_key;
+    const to = parseActivityValue(activity.new_value)?.project_key;
+    if (from && to) return `${from} → ${to}`;
+  }
+
+  if (type === "task_updated" && activity.field_name) {
+    // The description is content, not a value - "updated description" is enough.
+    if (activity.field_name === "description") return null;
+    const from = formatFieldValue(activity.old_value);
+    const to = formatFieldValue(activity.new_value);
+    if (from && to) return `${from} → ${to}`;
+    if (to) return to;
+    if (from) return `${from} → —`;
   }
 
   return null;
@@ -559,6 +616,12 @@ function getStateChangeDetail(activity: ActivityLogEntry): { from: string; to: s
                 <template v-if="getStateChangeDetail(item.data)">
                   from <span class="font-medium">{{ getStateChangeDetail(item.data)!.from }}</span>
                   to <span class="font-medium">{{ getStateChangeDetail(item.data)!.to }}</span>
+                </template>
+                <template v-else-if="item.data.activity_type === 'task_updated' && getFieldLabel(item.data.field_name)">
+                  <span class="font-medium">{{ getFieldLabel(item.data.field_name) }}</span>
+                  <template v-if="getActivityDetail(item.data)">
+                    : <span class="font-medium">{{ getActivityDetail(item.data) }}</span>
+                  </template>
                 </template>
                 <template v-else-if="getActivityDetail(item.data)">
                   <span class="font-medium">{{ getActivityDetail(item.data) }}</span>

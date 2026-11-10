@@ -977,20 +977,32 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		})
 	}
 
-	// Add areas (admin-defined classification). No activity log entry — the
-	// activity enum doesn't cover areas yet.
+	// Add areas (admin-defined classification), logged like any later addition
+	// so the feed tells the whole story from creation on.
 	for _, areaIDStr := range req.Areas {
 		areaID, err := uuid.Parse(areaIDStr)
 		if err != nil {
 			continue
 		}
-		if _, err := h.store.GetProjectAreaByID(ctx, areaID); err != nil {
+		area, err := h.store.GetProjectAreaByID(ctx, areaID)
+		if err != nil {
 			continue
 		}
-		_ = h.store.AddTaskArea(ctx, store.AddTaskAreaParams{
+		if err := h.store.AddTaskArea(ctx, store.AddTaskAreaParams{
 			TaskID:  task.ID,
 			AreaID:  areaID,
 			AddedBy: userID,
+		}); err != nil {
+			continue
+		}
+		h.activityService.LogActivity(ctx, activity.LogActivityParams{
+			TaskID:       task.ID,
+			ActivityType: activity.AreaAdded,
+			ActorID:      userID,
+			NewValue: map[string]interface{}{
+				"area_id": areaID.String(),
+				"name":    area.Name,
+			},
 		})
 	}
 
