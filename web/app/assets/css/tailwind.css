@@ -209,6 +209,9 @@
 /* Markdown prose styles */
 .prose {
   line-height: 1.6;
+  /* Pasted long URLs and unbroken strings must wrap inside the column
+     instead of running under the task sidebar. */
+  overflow-wrap: break-word;
 }
 .prose h1 {
   font-size: 1.5em;
@@ -261,6 +264,8 @@
   background-color: var(--muted);
   padding: 0.125em 0.375em;
   border-radius: 0.25rem;
+  /* Inline code spans (paths, module names) wrap rather than overflow. */
+  overflow-wrap: anywhere;
 }
 .prose pre {
   background-color: var(--muted);
@@ -284,6 +289,9 @@
 .prose a {
   color: var(--primary);
   text-decoration: underline;
+  /* A long URL has no natural break points; break it anywhere it must. */
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 .prose hr {
   border-color: var(--border);
