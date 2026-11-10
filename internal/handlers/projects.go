@@ -1446,6 +1446,24 @@ func (h *ProjectHandler) DeleteState(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot delete state with tasks")
 	}
 
+	// A workflow's entry nodes cascade away with the state. Deleting the last
+	// one would leave an enabled workflow that rejects every new task for
+	// non-admins, so that one deletion is refused until the workflow is edited.
+	if wfStates, err := h.store.ListWorkflowStates(ctx, state.ProjectID); err == nil {
+		entries, isEntry := 0, false
+		for _, ws := range wfStates {
+			if ws.IsEntry {
+				entries++
+				if ws.StateID == stateID {
+					isEntry = true
+				}
+			}
+		}
+		if isEntry && entries == 1 {
+			return echo.NewHTTPError(http.StatusConflict, "this state is the workflow's only entry state; change the workflow before deleting it")
+		}
+	}
+
 	err = h.store.DeleteProjectState(ctx, stateID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete state")

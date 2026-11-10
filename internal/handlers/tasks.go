@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -163,7 +164,7 @@ type TaskResponse struct {
 	CycleID        *uuid.UUID       `json:"cycle_id,omitempty"`
 	CycleTitle     *string          `json:"cycle_title,omitempty"`
 	Modules        []TaskModuleInfo `json:"modules,omitempty"`
-	DesignLink      *string          `json:"design_link,omitempty"`
+	DesignLink     *string          `json:"design_link,omitempty"`
 	Branch         *string          `json:"branch,omitempty"`
 	PullRequest    *string          `json:"pull_request,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
@@ -336,7 +337,7 @@ type CreateTaskRequest struct {
 	Assignees   []string   `json:"assignees"`
 	Labels      []string   `json:"labels"`
 	Areas       []string   `json:"areas"`
-	DesignLink   *string    `json:"design_link"`
+	DesignLink  *string    `json:"design_link"`
 	Branch      *string    `json:"branch"`
 	PullRequest *string    `json:"pull_request"`
 	// Originators/Requesters (user ids). Optional over the wire — defaults to the
@@ -367,7 +368,7 @@ type UpdateTaskRequest struct {
 	DueDate    NullableTime `json:"due_date"`
 	// Custom fields. Omitted (nil) means "leave unchanged"; send an empty
 	// string to clear one.
-	DesignLink   *string `json:"design_link"`
+	DesignLink  *string `json:"design_link"`
 	Branch      *string `json:"branch"`
 	PullRequest *string `json:"pull_request"`
 }
@@ -845,7 +846,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		StartDate:      timePtrToTimestamptz(req.StartDate),
 		DueDate:        timePtrToTimestamptz(req.DueDate),
 		ParentTaskID:   parentTaskID,
-		DesignLink:      stringToPgtypeText(req.DesignLink),
+		DesignLink:     stringToPgtypeText(req.DesignLink),
 		Branch:         stringToPgtypeText(req.Branch),
 		PullRequest:    stringToPgtypeText(req.PullRequest),
 	})
@@ -1173,7 +1174,7 @@ func (h *TaskHandler) CreateTask(c *echo.Context) error {
 		ParentTaskNumber:    pgInt4ToIntPtr(fullTask.ParentTaskNumber),
 		ParentTaskTitle:     textToStringPtr(fullTask.ParentTaskTitle),
 		SubtaskCount:        int(fullTask.SubtaskCount),
-		DesignLink:           textToStringPtr(fullTask.DesignLink),
+		DesignLink:          textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,
@@ -1273,7 +1274,7 @@ func (h *TaskHandler) GetTask(c *echo.Context) error {
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
-		DesignLink:           textToStringPtr(task.DesignLink),
+		DesignLink:          textToStringPtr(task.DesignLink),
 		Branch:              textToStringPtr(task.Branch),
 		PullRequest:         textToStringPtr(task.PullRequest),
 		CreatedAt:           task.CreatedAt.Time,
@@ -1441,7 +1442,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		StartDate:       startDateArg,
 		UpdateDueDate:   req.DueDate.Set,
 		DueDate:         dueDateArg,
-		DesignLink:       stringToPgtypeText(req.DesignLink),
+		DesignLink:      stringToPgtypeText(req.DesignLink),
 		Branch:          stringToPgtypeText(req.Branch),
 		PullRequest:     stringToPgtypeText(req.PullRequest),
 	})
@@ -1683,7 +1684,7 @@ func (h *TaskHandler) UpdateTask(c *echo.Context) error {
 		CycleID:             cycleID,
 		CycleTitle:          cycleTitle,
 		Modules:             h.getTaskModules(ctx, linkTaskID),
-		DesignLink:           textToStringPtr(fullTask.DesignLink),
+		DesignLink:          textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,
@@ -2100,6 +2101,12 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 	if err != nil || destState.ProjectID != dest.ID {
 		return echo.NewHTTPError(http.StatusBadRequest, "state does not belong to the target project")
 	}
+	// A copy is a create in the destination: its workflow entry rules apply,
+	// with the caller's role THERE deciding the admin bypass.
+	destRole, _ := h.store.GetProjectMemberRole(ctx, store.GetProjectMemberRoleParams{ProjectID: dest.ID, UserID: userID})
+	if err := workflow.CheckEntry(ctx, h.store, dest.ID, stateID, destRole == "admin"); err != nil {
+		return workflowHTTPError(err)
+	}
 	// Priority is project-specific: the given target priority id, or the
 	// target's level matching the original by name, then rank, then default.
 	var destPrio store.ProjectPriority
@@ -2185,7 +2192,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 		CreatedBy:      userID,
 		StartDate:      src.StartDate,
 		DueDate:        src.DueDate,
-		DesignLink:      src.DesignLink,
+		DesignLink:     src.DesignLink,
 		Branch:         src.Branch,
 		PullRequest:    src.PullRequest,
 		PriorityRating: pgtype.Int4{Int32: src.PriorityRating, Valid: true},
@@ -2321,7 +2328,7 @@ func (h *TaskHandler) CopyTask(c *echo.Context) error {
 				StartDate:      full.StartDate,
 				DueDate:        full.DueDate,
 				ParentTaskID:   pgtype.UUID{Bytes: copyTask.ID, Valid: true},
-				DesignLink:      full.DesignLink,
+				DesignLink:     full.DesignLink,
 				Branch:         full.Branch,
 				PullRequest:    full.PullRequest,
 				PriorityRating: pgtype.Int4{Int32: full.PriorityRating, Valid: true},
@@ -3784,6 +3791,13 @@ func (h *TaskHandler) moveOneWithinTx(ctx context.Context, q *store.Queries, tas
 		}
 		newStateID = def.ID
 	}
+	// Arriving by move is a create as far as the destination's workflow is
+	// concerned: non-admin movers may only land tasks in an entry state, which
+	// closes the move-out-and-back route around transition rules.
+	destRole, _ := q.GetProjectMemberRole(ctx, store.GetProjectMemberRoleParams{ProjectID: dest.ID, UserID: actorID})
+	if err := workflow.CheckEntry(ctx, q, dest.ID, newStateID, destRole == "admin"); err != nil {
+		return store.MoveTaskRow{}, err
+	}
 
 	// Remap priority onto the destination's set: same name first, same rank
 	// second, the destination's default (lowest active rank) last.
@@ -3951,6 +3965,10 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 
 	newNumber, err := h.moveTaskTx(ctx, task, dest, userID, requestBaseURL(c))
 	if err != nil {
+		var wfErr *workflow.Error
+		if errors.As(err, &wfErr) {
+			return workflowHTTPError(err)
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to move task")
 	}
 
@@ -3996,7 +4014,7 @@ func (h *TaskHandler) MoveTask(c *echo.Context) error {
 		Contributors:        h.contributorsForTask(ctx, fullTask.ID),
 		Labels:              labels,
 		Areas:               areas,
-		DesignLink:           textToStringPtr(fullTask.DesignLink),
+		DesignLink:          textToStringPtr(fullTask.DesignLink),
 		Branch:              textToStringPtr(fullTask.Branch),
 		PullRequest:         textToStringPtr(fullTask.PullRequest),
 		CreatedAt:           fullTask.CreatedAt.Time,
@@ -4269,7 +4287,12 @@ func (h *TaskHandler) notifyAssigned(ctx context.Context, baseURL string, actorI
 // applyWorkflowOnEnter runs the state's workflow actions (best-effort). They are
 // logged with via=workflow; actorID stays as the user whose move triggered them.
 func (h *TaskHandler) applyWorkflowOnEnter(ctx context.Context, baseURL string, projectID uuid.UUID, projectKey string, taskID uuid.UUID, taskNum int, title string, stateID, actorID uuid.UUID) {
-	added, removed, _ := workflow.ApplyOnEnter(ctx, h.store, projectID, taskID, stateID, actorID)
+	added, removed, err := workflow.ApplyOnEnter(ctx, h.store, projectID, taskID, stateID, actorID)
+	if err != nil {
+		// Best-effort by design, but silence here made partial rule runs
+		// undiagnosable.
+		log.Printf("workflow: on-enter actions for task %s entering state %s: %v", taskID, stateID, err)
+	}
 	ctx = auth.WithVia(ctx, auth.ViaWorkflow)
 	for _, id := range added {
 		u, _ := h.store.GetUserByID(ctx, id)

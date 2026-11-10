@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/labstack/echo/v5"
 	"github.com/swaggo/swag"
@@ -29,37 +30,62 @@ func hiddenDocPath(path string) bool {
 	return false
 }
 
-// openAPISpec serves the swag-generated spec with hidden paths stripped and
-// host and scheme rewritten to match the incoming request, so "try it" calls
-// hit the current instance instead of the hardcoded localhost from the
-// annotations.
-func openAPISpec(c *echo.Context) error {
-	doc, err := swag.ReadDoc()
-	if err != nil {
-		return echo.ErrInternalServerError
-	}
+// filteredSpec is the parsed spec with hidden paths stripped, built once: the
+// spec is fixed at build time, and the route is public and unthrottled, so
+// per-request parsing would be attacker-billable CPU.
+var (
+	specOnce     sync.Once
+	filteredSpec map[string]any
+	specErr      error
+)
 
-	var spec map[string]any
-	if err := json.Unmarshal([]byte(doc), &spec); err != nil {
-		return echo.ErrInternalServerError
-	}
-
-	if paths, ok := spec["paths"].(map[string]any); ok {
-		for p := range paths {
-			if hiddenDocPath(p) {
-				delete(paths, p)
-			}
+func loadFilteredSpec() (map[string]any, error) {
+	specOnce.Do(func() {
+		doc, err := swag.ReadDoc()
+		if err != nil {
+			specErr = err
+			return
 		}
-	}
-	if defs, ok := spec["definitions"].(map[string]any); ok {
-		for name := range defs {
-			for _, prefix := range hiddenDocDefinitionPrefixes {
-				if strings.HasPrefix(name, prefix) {
-					delete(defs, name)
-					break
+		var spec map[string]any
+		if err := json.Unmarshal([]byte(doc), &spec); err != nil {
+			specErr = err
+			return
+		}
+		if paths, ok := spec["paths"].(map[string]any); ok {
+			for p := range paths {
+				if hiddenDocPath(p) {
+					delete(paths, p)
 				}
 			}
 		}
+		if defs, ok := spec["definitions"].(map[string]any); ok {
+			for name := range defs {
+				for _, prefix := range hiddenDocDefinitionPrefixes {
+					if strings.HasPrefix(name, prefix) {
+						delete(defs, name)
+						break
+					}
+				}
+			}
+		}
+		filteredSpec = spec
+	})
+	return filteredSpec, specErr
+}
+
+// openAPISpec serves the filtered spec with host and scheme rewritten to match
+// the incoming request, so "try it" calls hit the current instance instead of
+// the hardcoded localhost from the annotations.
+func openAPISpec(c *echo.Context) error {
+	base, err := loadFilteredSpec()
+	if err != nil {
+		return echo.ErrInternalServerError
+	}
+	// Shallow copy: only the top-level host/schemes keys differ per request,
+	// and the nested maps are never mutated after the one-time filter.
+	spec := make(map[string]any, len(base)+2)
+	for k, v := range base {
+		spec[k] = v
 	}
 
 	r := c.Request()

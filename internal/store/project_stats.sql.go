@@ -27,6 +27,7 @@ task_days AS (
            COUNT(*) FILTER (WHERE parent_task_id IS NULL) AS tasks,
            COUNT(*) FILTER (WHERE parent_task_id IS NOT NULL) AS subtasks
     FROM pt
+    WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 completed_days AS (
@@ -35,6 +36,7 @@ completed_days AS (
     JOIN pt ON pt.id = al.task_id AND pt.parent_task_id IS NULL
     JOIN project_states ps ON ps.id = (al.new_value->>'state_id')::uuid AND ps.state_type = 'completed'
     WHERE al.activity_type = 'state_changed'
+      AND al.created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 activity_days AS (
@@ -42,6 +44,7 @@ activity_days AS (
     FROM activity_log al
     JOIN pt ON pt.id = al.task_id
     WHERE al.activity_type NOT IN ('comment_created', 'comment_updated', 'comment_deleted')
+      AND al.created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 comment_days AS (
@@ -49,6 +52,7 @@ comment_days AS (
     FROM comments c
     JOIN pt ON pt.id = c.task_id
     WHERE c.deleted_at IS NULL
+      AND c.created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 attachment_days AS (
@@ -56,24 +60,28 @@ attachment_days AS (
     FROM attachments a
     LEFT JOIN comments c ON a.entity_type = 'comment' AND c.id = a.entity_id AND c.deleted_at IS NULL
     JOIN pt ON pt.id = CASE WHEN a.entity_type = 'task' THEN a.entity_id ELSE c.task_id END
+    WHERE a.created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 page_days AS (
     SELECT created_at::date AS day, COUNT(*) AS n
     FROM pages
     WHERE project_id = $3::uuid AND deleted_at IS NULL
+      AND created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 cycle_days AS (
     SELECT created_at::date AS day, COUNT(*) AS n
     FROM cycles
     WHERE project_id = $3::uuid AND deleted_at IS NULL
+      AND created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 ),
 module_days AS (
     SELECT created_at::date AS day, COUNT(*) AS n
     FROM modules
     WHERE project_id = $3::uuid AND deleted_at IS NULL
+      AND created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
 )
 SELECT days.day,

@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -87,7 +88,6 @@ var nonCatalogRoutes = map[string]bool{
 	"GET /api/v1/projects/{}/modules/no-module-tasks":       true,
 	"GET /api/v1/projects/{}/modules/no-module-tasks/count": true,
 	"GET /api/v1/projects/{}/preferences":                   true,
-	"GET /api/v1/projects/{}/priorities":                    true,
 	"GET /api/v1/projects/{}/tasks/{}/parent-candidates":    true,
 	"PATCH /api/v1/projects/reorder":                        true,
 	"PATCH /api/v1/projects/{}/areas/{}":                    true,
@@ -140,6 +140,17 @@ func TestAPIRoutesMatchAssistantCatalog(t *testing.T) {
 		assistantHandler:     &handlers.AssistantHandler{},
 		notificationsHandler: &handlers.NotificationHandler{},
 	}
+	// registerRoutes nil-guards most groups, so a handler forgotten in the
+	// literal above silently unregisters its routes and the drift check would
+	// pass without seeing them. Fail loudly instead.
+	sv := reflect.ValueOf(s).Elem()
+	for i := 0; i < sv.NumField(); i++ {
+		f := sv.Type().Field(i)
+		if strings.HasPrefix(f.Type.String(), "*handlers.") && sv.Field(i).IsNil() {
+			t.Fatalf("Server.%s is nil: add it to this test's literal so its routes register", f.Name)
+		}
+	}
+
 	s.registerRoutes()
 
 	catalog := map[string]bool{}

@@ -1,5 +1,5 @@
 # Build context is the repo root (shared by docker-compose and goreleaser).
-FROM oven/bun:1.3.7-slim AS build
+FROM oven/bun:1.4.4-slim AS build
 WORKDIR /app
 COPY landing/package.json landing/bun.lock ./
 RUN bun install --frozen-lockfile

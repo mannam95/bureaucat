@@ -162,6 +162,47 @@ func TestCompileWatchersPredicates(t *testing.T) {
 	}
 }
 
+func TestCompileOriginatorsPredicates(t *testing.T) {
+	caller := uuid.New()
+	tree := FilterTree{Children: []FilterNode{
+		{Predicate: &Predicate{Field: "originators", Op: "has_any", Value: mustRaw(t, []string{"@me"})}},
+	}}
+	c := compileOrFail(t, tree, caller)
+	if !strings.Contains(c.WhereSQL, "task_originators") {
+		t.Fatalf("expected task_originators join, got: %q", c.WhereSQL)
+	}
+	// The @me alias should be substituted into the arg slice.
+	found := false
+	for _, a := range c.Args {
+		if ids, ok := a.([]uuid.UUID); ok {
+			for _, id := range ids {
+				if id == caller {
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected caller UUID in args: %+v", c.Args)
+	}
+
+	// has_none negates the EXISTS; is_empty takes no value.
+	tree = FilterTree{Children: []FilterNode{
+		{Predicate: &Predicate{Field: "originators", Op: "has_none", Value: mustRaw(t, []string{caller.String()})}},
+	}}
+	c = compileOrFail(t, tree, caller)
+	if !strings.Contains(c.WhereSQL, "NOT EXISTS (SELECT 1 FROM task_originators") {
+		t.Fatalf("expected NOT EXISTS on task_originators, got: %q", c.WhereSQL)
+	}
+	tree = FilterTree{Children: []FilterNode{
+		{Predicate: &Predicate{Field: "originators", Op: "is_empty"}},
+	}}
+	c = compileOrFail(t, tree, caller)
+	if !strings.Contains(c.WhereSQL, "NOT EXISTS (SELECT 1 FROM task_originators") {
+		t.Fatalf("expected NOT EXISTS on task_originators, got: %q", c.WhereSQL)
+	}
+}
+
 func TestCompileRejectsUnknownField(t *testing.T) {
 	tree := FilterTree{Children: []FilterNode{
 		{Predicate: &Predicate{Field: "nope", Op: "is", Value: mustRaw(t, "x")}},

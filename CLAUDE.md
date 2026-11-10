@@ -113,7 +113,7 @@ Opt-in per project. Enforced in `internal/workflow` from `CreateTask` (entry sta
 GET    /api/v1/admin/users           # List users (paginated)
 POST   /api/v1/admin/users           # Create user
 GET    /api/v1/admin/users/:id       # User details (SSO, sessions/tokens, memberships)
-PATCH  /api/v1/admin/users/:id       # Edit name, role, email notifications
+PATCH  /api/v1/admin/users/:id       # Edit username, email, first/last name (role: PUT /users/:id/role)
 DELETE /api/v1/admin/users/:id       # Delete user
 GET    /api/v1/admin/tokens          # List active refresh tokens
 DELETE /api/v1/admin/tokens/:id      # Revoke token

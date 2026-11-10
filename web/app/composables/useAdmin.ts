@@ -117,7 +117,6 @@ export interface AdminStats {
     subtasks: number;
     pages: number;
     users: number;
-    email_notification_users: number;
     blocked_tasks: number;
     blocking_tasks: number;
     attachments: number;

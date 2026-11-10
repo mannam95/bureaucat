@@ -26,7 +26,10 @@ func Handler(s store.Querier, svc *assistant.Service) http.Handler {
 	}, &mcp.StreamableHTTPOptions{Stateless: true})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(auth.HeaderAuthMethod) != auth.AuthMethodPAT {
+		// The via context is set server-side by the PAT auth path and cannot be
+		// forged by a client header (a JWT request passes any X-Auth-Method it
+		// sends straight through the middleware).
+		if auth.ViaFromContext(r.Context()) != auth.ViaPAT {
 			http.Error(w, "a personal access token is required", http.StatusUnauthorized)
 			return
 		}

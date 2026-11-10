@@ -11,6 +11,7 @@ dist: .goreleaser-dist
 # They run inside the release-runner container (bun + go are on PATH).
 before:
   hooks:
+    - go run github.com/swaggo/swag/cmd/swag init -g cmd/bureaucat/main.go -o docs --parseDependency=false
     - bash -c "find cmd/bureaucat/migrations -mindepth 1 ! -name .gitkeep -exec rm -rf {} + && cp -a migrations/. cmd/bureaucat/migrations/"
     - bash -c "cd web && bun install --frozen-lockfile && bun run generate"
     - bash -c "find cmd/bureaucat/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} + && cp -a web/.output/public/. cmd/bureaucat/dist/"

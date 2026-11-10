@@ -52,7 +52,6 @@ export interface ProjectStats {
     attachments_bytes: number;
   };
   tasks_by_state: { name: string; state_type: string; color?: string; count: number }[];
-  tasks_by_priority: { label: string; count: number }[];
   workload: {
     user_id: string;
     username: string;

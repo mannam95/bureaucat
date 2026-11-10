@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"bereaucat/internal/store"
 )
 
@@ -135,6 +137,14 @@ func ApplyOnEnter(ctx context.Context, q store.Querier, projectID, taskID, state
 				continue
 			}
 			if _, err := q.AddTaskAssignee(ctx, store.AddTaskAssigneeParams{TaskID: taskID, UserID: a.UserID, AssignedBy: actorID}); err != nil {
+				// A concurrent run of the same action can win the insert between
+				// the assignee check and here; that outcome is the desired state,
+				// so the unique violation is not an error and the remaining
+				// actions still run.
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+					continue
+				}
 				return added, removed, err
 			}
 			added = append(added, a.UserID)

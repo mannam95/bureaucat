@@ -1,3 +1,6 @@
+-- WARNING: rewriting via on existing rows breaks their v2 activity
+-- checksums (via is part of the checksum input), so VerifyChain will
+-- report those tasks as tampered after this down migration.
 ALTER TABLE notifications DROP COLUMN IF EXISTS via;
 UPDATE activity_log SET via = 'web' WHERE via = 'workflow';
 ALTER TABLE activity_log DROP CONSTRAINT IF EXISTS activity_log_via_check;

@@ -369,10 +369,13 @@ watch(selectedTemplateId, (id) => {
 });
 
 // The project's mandatory template pre-fills new tasks — a guide, not a lock:
-// the text stays editable, and an unfinished draft still wins (it restores
-// after this). Subtasks are exempt; the template describes a full task.
+// the text stays editable, and an unfinished draft wins, so this only runs
+// when the form is still empty (drafts restore first; a restored draft blocks
+// the prefill, and the prefill never overwrites it). Subtasks are exempt; the
+// template describes a full task.
 function applyMandatoryTemplate() {
   if (isSubtaskMode.value || selectedTemplateId.value) return;
+  if (form.value.title || form.value.description) return;
   const mandatory = effTemplates.value.find((t) => t.is_mandatory);
   if (mandatory) selectedTemplateId.value = mandatory.id;
 }
@@ -412,12 +415,12 @@ watch(open, async (isOpen) => {
       });
     }
     resetForm();
-    applyMandatoryTemplate();
     if (!selectable.value && props.projectKey) {
       await loadCycles(props.projectKey);
     }
     titleDraft.restore();
     descriptionDraft.restore();
+    applyMandatoryTemplate();
   }
 });
 

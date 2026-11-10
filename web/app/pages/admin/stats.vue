@@ -53,12 +53,6 @@ const totalCards = computed(() => {
     { label: "Attachments", value: t.attachments.toLocaleString(), icon: Paperclip, color: "text-cyan-400" },
     { label: "Attachments size", value: formatBytes(t.attachments_bytes), icon: HardDrive, color: "text-sky-400" },
     {
-      label: "AI users",
-      value: `${t.ai_users.toLocaleString()} / ${t.users.toLocaleString()}`,
-      icon: UserCheck,
-      color: "text-lime-400",
-    },
-    {
       label: "Workflow enforced",
       value: `${t.workflow_projects.toLocaleString()} / ${t.projects.toLocaleString()}`,
       icon: WorkflowIcon,

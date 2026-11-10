@@ -53,8 +53,8 @@ func body(name, typ, desc string) Param {
 
 const filterHelp = `Optional FilterTree object; all children are ANDed: {"children":[{"predicate":{"field":F,"op":OP,"value":V}}]}.
 Fields/ops: search contains(str, also matches KEY-12); title contains|not_contains|is|is_not(str), is_empty|is_set; description contains|not_contains, is_empty|is_set;
-state in|not_in(state uuids); state_type in|not_in(backlog|unstarted|started|verification|completed|cancelled|archived); priority in|not_in(int[]), gte|lte(int);
-created_by in|not_in(uuids or "@me"), is_me|is_not_me; assignees has_any|has_none|has_all(uuids or "@me"), is_empty|is_set; labels has_any|has_none|has_all(label uuids), is_empty|is_set;
+state in|not_in(state uuids); state_type in|not_in(backlog|unstarted|started|verification|completed|cancelled|archived); priority in|not_in(priority uuids), gte|lte(priority uuid, compares by rank);
+created_by in|not_in(uuids or "@me"), is_me|is_not_me; assignees|originators|watchers has_any|has_none|has_all(uuids or "@me"), is_empty|is_set; labels has_any|has_none|has_all(label uuids), is_empty|is_set;
 start_date|due_date before|after(anchor), between({"from":a,"to":a}), is_empty|is_set; due_date overdue; created_at|updated_at before|after|between; comment_count eq|ne|gt|gte|lt|lte(int);
 attachments|comment_attachments is_set|is_empty (files on the task itself / on its comments).
 Anchors: YYYY-MM-DD or today, yesterday, tomorrow, this_week, last_week, next_week, this_month, last_month, next_month, last_7_days, last_30_days, last_90_days.`
@@ -70,7 +70,7 @@ var (
 	pLimit     = query("limit", "integer", "Max results, 1-200, default 50")
 	pSearch    = query("search", "string", "Case-insensitive title search")
 	pTaskUUIDs = body("task_ids", "string[]", "Task UUIDs (the id field of a task, not task numbers)").req()
-	pPriority  = body("priority", "integer", "0 none, 1 low, 2 medium, 3 high, 4 urgent")
+	pPriority  = body("priority_id", "string", "Priority UUID from list_priorities; the project default when omitted")
 	pColor     = body("color", "string", "Hex colour, e.g. #3B82F6")
 	pUpload    = body("upload_id", "string", "upload_id of a file the user attached in this chat").req()
 )
@@ -110,6 +110,7 @@ var catalog = []Tool{
 	{Name: "list_projects", Title: "List projects", Description: "Projects the user can access.", Method: http.MethodGet, Path: "/projects",
 		Params: []Param{pPage, pPerPage, pSearch, query("workspace_id", "string", "Optional workspace UUID")}},
 	{Name: "get_project", Title: "Get project", Description: "Get a project, including the user's role in it.", Method: http.MethodGet, Path: pp, Params: []Param{pProject}},
+	{Name: "list_priorities", Title: "List priorities", Description: "The project's priority levels (id, name, rank; higher rank = more urgent).", Method: http.MethodGet, Path: pp + "/priorities", Params: []Param{pProject}},
 	{Name: "get_project_stats", Title: "Get project stats", Description: "Task counts, state buckets and per-member load for a project.", Method: http.MethodGet, Path: pp + "/stats", Params: []Param{pProject}},
 	{Name: "create_project", Title: "Create project", Description: "Create a project with default states.", Method: http.MethodPost, Path: "/projects", Confirm: true,
 		Params: []Param{

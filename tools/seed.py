@@ -855,7 +855,7 @@ def main():
     for handle in list(p0.tasks)[:3]:
         tk = p0.tasks[handle]
         api("PATCH", f"/projects/{p0.key}/tasks/{tk['num']}",
-            {"start_date": (date.today() - timedelta(days=random.randint(2, 12))).isoformat()})
+            {"start_date": (date.today() - timedelta(days=random.randint(2, 12))).isoformat() + "T09:00:00Z"})
 
     print("→ blockers and epics")
     for p in story_projects:

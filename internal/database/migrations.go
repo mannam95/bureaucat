@@ -43,6 +43,18 @@ func NewMigratorFromFS(dbURL string, fsys fs.FS) (*Migrator, error) {
 	return &Migrator{m: m}, nil
 }
 
+// Force overwrites the recorded schema version and clears the dirty flag. It
+// is the recovery tool for a migration killed mid-file (golang-migrate marks
+// the version dirty before running each file and a crash leaves it set):
+// after confirming the schema state by hand, force the version and run up.
+func (m *Migrator) Force(version uint) error {
+	if err := m.m.Force(int(version)); err != nil {
+		return fmt.Errorf("failed to force version %d: %w", version, err)
+	}
+	fmt.Printf("Forced schema version to %d (dirty flag cleared)\n", version)
+	return nil
+}
+
 // Up runs all pending migrations one at a time with logging
 func (m *Migrator) Up() error {
 	startVersion, dirty, _ := m.m.Version()

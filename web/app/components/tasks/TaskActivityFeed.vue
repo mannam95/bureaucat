@@ -470,7 +470,8 @@ function getActivityDetail(activity: ActivityLogEntry): string | null {
 
   if (type === "task_updated" && activity.field_name) {
     // The description is content, not a value - "updated description" is enough.
-    if (activity.field_name === "description") return null;
+    // Parent changes log bare task UUIDs, which read as noise; skip them too.
+    if (activity.field_name === "description" || activity.field_name === "parent") return null;
     const from = formatFieldValue(activity.old_value);
     const to = formatFieldValue(activity.new_value);
     if (from && to) return `${from} → ${to}`;

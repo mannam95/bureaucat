@@ -104,6 +104,30 @@ func MigrateCommand() *cli.Command {
 					return migrator.Down()
 				},
 			},
+			{
+				Name:      "force",
+				Usage:     "Recover a dirty database: set the schema version and clear the dirty flag (verify the schema state first)",
+				ArgsUsage: "<version>",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					dbURL := cmd.String("database-url")
+					if dbURL == "" {
+						return fmt.Errorf("database-url is required (use --database-url or DATABASE_URL env var)")
+					}
+					if cmd.Args().Len() != 1 {
+						return fmt.Errorf("usage: migrate force <version>")
+					}
+					version, err := parseVersion(cmd.Args().First())
+					if err != nil {
+						return err
+					}
+					migrator, err := createMigrator(dbURL, cmd.String("path"))
+					if err != nil {
+						return fmt.Errorf("failed to create migrator: %w", err)
+					}
+					defer migrator.Close()
+					return migrator.Force(version)
+				},
+			},
 		},
 	}
 }

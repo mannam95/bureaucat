@@ -50,7 +50,10 @@ func ErrorText(err error) string {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "the assistant took too long to respond"
 	default:
-		return "assistant error: " + err.Error()
+		// Raw errors can carry DB hosts or provider response bodies; the client
+		// gets a generic line and the detail goes to the server log.
+		log.Printf("assistant: %v", err)
+		return "the assistant request failed"
 	}
 }
 
