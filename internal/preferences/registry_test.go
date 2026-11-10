@@ -9,8 +9,8 @@ import (
 // The registry is a closed set; these counts guard against a key being added or
 // removed without a deliberate test update.
 func TestForScopeCounts(t *testing.T) {
-	if got := len(ForScope(ScopeGlobal)); got != 11 {
-		t.Fatalf("global scope has %d keys, want 11", got)
+	if got := len(ForScope(ScopeGlobal)); got != 13 {
+		t.Fatalf("global scope has %d keys, want 13", got)
 	}
 	if got := len(ForScope(ScopeProject)); got != 3 {
 		t.Fatalf("project scope has %d keys, want 3", got)
