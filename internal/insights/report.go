@@ -92,6 +92,17 @@ func (e *Engine) cycleRefs(cycles []ListCycle) []CycleRef {
 	return out
 }
 
+// subtasksOver counts the subtask units in a set, for the tile captions.
+func subtasksOver(units []*task) int {
+	n := 0
+	for _, t := range units {
+		if t.parent != (uuid.UUID{}) {
+			n++
+		}
+	}
+	return n
+}
+
 // cxOver sums complexity with coverage over a unit set.
 func cxOver(units []*task) *ComplexitySum {
 	out := &ComplexitySum{Of: len(units)}
@@ -238,7 +249,7 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		verification = nil
 	}
 	sec := &CycleSection{
-		Delivered:      Tile{Metric: "delivered", Count: len(deliveredList), Cx: cxOver(deliveredList)},
+		Delivered:      Tile{Metric: "delivered", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList)},
 		OriginalPlan:   Tile{Metric: "original_plan", Count: len(originalPlan)},
 		PlannedAtStart: Tile{Metric: "planned", Count: len(planned), Cx: cxOver(planned)},
 		Added:          Tile{Metric: "added", Count: len(added)},
@@ -251,7 +262,7 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 	if d.hasType("verification") {
 		t := Tile{Metric: "verification", Count: len(verification), Cx: cxOver(verification)}
 		sec.InVerification = &t
-		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList)}
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList)}
 		sec.HandedOff = &h
 	}
 	if d.hasType("cancelled") {
@@ -343,7 +354,7 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 	}
 
 	sec := &RangeSection{
-		Completed: Tile{Metric: "completed", Count: len(deliveredList), Cx: cxOver(deliveredList)},
+		Completed: Tile{Metric: "completed", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList)},
 		Created:   Tile{Metric: "created", Count: len(created)},
 		Days:      []DayPoint{},
 		Bands:     bandsOver(deliveredList),
@@ -354,7 +365,7 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 		sec.Cancelled = &t
 	}
 	if d.hasType("verification") {
-		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList)}
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList)}
 		sec.HandedOff = &h
 	}
 

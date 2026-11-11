@@ -617,3 +617,31 @@ func TestIntakeLeavesOpenWork(t *testing.T) {
 		t.Errorf("intake evidence = %d, want 3", ev.Count)
 	}
 }
+
+// TestDeliveryTilesNameTheirSubtasks: Q2 decision — leaf counting stays, but a
+// delivery number says how many of its units are subtasks.
+func TestDeliveryTilesNameTheirSubtasks(t *testing.T) {
+	f := newFixture("SUB")
+	f.state("Todo", "unstarted", 0)
+	f.state("Done", "completed", 1)
+	f.prio("No priority", 0, true)
+	f.task("P", "Todo", "No priority", 0, 0, "2026-10-01 09:00")
+	f.subtask("S1", "P", "Todo", "No priority", 0, 0, "2026-10-01 09:10")
+	f.subtask("S2", "P", "Todo", "No priority", 0, 0, "2026-10-01 09:20")
+	f.task("R1", "Todo", "No priority", 0, 0, "2026-10-01 09:30")
+	f.move("S1", "Todo", "Done", "2026-10-05 09:00", f.actor)
+	f.move("S2", "Todo", "Done", "2026-10-06 09:00", f.actor)
+	f.move("R1", "Todo", "Done", "2026-10-07 09:00", f.actor)
+
+	e := f.engine("2026-10-25 12:00")
+	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
+		From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if rep.Range.Completed.Count != 3 || rep.Range.Completed.Subtasks != 2 {
+		t.Errorf("completed = %d with %d subtasks, want 3 with 2",
+			rep.Range.Completed.Count, rep.Range.Completed.Subtasks)
+	}
+}

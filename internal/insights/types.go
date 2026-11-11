@@ -74,6 +74,10 @@ type Tile struct {
 	Metric string         `json:"metric"`
 	Count  int            `json:"count"`
 	Cx     *ComplexitySum `json:"cx,omitempty"`
+	// Subtasks says how many of Count are subtasks, so a delivery number is
+	// honest about its units ("17 delivered · 9 subtasks"). Only the delivery
+	// tiles fill it.
+	Subtasks int `json:"subtasks,omitempty"`
 }
 
 // DayPoint is one day of the scope-vs-completed series plus the day strip.

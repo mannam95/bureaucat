@@ -13,6 +13,8 @@ const props = defineProps<{
   sign?: "plus" | "minus";
   /** Overrides the default evidence hint, e.g. to spell out a computed rule. */
   tooltip?: string;
+  /** How many of count are subtasks; a delivery number is honest about its units. */
+  subtasks?: number;
 }>();
 
 const emit = defineEmits<{ open: [metric: string] }>();
@@ -46,6 +48,7 @@ const cxLine = computed(() => {
     <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ label }}</span>
     <span class="mt-1 text-2xl font-semibold tabular-nums">{{ display }}</span>
     <span v-if="cxLine" class="mt-0.5 text-[11px] text-muted-foreground">{{ cxLine }}</span>
+    <span v-if="subtasks" class="mt-0.5 text-[11px] text-muted-foreground">{{ subtasks }} of them subtasks</span>
     <span v-if="sub" class="mt-0.5 text-[11px] text-muted-foreground">{{ sub }}</span>
   </component>
 </template>

@@ -49,6 +49,7 @@ export interface MetricTile {
   metric: string;
   count: number;
   cx?: ComplexitySum;
+  subtasks?: number;
 }
 
 export interface DayPoint {

@@ -393,7 +393,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 		User:       d.userRef(userID),
 		CreditRule: creditRule,
 		ByCycle:    []CycleCount{},
-		Delivered:  Tile{Metric: "person_delivered", Count: len(s.mine), Cx: cxOver(s.mine)},
+		Delivered:  Tile{Metric: "person_delivered", Count: len(s.mine), Cx: cxOver(s.mine), Subtasks: subtasksOver(s.mine)},
 		TopRank:    s.topRank,
 		OpenNow:    s.openNow,
 		Comments:   s.comments,
@@ -401,7 +401,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 		Bands:      bandsOver(s.mine),
 	}
 	if d.hasType("verification") {
-		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed)}
+		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed), Subtasks: subtasksOver(s.handed)}
 		rep.HandedOff = &h
 	}
 

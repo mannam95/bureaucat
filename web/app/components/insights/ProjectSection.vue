@@ -28,6 +28,7 @@ const narrative = computed(() => {
   if (cycle.value) {
     const c = cycle.value;
     let s = `${c.delivered.count} work items completed`;
+    if (c.delivered.subtasks) s += ` (${c.delivered.subtasks} of them subtasks)`;
     if (c.handed_off) s += `, ${c.handed_off.count} handed off by their developers`;
     if (planPercent.value !== null) {
       s += `; ${c.original_plan_delivered.count} of ${c.planned_at_start.count} planned items delivered (${planPercent.value}% of the original plan)`;
@@ -44,6 +45,7 @@ const narrative = computed(() => {
   if (range.value) {
     const r = range.value;
     let s = `${r.completed.count} work items completed`;
+    if (r.completed.subtasks) s += ` (${r.completed.subtasks} of them subtasks)`;
     if (r.handed_off) s += `, ${r.handed_off.count} handed off by their developers`;
     s += ` and ${r.created.count} created in the window`;
     if (r.cancelled && r.cancelled.count > 0) s += `; ${r.cancelled.count} cancelled (never counted as delivery)`;
@@ -80,6 +82,7 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
         :count="cycle.handed_off.count"
         metric="handed_off"
         :cx="cycle.handed_off.cx"
+        :subtasks="cycle.handed_off.subtasks"
         sub="the developer finish line"
         :tooltip="report.handoff_rule"
         @open="emit('open', $event)"
@@ -89,6 +92,7 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
         :count="cycle.delivered.count"
         metric="delivered"
         :cx="cycle.delivered.cx"
+        :subtasks="cycle.delivered.subtasks"
         highlight
         :sub="endScopePercent !== null ? `${endScopePercent}% of end scope (${cycle.at_close})` : undefined"
         @open="emit('open', $event)"
@@ -150,11 +154,12 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
         :count="range.handed_off.count"
         metric="handed_off"
         :cx="range.handed_off.cx"
+        :subtasks="range.handed_off.subtasks"
         sub="the developer finish line"
         :tooltip="report.handoff_rule"
         @open="emit('open', $event)"
       />
-      <MetricTile label="Completed" :count="range.completed.count" metric="completed" :cx="range.completed.cx" highlight @open="emit('open', $event)" />
+      <MetricTile label="Completed" :count="range.completed.count" metric="completed" :cx="range.completed.cx" :subtasks="range.completed.subtasks" highlight @open="emit('open', $event)" />
       <MetricTile label="Created" :count="range.created.count" metric="created" @open="emit('open', $event)" />
       <MetricTile
         v-if="range.cancelled"
