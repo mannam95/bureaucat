@@ -610,6 +610,8 @@ definitions:
         type: string
       description:
         type: string
+      design_link:
+        type: string
       difficulty:
         description: DEV estimation inputs, 1-5 each (0 = not assessed).
         type: integer
@@ -617,8 +619,6 @@ definitions:
         type: string
       effort:
         type: integer
-      figma_link:
-        type: string
       labels:
         items:
           type: string
@@ -1816,6 +1816,8 @@ definitions:
         type: string
       description:
         type: string
+      design_link:
+        type: string
       difficulty:
         description: |-
           DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).
@@ -1825,8 +1827,6 @@ definitions:
         type: string
       effort:
         type: integer
-      figma_link:
-        type: string
       hidden_subtasks:
         type: integer
       id:
@@ -2025,6 +2025,11 @@ definitions:
         type: string
       description:
         type: string
+      design_link:
+        description: |-
+          Custom fields. Omitted (nil) means "leave unchanged"; send an empty
+          string to clear one.
+        type: string
       difficulty:
         description: DEV estimation inputs, 1-5 each (0 = not assessed).
         type: integer
@@ -2032,11 +2037,6 @@ definitions:
         $ref: '#/definitions/handlers.NullableTime'
       effort:
         type: integer
-      figma_link:
-        description: |-
-          Custom fields. Omitted (nil) means "leave unchanged"; send an empty
-          string to clear one.
-        type: string
       priority:
         description: |-
           Priority is rejected: priorities are per-project entities now. Clients
@@ -2442,6 +2442,13 @@ definitions:
         type: array
       delivered:
         $ref: '#/definitions/insights.Tile'
+      handed_off:
+        allOf:
+        - $ref: '#/definitions/insights.Tile'
+        description: |-
+          HandedOff is nil when the project defines no verification states: the
+          developer finish line coincides with delivery, so the tile would repeat
+          the Delivered number.
       identity:
         description: |-
           Identity is the reconciliation line: planned + added - removed = at
@@ -2580,6 +2587,12 @@ definitions:
         type: integer
       in_verification:
         type: integer
+      intake:
+        type: integer
+      intake_by_state:
+        items:
+          $ref: '#/definitions/insights.StateCount'
+        type: array
       open:
         type: integer
       open_by_state:
@@ -2606,6 +2619,8 @@ definitions:
       cx:
         $ref: '#/definitions/insights.ComplexitySum'
       delivered:
+        type: integer
+      handed_off:
         type: integer
       open_now:
         type: integer
@@ -2634,6 +2649,14 @@ definitions:
         type: string
       delivered:
         $ref: '#/definitions/insights.Tile'
+      handed_off:
+        allOf:
+        - $ref: '#/definitions/insights.Tile'
+        description: |-
+          HandedOff is absent when the project has no verification states;
+          HandoffRule is its tooltip, as on the project report.
+      handoff_rule:
+        type: string
       open_now:
         type: integer
       scope:
@@ -2664,6 +2687,14 @@ definitions:
         $ref: '#/definitions/insights.ComplexitySum'
       delivered:
         type: integer
+      handed_off:
+        description: |-
+          HandedOff counts items this person pushed past the developer finish line
+          (into a verification- or completed-type state) during the window. In a
+          project without verification states the column is hidden and the number
+          effectively tracks Delivered (a completed-to-completed move can nudge
+          them apart, which is why the hidden number never drives the sort there).
+        type: integer
       has_activity:
         type: boolean
       open_at_end:
@@ -2688,6 +2719,9 @@ definitions:
       total_cx:
         $ref: '#/definitions/insights.ComplexitySum'
       total_delivered:
+        description: distinct items
+        type: integer
+      total_handed_off:
         description: distinct items
         type: integer
     type: object
@@ -2744,6 +2778,8 @@ definitions:
         type: integer
       icon_url:
         type: string
+      intake:
+        type: integer
       low_history:
         type: boolean
       members:
@@ -2798,12 +2834,19 @@ definitions:
         items:
           $ref: '#/definitions/insights.CycleRef'
         type: array
+      handoff_rule:
+        type: string
       has_areas:
         description: |-
           Vocabularies the frontend needs for panels that are conditional on their
           existence.
         type: boolean
       has_labels:
+        type: boolean
+      has_verification:
+        description: |-
+          HasVerification gates the Handed off tile and person column; HandoffRule
+          is its tooltip, spelled in the project's own state names.
         type: boolean
       health:
         $ref: '#/definitions/insights.Health'
@@ -2830,6 +2873,11 @@ definitions:
         items:
           $ref: '#/definitions/insights.DayPoint'
         type: array
+      handed_off:
+        allOf:
+        - $ref: '#/definitions/insights.Tile'
+        description: 'HandedOff mirrors CycleSection: absent without verification
+          states.'
       has_cycles:
         description: |-
           HasCycles says whether the project could run cycle reports at all; false
@@ -2894,6 +2942,12 @@ definitions:
         $ref: '#/definitions/insights.ComplexitySum'
       metric:
         type: string
+      subtasks:
+        description: |-
+          Subtasks says how many of Count are subtasks, so a delivery number is
+          honest about its units ("17 delivered · 9 subtasks"). Only the delivery
+          tiles fill it.
+        type: integer
     type: object
   insights.UserCount:
     properties:
@@ -2935,6 +2989,13 @@ definitions:
         type: string
       delivered:
         $ref: '#/definitions/insights.Tile'
+      handed_off:
+        type: integer
+      has_verification:
+        description: |-
+          HasVerification is true when any contributing project defines
+          verification states — the gate for showing the Handed off tile.
+        type: boolean
       open_now:
         type: integer
       projects:
@@ -5064,10 +5125,10 @@ paths:
         name: projectKey
         required: true
         type: string
-      - description: Metric key (delivered, planned, added, descoped, carried, verification,
-          cancelled, archived, completed, created, original_plan, person_delivered,
-          person_open, open_state, priority_rank, aging, overdue, due_soon, blocked,
-          day)
+      - description: Metric key (delivered, handed_off, planned, added, descoped,
+          carried, verification, cancelled, archived, completed, created, original_plan,
+          person_delivered, person_handed_off, person_open, open_state, priority_rank,
+          aging, overdue, due_soon, blocked, intake, day)
         in: query
         name: metric
         required: true

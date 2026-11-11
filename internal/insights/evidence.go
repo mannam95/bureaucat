@@ -388,8 +388,8 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 	now := e.now()
 	switch p.Metric {
 	case "open_state":
-		ev.Title = "Open work in a state"
-		ev.HowComputed = "Open leaf items currently in the selected state."
+		ev.Title = "Work in a state"
+		ev.HowComputed = "Leaf items currently in the selected state. For a backlog-type state these are intake, not open work."
 		ev.SourceEvents = "current state (snapshot)"
 		if p.StateID != nil {
 			ev.Chips = []string{"state = " + d.states[*p.StateID].Name, "snapshot " + e.dayKey(now)}
@@ -425,12 +425,21 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 	}
 	for _, t := range units {
 		st := d.states[t.stateID]
-		if p.Metric == "intake" {
+		switch {
+		case p.Metric == "intake":
 			if !isIntakeType(st.Type) {
 				continue
 			}
-		} else if !isOpenType(st.Type) {
-			continue
+		case p.Metric == "open_state":
+			// The state id decides its own population: an intake state's
+			// drawer must list its items, not claim "0 open".
+			if !isOpenType(st.Type) && !isIntakeType(st.Type) {
+				continue
+			}
+		default:
+			if !isOpenType(st.Type) {
+				continue
+			}
 		}
 		match := false
 		row := e.rowWithState(d, t, now)

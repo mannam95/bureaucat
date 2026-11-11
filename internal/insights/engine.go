@@ -42,8 +42,18 @@ var activityTypes = []string{
 // countingRule is the one-line scope footer, identical everywhere.
 const countingRule = "Counts leaf items: a parent with subtasks counts through its subtasks. Cancelled is never delivery; archived is its own bucket; unknown estimates are never zero."
 
-// creditRule explains the person table.
-const creditRule = "A completed item credits its Contributors; with none recorded, it credits its assignees at completion. Handed-off items credit the same way, at the moment of the handoff. Shared items count once per credited person; the total counts each item once."
+// creditRule explains the person table; creditRuleHandoff extends it where the
+// Handed off column actually renders (projects with verification states).
+const creditRule = "A completed item credits its Contributors; with none recorded, it credits its assignees at completion. Shared items count once per credited person; the total counts each item once."
+const creditRuleHandoff = " Handed-off items credit the same way, at the moment of the handoff."
+
+// creditRuleFor picks the right wording for a project.
+func (d *projectData) creditRuleFor() string {
+	if d.hasType("verification") {
+		return creditRule + creditRuleHandoff
+	}
+	return creditRule
+}
 
 type stateInfo struct {
 	ID       uuid.UUID
@@ -464,35 +474,40 @@ func (d *projectData) completions(t *task) []completion {
 // handoffs lists every event where the task crossed INTO the handed-off band
 // (verification- or completed-type) from outside it. A move between two states
 // inside the band is not a new handoff; a bounce back out and a later re-entry
-// is. An event without a readable old state counts as a crossing, mirroring
-// completions' permissiveness on import-era rows.
+// is. The previous state comes from the replayed timeline, not the event's own
+// old_value, so an import-era row with an unreadable old state cannot invent a
+// crossing for an in-band move.
 func (d *projectData) handoffs(t *task) []completion {
 	var out []completion
+	cur := d.stateTimeline(t)[0].stateID
 	for _, ev := range t.events {
 		if ev.typ != "state_changed" {
 			continue
 		}
 		next := uuidFrom(ev.new, "state_id")
-		if !isHandedOffType(d.states[next].Type) {
+		if next == (uuid.UUID{}) {
 			continue
 		}
-		if old := uuidFrom(ev.old, "state_id"); old != (uuid.UUID{}) && isHandedOffType(d.states[old].Type) {
-			continue
+		if isHandedOffType(d.states[next].Type) && !isHandedOffType(d.states[cur].Type) {
+			out = append(out, completion{at: ev.at, actor: ev.actor, stateID: next})
 		}
-		out = append(out, completion{at: ev.at, actor: ev.actor, stateID: next})
+		cur = next
 	}
 	return out
 }
 
-// handedOffIn finds the first qualifying handoff for a unit: crossed into the
-// handed-off band inside [from, cutoff) and still at or beyond it at the cutoff
-// (work bounced back by review falls out until it crosses again). In a project
-// without verification states the band is completed alone, so handed off and
-// delivered coincide by construction. inCycle mirrors deliveredIn.
+// handedOffIn finds the qualifying handoff for a unit: crossed into the
+// handed-off band inside [from, cutoff) and still at or beyond it at the
+// cutoff. Work bounced back by review falls out until it crosses again, and
+// when it does, the LAST crossing in the window is the one that holds — its
+// moment dates the handoff and its assignees take the credit, not the earlier
+// attempt that review rejected. inCycle mirrors deliveredIn.
 func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span, requireCycle bool) (completion, bool) {
 	if !isHandedOffType(d.states[d.stateAt(t, cutoff)].Type) {
 		return completion{}, false
 	}
+	var best completion
+	found := false
 	for _, h := range d.handoffs(t) {
 		if h.at.Before(from) || !h.at.Before(cutoff) {
 			continue
@@ -500,9 +515,9 @@ func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span,
 		if requireCycle && !memberAt(spans, h.at) {
 			continue
 		}
-		return h, true
+		best, found = h, true
 	}
-	return completion{}, false
+	return best, found
 }
 
 // span is a half-open membership interval [from, to); to zero = still open.
@@ -722,7 +737,7 @@ func (d *projectData) handoffRule() string {
 	if len(names) == 0 {
 		return ""
 	}
-	return "Handed off = entered " + strings.Join(names, ", ") + " or a completed state during the window, and not moved back before the cutoff. The developer finish line; everything after is carried by others."
+	return "Handed off = crossed into " + strings.Join(names, ", ") + " (or straight into a completed state) during the window, and still past that line at the cutoff. Work bounced back by review counts again when it re-crosses. The developer finish line; everything after is carried by others."
 }
 
 // hasType says whether the project defines any state of the given type; a

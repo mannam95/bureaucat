@@ -232,6 +232,7 @@ export interface PersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
   handed_off?: MetricTile;
+  handoff_rule?: string;
   delivered: MetricTile;
   top_rank_handled: number;
   open_now: number;
@@ -260,6 +261,7 @@ export interface WorkspacePersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
   handed_off: number;
+  has_verification: boolean;
   delivered: MetricTile;
   top_rank_handled: number;
   open_now: number;

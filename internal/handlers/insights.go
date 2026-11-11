@@ -344,8 +344,14 @@ func (h *InsightsHandler) evidenceCSV(c *echo.Context, ev *insights.Evidence) er
 	res.WriteHeader(http.StatusOK)
 
 	w := csv.NewWriter(res)
+	// For handoff metrics the timestamp columns carry the crossing, not a
+	// completion; the headers must not claim otherwise.
+	atCol, byCol := "completed_at", "marked_complete_by"
+	if strings.Contains(ev.Metric, "handed_off") {
+		atCol, byCol = "handed_off_at", "handed_off_by"
+	}
 	header := []string{"key", "title", "parent", "state", "state_type", "priority",
-		"complexity", "completed_at", "marked_complete_by", "credits", "assignees",
+		"complexity", atCol, byCol, "credits", "assignees",
 		"due", "entered_cycle", "age_days"}
 	if err := w.Write(header); err != nil {
 		return err

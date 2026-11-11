@@ -180,7 +180,7 @@ func TestHarborCycleContract(t *testing.T) {
 		t.Errorf("planned cx = %+v, want 171 across 23 of 30", pcx)
 	}
 
-	wantIdentity := "30 planned + 6 added - 3 removed = 33 at close = 25 completed + 7 open + 1 archived"
+	wantIdentity := "30 planned + 6 added - 3 removed = 33 at close = 25 completed + 7 still to do + 1 archived"
 	if sec.Identity != wantIdentity {
 		t.Errorf("identity = %q, want %q", sec.Identity, wantIdentity)
 	}
@@ -469,12 +469,17 @@ func TestHandedOffDevFinishLine(t *testing.T) {
 	f.task("T5", "Backlog", "No priority", 0, 0, "2026-09-01 09:00")
 	f.move("T5", "Backlog", "Code Review", "2026-09-10 09:00", f.userIDs["bob"])
 
-	// T6: bounced, then re-crossed inside the window — counts once.
+	// T6: bounced, then re-crossed inside the window — counts once, and the
+	// crossing that HOLDS carries the date and the credit: carol's first
+	// attempt was rejected, dave reworked it and re-crossed, so dave is
+	// credited, not carol.
 	f.task("T6", "Backlog", "No priority", 0, 0, "2026-10-02 09:00")
 	f.assign("T6", "carol", "2026-10-02 10:00")
 	f.move("T6", "Backlog", "Code Review", "2026-10-08 09:00", f.userIDs["carol"])
 	f.move("T6", "Code Review", "In Progress", "2026-10-09 09:00", f.userIDs["carol"])
-	f.move("T6", "In Progress", "Testing", "2026-10-15 09:00", f.userIDs["carol"])
+	f.unassign("T6", "carol", "2026-10-10 09:00")
+	f.assign("T6", "dave", "2026-10-10 09:01")
+	f.move("T6", "In Progress", "Testing", "2026-10-15 09:00", f.userIDs["dave"])
 
 	e := f.engine("2026-10-25 12:00")
 	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
@@ -498,7 +503,7 @@ func TestHandedOffDevFinishLine(t *testing.T) {
 	if rep.People.TotalHandedOff != 4 {
 		t.Errorf("total handed off = %d, want 4", rep.People.TotalHandedOff)
 	}
-	wantPerPerson := map[string]int{"ann": 1, "bob": 2, "carol": 1}
+	wantPerPerson := map[string]int{"ann": 1, "bob": 2, "carol": 0, "dave": 1}
 	for _, row := range rep.People.Rows {
 		if want, ok := wantPerPerson[row.User.Username]; ok && row.HandedOff != want {
 			t.Errorf("%s handed off = %d, want %d", row.User.Username, row.HandedOff, want)
@@ -516,6 +521,11 @@ func TestHandedOffDevFinishLine(t *testing.T) {
 	}
 	if ev.Count != 4 {
 		t.Errorf("evidence count = %d, want 4", ev.Count)
+	}
+	for _, row := range ev.Rows {
+		if row.Key == "DEV-6" && (row.CompletedAt == nil || row.CompletedAt.Day() != 15) {
+			t.Errorf("T6 handoff date = %v, want the re-crossing on the 15th", row.CompletedAt)
+		}
 	}
 	uid := f.userIDs["bob"]
 	pev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
@@ -537,10 +547,21 @@ func TestHandedOffAbsentWithoutVerification(t *testing.T) {
 	f := newFixture("NOV")
 	f.state("Todo", "unstarted", 0)
 	f.state("Done", "completed", 1)
+	f.state("Released", "completed", 2)
 	f.prio("No priority", 0, true)
 	f.task("T1", "Todo", "No priority", 0, 0, "2026-10-02 09:00")
 	f.assign("T1", "ann", "2026-10-02 10:00")
 	f.move("T1", "Todo", "Done", "2026-10-10 09:00", f.userIDs["ann"])
+	// T2 completed BEFORE the window and moved Done -> Released inside it: the
+	// permissive completions rule counts it delivered, but it is no handoff
+	// crossing. The visible table must still be ordered by Delivered.
+	f.task("T2", "Todo", "No priority", 0, 0, "2026-09-01 09:00")
+	f.assign("T2", "bob", "2026-09-01 10:00")
+	f.move("T2", "Todo", "Done", "2026-09-10 09:00", f.userIDs["bob"])
+	f.move("T2", "Done", "Released", "2026-10-11 09:00", f.userIDs["bob"])
+	f.task("T3", "Todo", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T3", "bob", "2026-10-02 10:00")
+	f.move("T3", "Todo", "Done", "2026-10-12 09:00", f.userIDs["bob"])
 
 	e := f.engine("2026-10-25 12:00")
 	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
@@ -552,10 +573,15 @@ func TestHandedOffAbsentWithoutVerification(t *testing.T) {
 	if rep.HasVerification || rep.Range.HandedOff != nil || rep.HandoffRule != "" {
 		t.Error("handed off must stay absent without verification states")
 	}
-	for _, row := range rep.People.Rows {
-		if row.HandedOff != row.Delivered {
-			t.Errorf("%s handed off %d != delivered %d", row.User.Username, row.HandedOff, row.Delivered)
-		}
+	// bob: Delivered 2 (T2 by the permissive rule, T3), HandedOff 1 (T3 only).
+	// With no verification states the hidden number must not drive the sort:
+	// bob (Delivered 2) sorts above ann (Delivered 1).
+	if rep.People.Rows[0].User.Username != "bob" || rep.People.Rows[0].Delivered != 2 {
+		t.Errorf("table leads with %s (delivered %d), want bob with 2 — the hidden handoff number must not reorder the visible column",
+			rep.People.Rows[0].User.Username, rep.People.Rows[0].Delivered)
+	}
+	if rep.People.CreditRule != creditRule {
+		t.Error("credit rule must not mention handoffs without verification states")
 	}
 }
 

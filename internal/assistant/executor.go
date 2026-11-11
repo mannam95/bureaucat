@@ -17,8 +17,9 @@ import (
 	"bereaucat/internal/store"
 )
 
-// maxToolOutput caps tool output fed to the chat assistant's LLM; the chat UI
-// offers the full output separately. Programmatic callers (MCP, workflow) read
+// maxToolOutput caps tool output fed to the chat assistant's LLM and stored on
+// its messages (the chat shows a short preview; the tool-call output endpoint
+// serves this stored, capped text). Programmatic callers (the MCP server) read
 // the JSON directly - a mid-string cut would corrupt it - so they are not capped.
 const maxToolOutput = 16 * 1024
 

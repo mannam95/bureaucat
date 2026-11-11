@@ -31,7 +31,7 @@ const intakeLine = computed(() => {
   const h = props.health;
   if (h.intake === 0) return "";
   const parts = h.intake_by_state.map((sc) => `${sc.count} in ${sc.state.name}`);
-  return `${h.intake} items sit in intake (${parts.join(", ")}) — arrived, but not committed to yet. They are not counted as open work.`;
+  return `${h.intake} ${h.intake === 1 ? "item sits" : "items sit"} in intake (${parts.join(", ")}) — arrived, but not committed to yet. Intake is not counted as open work.`;
 });
 
 const totalOpen = computed(() => Math.max(1, props.health.open));

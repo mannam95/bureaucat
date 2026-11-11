@@ -321,7 +321,7 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 			}
 		}
 		s := e.personSliceOf(d, w, nil, userID)
-		if !isMember && len(s.mine) == 0 && s.openNow == 0 && s.comments == 0 && s.created == 0 {
+		if !isMember && len(s.mine) == 0 && len(s.handed) == 0 && s.openNow == 0 && s.comments == 0 && s.created == 0 {
 			continue
 		}
 		if u, ok := d.users[userID]; ok && !haveUser {
@@ -336,7 +336,11 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 			OpenNow: s.openNow, Comments: s.comments, Created: s.created,
 		})
 		rep.HandedOff += len(s.handed)
+		if d.hasType("verification") {
+			rep.HasVerification = true
+		}
 		rep.Delivered.Count += len(s.mine)
+		rep.Delivered.Subtasks += subtasksOver(s.mine)
 		rep.Delivered.Cx.Sum += cx.Sum
 		rep.Delivered.Cx.Assessed += cx.Assessed
 		rep.Delivered.Cx.Of += cx.Of
@@ -354,6 +358,9 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 		workedWith(d, s, userID, peers, refs)
 	}
 	rep.WorkedWith = sortedUserCounts(peers, refs)
+	if rep.HasVerification {
+		rep.CreditRule = creditRule + creditRuleHandoff
+	}
 
 	// A person the viewer shares no project with still resolves to a name when
 	// the store knows them; the numbers stay zero.
@@ -391,7 +398,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 	rep := &PersonReport{
 		Scope:      e.scope(d, w, cycle),
 		User:       d.userRef(userID),
-		CreditRule: creditRule,
+		CreditRule: d.creditRuleFor(),
 		ByCycle:    []CycleCount{},
 		Delivered:  Tile{Metric: "person_delivered", Count: len(s.mine), Cx: cxOver(s.mine), Subtasks: subtasksOver(s.mine)},
 		TopRank:    s.topRank,
@@ -403,6 +410,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 	if d.hasType("verification") {
 		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed), Subtasks: subtasksOver(s.handed)}
 		rep.HandedOff = &h
+		rep.HandoffRule = d.handoffRule()
 	}
 
 	peers, refs := map[uuid.UUID]int{}, map[uuid.UUID]UserRef{}

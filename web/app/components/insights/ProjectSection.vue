@@ -29,7 +29,10 @@ const narrative = computed(() => {
     const c = cycle.value;
     let s = `${c.delivered.count} work items completed`;
     if (c.delivered.subtasks) s += ` (${c.delivered.subtasks} of them subtasks)`;
-    if (c.handed_off) s += `, ${c.handed_off.count} handed off by their developers`;
+    if (c.handed_off) {
+      s += `, ${c.handed_off.count} handed off by their developers`;
+      if (c.handed_off.subtasks) s += ` (${c.handed_off.subtasks} of them subtasks)`;
+    }
     if (planPercent.value !== null) {
       s += `; ${c.original_plan_delivered.count} of ${c.planned_at_start.count} planned items delivered (${planPercent.value}% of the original plan)`;
     }
@@ -46,7 +49,10 @@ const narrative = computed(() => {
     const r = range.value;
     let s = `${r.completed.count} work items completed`;
     if (r.completed.subtasks) s += ` (${r.completed.subtasks} of them subtasks)`;
-    if (r.handed_off) s += `, ${r.handed_off.count} handed off by their developers`;
+    if (r.handed_off) {
+      s += `, ${r.handed_off.count} handed off by their developers`;
+      if (r.handed_off.subtasks) s += ` (${r.handed_off.subtasks} of them subtasks)`;
+    }
     s += ` and ${r.created.count} created in the window`;
     if (r.cancelled && r.cancelled.count > 0) s += `; ${r.cancelled.count} cancelled (never counted as delivery)`;
     return s + ".";

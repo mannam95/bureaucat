@@ -17,11 +17,6 @@ const docTemplate = `{
     "paths": {
         "/admin/email": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Whether env-configured SMTP is usable, and the From address. Super admin only.",
                 "produces": [
                     "application/json"
@@ -37,16 +32,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.EmailStatusResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/email/test": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/email/test": {
+            "post": {
                 "description": "Send a notification template with sample data to a chosen user. Super admin only.",
                 "consumes": [
                     "application/json"
@@ -91,16 +86,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/features": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/features": {
+            "get": {
                 "description": "Every registered gated feature with its mode and specific-user grants. Super admin only.",
                 "produces": [
                     "application/json"
@@ -125,16 +120,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/features/{feature}": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/features/{feature}": {
+            "put": {
                 "description": "Sets who can use a feature: disabled, admins or everyone. Grants stay and remain additive. Super admin only.",
                 "consumes": [
                     "application/json"
@@ -189,16 +184,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/features/{feature}/grants": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/features/{feature}/grants": {
+            "post": {
                 "description": "Adds a specific-user grant on a feature gate; additive on top of the mode. Super admin only.",
                 "consumes": [
                     "application/json"
@@ -253,16 +248,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/features/{feature}/grants/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/features/{feature}/grants/{userId}": {
+            "delete": {
                 "description": "Removes a specific-user grant from a feature gate. The user keeps access the mode gives them. Super admin only.",
                 "produces": [
                     "application/json"
@@ -312,16 +307,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/feedback": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/feedback": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -350,16 +345,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.PaginatedFeedback"
                         }
                     }
-                }
-            }
-        },
-        "/admin/feedback/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/feedback/{id}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -383,16 +378,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/graph": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/graph": {
+            "get": {
                 "description": "Returns task nodes (assigned or not), user nodes and assignment edges for the admin graph view.",
                 "produces": [
                     "application/json"
@@ -440,16 +435,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/graph/filters": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/graph/filters": {
+            "get": {
                 "description": "Returns workspace, project and user options for the admin graph view filters.",
                 "produces": [
                     "application/json"
@@ -471,16 +466,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/import/plane": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/import/plane": {
+            "post": {
                 "description": "Upload and import a Plane.so SQL dump file. Max 500MB. Requires admin role.",
                 "consumes": [
                     "multipart/form-data"
@@ -520,16 +515,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/projects/deleted": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/projects/deleted": {
+            "get": {
                 "description": "Returns a paginated list of soft-deleted projects across all workspaces.",
                 "produces": [
                     "application/json"
@@ -567,16 +562,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/projects/{id}/restore": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/projects/{id}/restore": {
+            "post": {
                 "description": "Clears the soft-delete flag on a project, making it accessible again.",
                 "produces": [
                     "application/json"
@@ -613,16 +608,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/assistant": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/assistant": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -637,14 +632,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/assistant.Settings"
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -679,16 +674,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/assistant/test": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/assistant/test": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -709,16 +704,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/branding": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/branding": {
+            "put": {
                 "description": "Update branding settings. Requires admin role.",
                 "consumes": [
                     "application/json"
@@ -760,16 +755,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/branding/{asset}": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/branding/{asset}": {
+            "put": {
                 "description": "Multipart upload in field \"file\". Logo: PNG up to 256 KB. Favicon: PNG or ICO up to 64 KB. Requires admin role.",
                 "consumes": [
                     "multipart/form-data"
@@ -810,14 +805,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -841,16 +836,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.BrandingResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/feedback": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/feedback": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -865,14 +860,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.FeedbackSettings"
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -901,16 +896,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.FeedbackSettings"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/mattermost": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/mattermost": {
+            "get": {
                 "description": "Returns Mattermost integration configuration with bot token masked. Requires admin role.",
                 "produces": [
                     "application/json"
@@ -926,14 +921,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MattermostResponse"
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "description": "Update Mattermost integration configuration. Masked tokens are preserved. Requires admin role.",
                 "consumes": [
                     "application/json"
@@ -975,16 +970,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/mattermost/test": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/mattermost/test": {
+            "post": {
                 "description": "Tests the Mattermost bot connection using the saved settings. Requires admin role.",
                 "produces": [
                     "application/json"
@@ -1012,16 +1007,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings/sso": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings/sso": {
+            "get": {
                 "description": "Returns full SSO configuration with secrets masked. Requires admin role.",
                 "produces": [
                     "application/json"
@@ -1037,14 +1032,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.SSOSettings"
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "description": "Update SSO provider configuration. Masked secrets are preserved. Requires admin role.",
                 "consumes": [
                     "application/json"
@@ -1086,16 +1081,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/stats": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/stats": {
+            "get": {
                 "description": "Returns system-wide totals, breakdowns, and per-day activity series.",
                 "produces": [
                     "application/json"
@@ -1131,16 +1126,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/tokens": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/tokens": {
+            "get": {
                 "description": "Returns a paginated list of active refresh tokens with user info.",
                 "produces": [
                     "application/json"
@@ -1178,16 +1173,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/tokens/expired": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/tokens/expired": {
+            "delete": {
                 "description": "Hard-delete all expired refresh tokens from the database.",
                 "produces": [
                     "application/json"
@@ -1209,16 +1204,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/tokens/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/tokens/{id}": {
+            "delete": {
                 "description": "Revoke a specific refresh token by ID.",
                 "produces": [
                     "application/json"
@@ -1261,16 +1256,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users": {
+            "get": {
                 "description": "Returns a paginated list of all users. Supports search by username, email, or name.",
                 "consumes": [
                     "application/json"
@@ -1317,14 +1312,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new user account with the specified details.",
                 "consumes": [
                     "application/json"
@@ -1372,16 +1367,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}": {
+            "get": {
                 "description": "Get a user's profile, SSO/password status, active sessions/tokens, workspaces and projects.",
                 "produces": [
                     "application/json"
@@ -1424,14 +1419,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "Soft-delete a user: the account is hidden and can no longer sign in, but is kept and can be restored. Cannot delete yourself.",
                 "produces": [
                     "application/json"
@@ -1474,14 +1469,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Admin edit of username, email, first and last name.",
                 "consumes": [
                     "application/json"
@@ -1548,16 +1543,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}/active": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}/active": {
+            "put": {
                 "description": "Enable or disable a user account without deleting it.",
                 "consumes": [
                     "application/json"
@@ -1618,16 +1613,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}/merge": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}/merge": {
+            "post": {
                 "description": "Additively copies the source user's workspace/project/module memberships, task assignments and private views to the target user, and makes the target watch tasks the source created, watched, or commented on. The source user is left unchanged.",
                 "consumes": [
                     "application/json"
@@ -1682,16 +1677,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}/password": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}/password": {
+            "put": {
                 "description": "Reset a user's password and revoke all their active sessions.",
                 "consumes": [
                     "application/json"
@@ -1746,16 +1741,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}/restore": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}/restore": {
+            "post": {
                 "description": "Restore a soft-deleted user; the account becomes active again and can sign in with its existing password.",
                 "produces": [
                     "application/json"
@@ -1798,16 +1793,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{id}/role": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{id}/role": {
+            "put": {
                 "description": "Change a user's role between admin and user. Cannot demote yourself.",
                 "consumes": [
                     "application/json"
@@ -1862,16 +1857,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/assistant/conversations": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/conversations": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -1889,14 +1884,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -1911,16 +1906,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/assistant.ConversationView"
                         }
                     }
-                }
-            }
-        },
-        "/assistant/conversations/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/conversations/{id}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -1950,14 +1945,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "Assistant"
                 ],
@@ -1981,14 +1976,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2036,16 +2031,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/assistant/conversations/{id}/actions/{actionId}": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/conversations/{id}/actions/{actionId}": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2085,16 +2080,16 @@ const docTemplate = `{
                     "200": {
                         "description": "OK"
                     }
-                }
-            }
-        },
-        "/assistant/conversations/{id}/messages": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/conversations/{id}/messages": {
+            "post": {
                 "description": "Streams events (step, message, pending, action, error, done) as text/event-stream.",
                 "consumes": [
                     "application/json"
@@ -2128,16 +2123,16 @@ const docTemplate = `{
                     "200": {
                         "description": "OK"
                     }
-                }
-            }
-        },
-        "/assistant/conversations/{id}/tool-calls/{callId}/output": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/conversations/{id}/tool-calls/{callId}/output": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -2174,16 +2169,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/assistant/status": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/assistant/status": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -2198,7 +2193,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.AssistantStatusResponse"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/auth/sso/{provider}": {
@@ -2303,11 +2303,6 @@ const docTemplate = `{
         },
         "/graph": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Returns task nodes (assigned or not), user nodes and assignment edges, limited to projects the caller is a member of.",
                 "produces": [
                     "application/json"
@@ -2361,16 +2356,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/graph/filters": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/graph/filters": {
+            "get": {
                 "description": "Returns workspace, project and user options for the graph view, limited to projects the caller is a member of.",
                 "produces": [
                     "application/json"
@@ -2398,16 +2393,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/insights/person/{userId}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/insights/person/{userId}": {
+            "get": {
                 "description": "One person's delivered work and load across the projects the viewer may see.",
                 "produces": [
                     "application/json"
@@ -2450,16 +2445,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/insights.WorkspacePersonReport"
                         }
                     }
-                }
-            }
-        },
-        "/insights/portfolio": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/insights/portfolio": {
+            "get": {
                 "description": "Attention table and delivery overview across the viewer's projects.",
                 "produces": [
                     "application/json"
@@ -2495,7 +2490,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/insights.Portfolio"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/logout": {
@@ -2520,11 +2520,6 @@ const docTemplate = `{
         },
         "/me": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Returns the authenticated user's profile information.",
                 "produces": [
                     "application/json"
@@ -2552,16 +2547,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/me/avatar": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/avatar": {
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2590,16 +2585,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.UserResponse"
                         }
                     }
-                }
-            }
-        },
-        "/me/feedback": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/feedback": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2625,7 +2620,12 @@ const docTemplate = `{
                     "202": {
                         "description": "Accepted"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/og-image": {
@@ -2653,11 +2653,6 @@ const docTemplate = `{
         },
         "/projects": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Returns a paginated list of projects. Admins see all projects; others see only their memberships.",
                 "produces": [
                     "application/json"
@@ -2701,14 +2696,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new project with default workflow states. Creator is added as admin.",
                 "consumes": [
                     "application/json"
@@ -2756,16 +2751,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/reorder": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/reorder": {
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2794,16 +2789,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{key}/tasks/delete": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{key}/tasks/delete": {
+            "post": {
                 "description": "Soft-deletes the given tasks and their subtasks. Admin only.",
                 "consumes": [
                     "application/json"
@@ -2846,16 +2841,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}": {
+            "get": {
                 "description": "Returns project details by project key.",
                 "produces": [
                     "application/json"
@@ -2886,14 +2881,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "Soft-delete a project. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -2924,14 +2919,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update project details. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -2980,16 +2975,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/areas": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/areas": {
+            "get": {
                 "description": "Returns all areas for a project.",
                 "produces": [
                     "application/json"
@@ -3023,14 +3018,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new project area.",
                 "consumes": [
                     "application/json"
@@ -3079,16 +3074,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/areas/{areaId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/areas/{areaId}": {
+            "delete": {
                 "description": "Delete a project area.",
                 "produces": [
                     "application/json"
@@ -3132,14 +3127,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a project area. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -3195,16 +3190,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/disabled": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/disabled": {
+            "patch": {
                 "description": "Toggle a project's disabled (read-only) state. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -3253,16 +3248,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/insights": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/insights": {
+            "get": {
                 "description": "The project report: cycle or date-range delivery, people, health.",
                 "produces": [
                     "application/json"
@@ -3305,16 +3300,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/insights.ProjectReport"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/insights/evidence": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/insights/evidence": {
+            "get": {
                 "description": "The exact population behind one reported number, with its computation rule.",
                 "produces": [
                     "application/json"
@@ -3333,7 +3328,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Metric key (delivered, planned, added, descoped, carried, verification, cancelled, archived, completed, created, original_plan, person_delivered, person_open, open_state, priority_rank, aging, overdue, due_soon, blocked, day)",
+                        "description": "Metric key (delivered, handed_off, planned, added, descoped, carried, verification, cancelled, archived, completed, created, original_plan, person_delivered, person_handed_off, person_open, open_state, priority_rank, aging, overdue, due_soon, blocked, intake, day)",
                         "name": "metric",
                         "in": "query",
                         "required": true
@@ -3352,16 +3347,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/insights.Evidence"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/insights/person/{userId}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/insights/person/{userId}": {
+            "get": {
                 "description": "One member's delivered work and current load inside the project.",
                 "produces": [
                     "application/json"
@@ -3393,16 +3388,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/insights.PersonReport"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/labels": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/labels": {
+            "get": {
                 "description": "Returns all labels for a project.",
                 "produces": [
                     "application/json"
@@ -3436,14 +3431,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new project label.",
                 "consumes": [
                     "application/json"
@@ -3492,16 +3487,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/labels/{labelId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/labels/{labelId}": {
+            "delete": {
                 "description": "Delete a project label.",
                 "produces": [
                     "application/json"
@@ -3545,14 +3540,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a project label. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -3608,16 +3603,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/members": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/members": {
+            "get": {
                 "description": "Returns all members of a project.",
                 "produces": [
                     "application/json"
@@ -3651,14 +3646,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Add a user as a member of the project. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -3713,16 +3708,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/members/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/members/search": {
+            "get": {
                 "description": "Search users by name/username/email. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -3760,16 +3755,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/members/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/members/{userId}": {
+            "delete": {
                 "description": "Remove a member from the project. Cannot remove yourself. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -3813,14 +3808,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a project member's role. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -3882,16 +3877,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/pages": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/pages": {
+            "get": {
                 "description": "Returns all documentation pages for a project (newest updated first).",
                 "produces": [
                     "application/json"
@@ -3931,14 +3926,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new documentation page in the project.",
                 "consumes": [
                     "application/json"
@@ -3987,16 +3982,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/pages/{pageNum}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/pages/{pageNum}": {
+            "get": {
                 "description": "Returns page details by page number.",
                 "produces": [
                     "application/json"
@@ -4040,14 +4035,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "Soft-delete a page.",
                 "produces": [
                     "application/json"
@@ -4097,14 +4092,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a page's title and/or content.",
                 "consumes": [
                     "application/json"
@@ -4166,16 +4161,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/states": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/states": {
+            "get": {
                 "description": "Returns all workflow states for a project.",
                 "produces": [
                     "application/json"
@@ -4209,14 +4204,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new workflow state. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -4265,16 +4260,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/states/{stateId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/states/{stateId}": {
+            "delete": {
                 "description": "Delete a workflow state. Cannot delete default states or states with tasks. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -4324,14 +4319,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a workflow state. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -4387,16 +4382,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/states/{stateId}/default": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/states/{stateId}/default": {
+            "post": {
                 "description": "Marks a workflow state as the project default, clearing the previous one. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -4446,16 +4441,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/stats": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/stats": {
+            "get": {
                 "description": "Returns project totals, task breakdowns, open-task workload per member and per-day series for the date range.",
                 "produces": [
                     "application/json"
@@ -4498,16 +4493,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks": {
+            "get": {
                 "description": "Returns a paginated list of tasks. Filters are expressed as a base64url(JSON) FilterTree in ?f=. Legacy scalar params are translated server-side.",
                 "produces": [
                     "application/json"
@@ -4588,14 +4583,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new task in the project.",
                 "consumes": [
                     "application/json"
@@ -4644,16 +4639,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/move": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/move": {
+            "post": {
                 "description": "Move multiple tasks to a different project. Each task is moved independently; failures do not roll back successful moves.",
                 "consumes": [
                     "application/json"
@@ -4702,16 +4697,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}": {
+            "get": {
                 "description": "Returns task details by task number.",
                 "produces": [
                     "application/json"
@@ -4755,14 +4750,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "Soft-delete a task. Requires project admin role or task creator.",
                 "produces": [
                     "application/json"
@@ -4812,14 +4807,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update task fields. Changes are logged in the activity log.",
                 "consumes": [
                     "application/json"
@@ -4881,16 +4876,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/activity": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/activity": {
+            "get": {
                 "description": "Returns the activity log for a task including all changes and comments.",
                 "produces": [
                     "application/json"
@@ -4943,16 +4938,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/activity/verify": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/activity/verify": {
+            "get": {
                 "description": "Verify the integrity of the activity log chain for tampering detection.",
                 "produces": [
                     "application/json"
@@ -5002,16 +4997,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/assignees": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/assignees": {
+            "post": {
                 "description": "Add a user as an assignee to a task.",
                 "consumes": [
                     "application/json"
@@ -5079,16 +5074,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/assignees/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/assignees/{userId}": {
+            "delete": {
                 "description": "Remove a user from a task's assignees.",
                 "produces": [
                     "application/json"
@@ -5145,16 +5140,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/blockers": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5191,14 +5186,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -5256,16 +5251,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/blockers/candidates": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers/candidates": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5317,16 +5312,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/blockers/{taskId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/blockers/{taskId}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -5370,16 +5365,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/comments": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/comments": {
+            "get": {
                 "description": "Returns all comments for a task.",
                 "produces": [
                     "application/json"
@@ -5432,14 +5427,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Add a comment to a task.",
                 "consumes": [
                     "application/json"
@@ -5501,16 +5496,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/comments/{commentId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/comments/{commentId}": {
+            "delete": {
                 "description": "Soft-delete a comment. Can delete own comments or any comment as project admin.",
                 "produces": [
                     "application/json"
@@ -5573,14 +5568,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a comment. Can only edit your own comments.",
                 "consumes": [
                     "application/json"
@@ -5655,16 +5650,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/contributors": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/contributors": {
+            "post": {
                 "description": "Record a user as a contributor on a task (someone who did the work, independent of current assignment).",
                 "consumes": [
                     "application/json"
@@ -5732,16 +5727,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/contributors/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/contributors/{userId}": {
+            "delete": {
                 "description": "Remove a user from a task's contributors.",
                 "produces": [
                     "application/json"
@@ -5798,16 +5793,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/copy": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/copy": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -5850,16 +5845,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.TaskResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/labels/{labelId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/labels/{labelId}": {
+            "delete": {
                 "description": "Remove a label from a task.",
                 "produces": [
                     "application/json"
@@ -5916,16 +5911,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/move": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/move": {
+            "post": {
                 "description": "Move a task to a different project, assigning a new task number and remapping state/labels.",
                 "consumes": [
                     "application/json"
@@ -5987,16 +5982,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/originators": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/originators": {
+            "post": {
                 "description": "Add a user to a task's requesters/originators.",
                 "consumes": [
                     "application/json"
@@ -6064,16 +6059,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/originators/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/originators/{userId}": {
+            "delete": {
                 "description": "Remove a user from a task's requesters/originators. The last one cannot be removed.",
                 "produces": [
                     "application/json"
@@ -6136,16 +6131,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/parent-candidates": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/parent-candidates": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6191,16 +6186,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/subtasks": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/subtasks": {
+            "get": {
                 "description": "Returns the direct child tasks of the given task, ordered by task number.",
                 "produces": [
                     "application/json"
@@ -6241,16 +6236,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/watchers": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/watchers": {
+            "post": {
                 "description": "Add a user to a task's watchers (they receive its updates).",
                 "consumes": [
                     "application/json"
@@ -6318,16 +6313,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/tasks/{taskNum}/watchers/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/tasks/{taskNum}/watchers/{userId}": {
+            "delete": {
                 "description": "Remove a user from a task's watchers.",
                 "produces": [
                     "application/json"
@@ -6384,16 +6379,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/templates": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/templates": {
+            "get": {
                 "description": "Returns all task templates for a project.",
                 "produces": [
                     "application/json"
@@ -6427,14 +6422,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new task template. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -6483,16 +6478,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/templates/{templateId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/templates/{templateId}": {
+            "delete": {
                 "description": "Delete a task template. Requires project admin role.",
                 "produces": [
                     "application/json"
@@ -6536,14 +6531,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update a task template. Requires project admin role.",
                 "consumes": [
                     "application/json"
@@ -6599,16 +6594,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/views": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/views": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6635,14 +6630,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6678,16 +6673,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ViewResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/views/reorder": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/views/reorder": {
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6723,16 +6718,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/views/{slug}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/views/{slug}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6763,14 +6758,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ViewResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -6801,14 +6796,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6851,16 +6846,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ViewResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/views/{slug}/default": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/views/{slug}/default": {
+            "put": {
                 "produces": [
                     "application/json"
                 ],
@@ -6891,14 +6886,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -6929,16 +6924,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.MessageResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/workflow": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/workflow": {
+            "get": {
                 "description": "Get the project's workflow states, transitions and rules.",
                 "produces": [
                     "application/json"
@@ -6963,14 +6958,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.WorkflowResponse"
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "description": "Replace the project's workflow states, transitions and rules. Enforcement is unchanged.",
                 "consumes": [
                     "application/json"
@@ -7013,16 +7008,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/workflow/enabled": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/workflow/enabled": {
+            "put": {
                 "description": "Enable or disable workflow enforcement. A workflow must be saved before it can be enabled.",
                 "consumes": [
                     "application/json"
@@ -7065,16 +7060,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/workspace": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/workspace": {
+            "patch": {
                 "description": "Reassign a project to another workspace by key. Admin only.",
                 "consumes": [
                     "application/json"
@@ -7129,16 +7124,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/projects/{projectKey}/workspace/move-impact": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/projects/{projectKey}/workspace/move-impact": {
+            "get": {
                 "description": "Lists project members not in the destination workspace. Admin only.",
                 "produces": [
                     "application/json"
@@ -7188,16 +7183,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/search": {
+            "get": {
                 "description": "Search across tasks, cycles, and projects the user has access to.",
                 "produces": [
                     "application/json"
@@ -7228,7 +7223,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/settings/branding": {
@@ -7454,11 +7454,6 @@ const docTemplate = `{
         },
         "/uploads": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Upload a file (images, PDFs, documents). Max 10MB.",
                 "consumes": [
                     "multipart/form-data"
@@ -7498,16 +7493,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/uploads/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/uploads/{id}": {
+            "get": {
                 "description": "Serve a previously uploaded file by its ID. Accepts a Bearer token or the access_token cookie.",
                 "produces": [
                     "application/octet-stream"
@@ -7547,16 +7542,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/users/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{id}": {
+            "get": {
                 "description": "Returns a user's public profile by their ID.",
                 "produces": [
                     "application/json"
@@ -7593,16 +7588,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/workspaces": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/workspaces": {
+            "get": {
                 "description": "Returns a paginated list of workspaces. Admins see all; others see only their memberships.",
                 "produces": [
                     "application/json"
@@ -7646,14 +7641,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Create a new workspace. Creator is added as a member. Requires admin.",
                 "consumes": [
                     "application/json"
@@ -7701,16 +7696,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/workspaces/{workspaceKey}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/workspaces/{workspaceKey}": {
+            "get": {
                 "description": "Returns workspace details by key.",
                 "produces": [
                     "application/json"
@@ -7741,14 +7736,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "Soft-delete a workspace. Requires admin.",
                 "produces": [
                     "application/json"
@@ -7779,14 +7774,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "description": "Update workspace details. Requires admin.",
                 "consumes": [
                     "application/json"
@@ -7835,16 +7830,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/workspaces/{workspaceKey}/members": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/workspaces/{workspaceKey}/members": {
+            "get": {
                 "description": "Returns all members of a workspace.",
                 "produces": [
                     "application/json"
@@ -7878,14 +7873,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "Add a user as a member of the workspace. Requires admin.",
                 "consumes": [
                     "application/json"
@@ -7940,16 +7935,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/workspaces/{workspaceKey}/members/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/workspaces/{workspaceKey}/members/search": {
+            "get": {
                 "description": "Search users by name/username/email. Requires admin.",
                 "produces": [
                     "application/json"
@@ -7987,16 +7982,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
-            }
-        },
-        "/workspaces/{workspaceKey}/members/{userId}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/workspaces/{workspaceKey}/members/{userId}": {
+            "delete": {
                 "description": "Remove a member from the workspace. Requires admin.",
                 "produces": [
                     "application/json"
@@ -8040,7 +8035,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         }
     },
@@ -8980,6 +8980,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "design_link": {
+                    "type": "string"
+                },
                 "difficulty": {
                     "description": "DEV estimation inputs, 1-5 each (0 = not assessed).",
                     "type": "integer"
@@ -8989,9 +8992,6 @@ const docTemplate = `{
                 },
                 "effort": {
                     "type": "integer"
-                },
-                "figma_link": {
-                    "type": "string"
                 },
                 "labels": {
                     "type": "array",
@@ -10777,6 +10777,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "design_link": {
+                    "type": "string"
+                },
                 "difficulty": {
                     "description": "DEV estimation: Difficulty (1-5) x Effort (1-5) = ComplexityScore (1-25).\nAll 0 while not assessed; the score is computed on read, never stored.",
                     "type": "integer"
@@ -10786,9 +10789,6 @@ const docTemplate = `{
                 },
                 "effort": {
                     "type": "integer"
-                },
-                "figma_link": {
-                    "type": "string"
                 },
                 "hidden_subtasks": {
                     "type": "integer"
@@ -11070,6 +11070,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "design_link": {
+                    "description": "Custom fields. Omitted (nil) means \"leave unchanged\"; send an empty\nstring to clear one.",
+                    "type": "string"
+                },
                 "difficulty": {
                     "description": "DEV estimation inputs, 1-5 each (0 = not assessed).",
                     "type": "integer"
@@ -11079,10 +11083,6 @@ const docTemplate = `{
                 },
                 "effort": {
                     "type": "integer"
-                },
-                "figma_link": {
-                    "description": "Custom fields. Omitted (nil) means \"leave unchanged\"; send an empty\nstring to clear one.",
-                    "type": "string"
                 },
                 "priority": {
                     "description": "Priority is rejected: priorities are per-project entities now. Clients\nsend priority_id instead; a non-nil value here fails the whole request.",
@@ -11676,6 +11676,14 @@ const docTemplate = `{
                 "delivered": {
                     "$ref": "#/definitions/insights.Tile"
                 },
+                "handed_off": {
+                    "description": "HandedOff is nil when the project defines no verification states: the\ndeveloper finish line coincides with delivery, so the tile would repeat\nthe Delivered number.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/insights.Tile"
+                        }
+                    ]
+                },
                 "identity": {
                     "description": "Identity is the reconciliation line: planned + added - removed = at\nclose = completed + in verification + open + cancelled + archived.",
                     "type": "string"
@@ -11878,6 +11886,15 @@ const docTemplate = `{
                 "in_verification": {
                     "type": "integer"
                 },
+                "intake": {
+                    "type": "integer"
+                },
+                "intake_by_state": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/insights.StateCount"
+                    }
+                },
                 "open": {
                     "type": "integer"
                 },
@@ -11917,6 +11934,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/insights.ComplexitySum"
                 },
                 "delivered": {
+                    "type": "integer"
+                },
+                "handed_off": {
                     "type": "integer"
                 },
                 "open_now": {
@@ -11960,6 +11980,17 @@ const docTemplate = `{
                 "delivered": {
                     "$ref": "#/definitions/insights.Tile"
                 },
+                "handed_off": {
+                    "description": "HandedOff is absent when the project has no verification states;\nHandoffRule is its tooltip, as on the project report.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/insights.Tile"
+                        }
+                    ]
+                },
+                "handoff_rule": {
+                    "type": "string"
+                },
                 "open_now": {
                     "type": "integer"
                 },
@@ -12002,6 +12033,10 @@ const docTemplate = `{
                 "delivered": {
                     "type": "integer"
                 },
+                "handed_off": {
+                    "description": "HandedOff counts items this person pushed past the developer finish line\n(into a verification- or completed-type state) during the window. In a\nproject without verification states the column is hidden and the number\neffectively tracks Delivered (a completed-to-completed move can nudge\nthem apart, which is why the hidden number never drives the sort there).",
+                    "type": "integer"
+                },
                 "has_activity": {
                     "type": "boolean"
                 },
@@ -12037,6 +12072,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/insights.ComplexitySum"
                 },
                 "total_delivered": {
+                    "description": "distinct items",
+                    "type": "integer"
+                },
+                "total_handed_off": {
                     "description": "distinct items",
                     "type": "integer"
                 }
@@ -12122,6 +12161,9 @@ const docTemplate = `{
                 "icon_url": {
                     "type": "string"
                 },
+                "intake": {
+                    "type": "integer"
+                },
                 "low_history": {
                     "type": "boolean"
                 },
@@ -12204,11 +12246,18 @@ const docTemplate = `{
                         "$ref": "#/definitions/insights.CycleRef"
                     }
                 },
+                "handoff_rule": {
+                    "type": "string"
+                },
                 "has_areas": {
                     "description": "Vocabularies the frontend needs for panels that are conditional on their\nexistence.",
                     "type": "boolean"
                 },
                 "has_labels": {
+                    "type": "boolean"
+                },
+                "has_verification": {
+                    "description": "HasVerification gates the Handed off tile and person column; HandoffRule\nis its tooltip, spelled in the project's own state names.",
                     "type": "boolean"
                 },
                 "health": {
@@ -12248,6 +12297,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/insights.DayPoint"
                     }
+                },
+                "handed_off": {
+                    "description": "HandedOff mirrors CycleSection: absent without verification states.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/insights.Tile"
+                        }
+                    ]
                 },
                 "has_cycles": {
                     "description": "HasCycles says whether the project could run cycle reports at all; false\nrenders the quiet \"create a cycle\" hint.",
@@ -12342,6 +12399,10 @@ const docTemplate = `{
                 },
                 "metric": {
                     "type": "string"
+                },
+                "subtasks": {
+                    "description": "Subtasks says how many of Count are subtasks, so a delivery number is\nhonest about its units (\"17 delivered · 9 subtasks\"). Only the delivery\ntiles fill it.",
+                    "type": "integer"
                 }
             }
         },
@@ -12405,6 +12466,13 @@ const docTemplate = `{
                 },
                 "delivered": {
                     "$ref": "#/definitions/insights.Tile"
+                },
+                "handed_off": {
+                    "type": "integer"
+                },
+                "has_verification": {
+                    "description": "HasVerification is true when any contributing project defines\nverification states — the gate for showing the Handed off tile.",
+                    "type": "boolean"
                 },
                 "open_now": {
                     "type": "integer"

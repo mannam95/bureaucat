@@ -284,7 +284,9 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 	if sec.InVerification != nil {
 		sec.Identity += fmt.Sprintf(" + %d in verification", sec.InVerification.Count)
 	}
-	sec.Identity += fmt.Sprintf(" + %d open", len(carried))
+	// "still to do", not "open": the bucket holds committed-but-unfinished work
+	// AND intake-typed items that sit in the cycle.
+	sec.Identity += fmt.Sprintf(" + %d still to do", len(carried))
 	if sec.Cancelled != nil {
 		sec.Identity += fmt.Sprintf(" + %d cancelled", sec.Cancelled.Count)
 	}
@@ -406,7 +408,7 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	}
 
 	topRank, _ := d.topRank()
-	table := PersonTable{Rows: []PersonRow{}, CreditRule: creditRule, TotalCx: cxOver(delivered),
+	table := PersonTable{Rows: []PersonRow{}, CreditRule: d.creditRuleFor(), TotalCx: cxOver(delivered),
 		TotalDelivered: len(delivered), TotalHandedOff: len(handedOff)}
 
 	for _, t := range handedOff {
@@ -473,11 +475,14 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	for _, a := range rows {
 		table.Rows = append(table.Rows, a.row)
 	}
-	// Handed off leads: it is the developer finish line the table answers for.
-	// Without verification states it equals Delivered, so the order is unchanged.
+	// Handed off leads where its column renders (projects with verification
+	// states). Elsewhere the visible order must follow the visible Delivered
+	// column — the two numbers can drift apart on a completed-to-completed move,
+	// so the hidden one never decides the order.
+	byHandoff := d.hasType("verification")
 	sort.Slice(table.Rows, func(i, j int) bool {
 		a, b := table.Rows[i], table.Rows[j]
-		if a.HandedOff != b.HandedOff {
+		if byHandoff && a.HandedOff != b.HandedOff {
 			return a.HandedOff > b.HandedOff
 		}
 		if a.Delivered != b.Delivered {

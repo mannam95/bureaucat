@@ -103,7 +103,9 @@ type PersonRow struct {
 	User UserRef `json:"user"`
 	// HandedOff counts items this person pushed past the developer finish line
 	// (into a verification- or completed-type state) during the window. In a
-	// project without verification states it equals Delivered by construction.
+	// project without verification states the column is hidden and the number
+	// effectively tracks Delivered (a completed-to-completed move can nudge
+	// them apart, which is why the hidden number never drives the sort there).
 	HandedOff   int            `json:"handed_off"`
 	Delivered   int            `json:"delivered"`
 	Shared      int            `json:"shared"` // of Delivered, items credited to >1 person
@@ -313,9 +315,11 @@ type UserCount struct {
 type PersonReport struct {
 	Scope Scope   `json:"scope"`
 	User  UserRef `json:"user"`
-	// HandedOff is absent when the project has no verification states.
-	HandedOff *Tile `json:"handed_off,omitempty"`
-	Delivered Tile  `json:"delivered"`
+	// HandedOff is absent when the project has no verification states;
+	// HandoffRule is its tooltip, as on the project report.
+	HandedOff   *Tile  `json:"handed_off,omitempty"`
+	HandoffRule string `json:"handoff_rule,omitempty"`
+	Delivered   Tile   `json:"delivered"`
 	TopRank   int          `json:"top_rank_handled"`
 	OpenNow   int          `json:"open_now"`
 	Comments  int          `json:"comments"`
@@ -355,7 +359,10 @@ type WorkspacePersonReport struct {
 	Scope     Scope   `json:"scope"`
 	User      UserRef `json:"user"`
 	HandedOff int     `json:"handed_off"`
-	Delivered Tile    `json:"delivered"`
+	// HasVerification is true when any contributing project defines
+	// verification states — the gate for showing the Handed off tile.
+	HasVerification bool `json:"has_verification"`
+	Delivered       Tile `json:"delivered"`
 	TopRank   int     `json:"top_rank_handled"`
 	OpenNow   int     `json:"open_now"`
 	Comments  int     `json:"comments"`
