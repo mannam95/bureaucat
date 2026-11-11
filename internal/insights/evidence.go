@@ -85,6 +85,39 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			}
 		}
 
+	case "handed_off":
+		ev.Title = "Handed off"
+		ev.HowComputed = "Leaf items that crossed into a verification- or completed-type state during the window and were still at or beyond it at the cutoff. Work bounced back by review falls out until it crosses again; the date shown is the handoff."
+		ev.SourceEvents = "state_changed"
+		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "still handed off at cutoff")
+		for _, t := range units {
+			if h, ok := d.handedOffIn(t, w.start, w.cutoff, spansOf[t.id], requireCycle); ok {
+				addDelivered(t, h, enteredLabel(t))
+			}
+		}
+
+	case "person_handed_off":
+		if p.UserID == nil {
+			return nil, fmt.Errorf("metric %q needs a user", p.Metric)
+		}
+		u := d.userRef(*p.UserID)
+		ev.Title = "Handed off by " + u.Username
+		ev.HowComputed = "Handed-off items credited to this person: their Contributors, or — when none are recorded — their assignees at the handoff moment. The date shown is the handoff."
+		ev.SourceEvents = "state_changed, assignee_added, assignee_removed + task contributors"
+		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "credited to "+u.Username)
+		for _, t := range units {
+			h, ok := d.handedOffIn(t, w.start, w.cutoff, spansOf[t.id], requireCycle)
+			if !ok {
+				continue
+			}
+			for _, cu := range d.credits(t, h.at) {
+				if cu == *p.UserID {
+					addDelivered(t, h, enteredLabel(t))
+					break
+				}
+			}
+		}
+
 	case "original_plan":
 		if cycle == nil {
 			return nil, fmt.Errorf("metric %q needs a cycle", p.Metric)

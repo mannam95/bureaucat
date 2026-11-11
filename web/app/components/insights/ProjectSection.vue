@@ -28,6 +28,7 @@ const narrative = computed(() => {
   if (cycle.value) {
     const c = cycle.value;
     let s = `${c.delivered.count} work items completed`;
+    if (c.handed_off) s += `, ${c.handed_off.count} handed off by their developers`;
     if (planPercent.value !== null) {
       s += `; ${c.original_plan_delivered.count} of ${c.planned_at_start.count} planned items delivered (${planPercent.value}% of the original plan)`;
     }
@@ -42,7 +43,9 @@ const narrative = computed(() => {
   }
   if (range.value) {
     const r = range.value;
-    let s = `${r.completed.count} work items completed and ${r.created.count} created in the window`;
+    let s = `${r.completed.count} work items completed`;
+    if (r.handed_off) s += `, ${r.handed_off.count} handed off by their developers`;
+    s += ` and ${r.created.count} created in the window`;
     if (r.cancelled && r.cancelled.count > 0) s += `; ${r.cancelled.count} cancelled (never counted as delivery)`;
     return s + ".";
   }
@@ -71,6 +74,16 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
 
     <!-- Cycle tiles -->
     <div v-if="cycle" class="mt-4 flex flex-wrap gap-3">
+      <MetricTile
+        v-if="cycle.handed_off"
+        label="Handed off"
+        :count="cycle.handed_off.count"
+        metric="handed_off"
+        :cx="cycle.handed_off.cx"
+        sub="the developer finish line"
+        :tooltip="report.handoff_rule"
+        @open="emit('open', $event)"
+      />
       <MetricTile
         label="Delivered"
         :count="cycle.delivered.count"
@@ -131,6 +144,16 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
 
     <!-- Range tiles -->
     <div v-else-if="range" class="mt-4 flex flex-wrap gap-3">
+      <MetricTile
+        v-if="range.handed_off"
+        label="Handed off"
+        :count="range.handed_off.count"
+        metric="handed_off"
+        :cx="range.handed_off.cx"
+        sub="the developer finish line"
+        :tooltip="report.handoff_rule"
+        @open="emit('open', $event)"
+      />
       <MetricTile label="Completed" :count="range.completed.count" metric="completed" :cx="range.completed.cx" highlight @open="emit('open', $event)" />
       <MetricTile label="Created" :count="range.created.count" metric="created" @open="emit('open', $event)" />
       <MetricTile

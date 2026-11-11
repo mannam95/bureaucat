@@ -5,21 +5,33 @@ import type { PersonTable } from "~/types";
 // falling back to assignees at completion; shared items count once per person
 // and the total de-duplicates. The sentences state facts the event log can
 // prove — never interpretations.
-const props = defineProps<{ people: PersonTable }>();
+const props = defineProps<{
+  people: PersonTable;
+  // The Handed off column renders only when the project has verification
+  // states; without them it would repeat Delivered digit for digit.
+  hasVerification?: boolean;
+  handoffRule?: string;
+}>();
 
 const emit = defineEmits<{
   person: [userId: string];
   open: [metric: string, userId: string];
 }>();
 
-const activeRows = computed(() => props.people.rows.filter((r) => r.has_activity || r.delivered > 0));
-const quietRows = computed(() => props.people.rows.filter((r) => !r.has_activity && r.delivered === 0));
+const activeRows = computed(() => props.people.rows.filter((r) => r.has_activity || r.delivered > 0 || r.handed_off > 0));
+const quietRows = computed(() => props.people.rows.filter((r) => !r.has_activity && r.delivered === 0 && r.handed_off === 0));
 
 const creditSum = computed(() => props.people.rows.reduce((n, r) => n + r.delivered, 0));
 
 const narrative = computed(() => {
-  const n = activeRows.value.filter((r) => r.delivered > 0).length;
-  let s = `${n} of ${props.people.rows.length} members delivered completed work in this window.`;
+  let s: string;
+  if (props.hasVerification) {
+    const nHand = activeRows.value.filter((r) => r.handed_off > 0).length;
+    s = `${nHand} of ${props.people.rows.length} members handed work off in this window.`;
+  } else {
+    const n = activeRows.value.filter((r) => r.delivered > 0).length;
+    s = `${n} of ${props.people.rows.length} members delivered completed work in this window.`;
+  }
   if (creditSum.value > props.people.total_delivered) {
     s += ` Person rows sum to ${creditSum.value} because shared items count once per credited person; the total counts ${props.people.total_delivered} distinct items.`;
   }
@@ -37,6 +49,9 @@ const narrative = computed(() => {
         <thead>
           <tr class="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
             <th class="px-3 py-2 font-medium">Member</th>
+            <th v-if="hasVerification" class="px-3 py-2 text-right font-medium">
+              <span :title="handoffRule" class="cursor-help underline decoration-dotted underline-offset-2">Handed off</span>
+            </th>
             <th class="px-3 py-2 text-right font-medium">Delivered</th>
             <th class="px-3 py-2 text-right font-medium">Complexity</th>
             <th class="px-3 py-2 text-right font-medium">Top priority handled</th>
@@ -64,6 +79,15 @@ const narrative = computed(() => {
                 <span class="font-medium">{{ r.user.first_name }} {{ r.user.last_name }}</span>
               </div>
             </td>
+            <td v-if="hasVerification" class="px-3 py-2.5 text-right tabular-nums">
+              <button
+                class="rounded px-1 font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring outline-none"
+                title="Open the exact items behind this number"
+                @click.stop="emit('open', 'person_handed_off', r.user.id)"
+              >
+                {{ r.handed_off }}
+              </button>
+            </td>
             <td class="px-3 py-2.5 text-right tabular-nums">
               <button
                 class="rounded px-1 underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring outline-none"
@@ -85,13 +109,14 @@ const narrative = computed(() => {
             <td class="px-3 py-2.5 text-right tabular-nums">{{ r.created }}</td>
           </tr>
           <tr v-if="quietRows.length > 0" class="border-b last:border-0">
-            <td colspan="7" class="px-3 py-2.5 text-xs text-muted-foreground">
+            <td :colspan="hasVerification ? 8 : 7" class="px-3 py-2.5 text-xs text-muted-foreground">
               No recorded activity in this project during the window:
               <span v-for="(r, i) in quietRows" :key="r.user.id">{{ i > 0 ? ", " : "" }}{{ r.user.first_name }} {{ r.user.last_name }}</span>
             </td>
           </tr>
           <tr class="bg-muted/30 font-medium">
             <td class="px-3 py-2.5">Total · shared counted once</td>
+            <td v-if="hasVerification" class="px-3 py-2.5 text-right tabular-nums">{{ people.total_handed_off }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums">{{ people.total_delivered }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums">
               <template v-if="people.total_cx && people.total_cx.assessed > 0">{{ people.total_cx.sum }}</template>

@@ -69,6 +69,7 @@ export interface BandCount {
 
 export interface PersonRow {
   user: InsightsUser;
+  handed_off: number;
   delivered: number;
   shared: number;
   cx?: ComplexitySum;
@@ -81,6 +82,7 @@ export interface PersonRow {
 
 export interface PersonTable {
   rows: PersonRow[];
+  total_handed_off: number;
   total_delivered: number;
   total_cx?: ComplexitySum;
   credit_rule: string;
@@ -132,6 +134,7 @@ export interface InsightsHealth {
 }
 
 export interface CycleSection {
+  handed_off?: MetricTile;
   delivered: MetricTile;
   original_plan_delivered: MetricTile;
   planned_at_start: MetricTile;
@@ -148,6 +151,7 @@ export interface CycleSection {
 }
 
 export interface RangeSection {
+  handed_off?: MetricTile;
   completed: MetricTile;
   created: MetricTile;
   cancelled?: MetricTile;
@@ -173,6 +177,8 @@ export interface ProjectInsights {
   cycles: InsightsCycle[];
   has_areas: boolean;
   has_labels: boolean;
+  has_verification: boolean;
+  handoff_rule?: string;
 }
 
 export interface PortfolioRow {
@@ -221,6 +227,7 @@ export interface UserCount {
 export interface PersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
+  handed_off?: MetricTile;
   delivered: MetricTile;
   top_rank_handled: number;
   open_now: number;
@@ -236,6 +243,7 @@ export interface PersonInsights {
 export interface PersonProjectRow {
   project_key: string;
   project_name: string;
+  handed_off: number;
   delivered: number;
   cx?: ComplexitySum;
   top_rank_handled: number;
@@ -247,6 +255,7 @@ export interface PersonProjectRow {
 export interface WorkspacePersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
+  handed_off: number;
   delivered: MetricTile;
   top_rank_handled: number;
   open_now: number;

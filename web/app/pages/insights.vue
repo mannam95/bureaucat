@@ -482,7 +482,13 @@ watch([() => q.value.project, () => q.value.person, report, portfolio, person, w
               <ProjectSection :report="report" @open="openEvidence" @day="(d) => openEvidence('day', { day: d })" />
             </div>
             <div id="q2" class="mt-10 scroll-mt-16 break-before-page">
-              <PeopleSection :people="report.people" @person="openPerson" @open="(m, uid) => openEvidence(m, { user_id: uid })" />
+              <PeopleSection
+                :people="report.people"
+                :has-verification="report.has_verification"
+                :handoff-rule="report.handoff_rule"
+                @person="openPerson"
+                @open="(m, uid) => openEvidence(m, { user_id: uid })"
+              />
             </div>
             <div id="q3" class="mt-10 scroll-mt-16 break-before-page">
               <HealthSection :health="report.health" :project-name="report.scope.project_name || ''" :project-key="q.project" @open="(m, p) => openEvidence(m, p)" />

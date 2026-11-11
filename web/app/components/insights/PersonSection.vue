@@ -47,6 +47,7 @@ function fmtDate(iso?: string): string {
 const narrative = computed(() => {
   const p = props.person;
   let s = `${p.delivered.count} items completed`;
+  if (p.handed_off) s = `${p.handed_off.count} items handed off, ` + s;
   if (p.delivered.cx && p.delivered.cx.assessed > 0) {
     s += ` (complexity ${p.delivered.cx.sum}`;
     if (p.delivered.cx.not_assessed > 0) s += `, ${p.delivered.cx.not_assessed} not assessed`;
@@ -74,6 +75,15 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
     </p>
 
     <div class="mt-4 flex flex-wrap gap-3">
+      <MetricTile
+        v-if="person.handed_off"
+        label="Handed off"
+        :count="person.handed_off.count"
+        metric="person_handed_off"
+        :cx="person.handed_off.cx"
+        sub="the developer finish line"
+        @open="emit('open', 'person_handed_off', person.user.id)"
+      />
       <MetricTile
         label="Completed"
         :count="person.delivered.count"

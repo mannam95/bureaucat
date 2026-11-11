@@ -149,40 +149,40 @@ func (e *Engine) ProjectReport(ctx context.Context, project store.Project, opts 
 		HasLabels: d.hasLabels,
 	}
 
+	rep.HasVerification = d.hasType("verification")
+	rep.HandoffRule = d.handoffRule()
+
 	units := d.leafUnits()
-	var delivered []*task
+	var delivered, handedOff []*task
 	deliveredAt := map[uuid.UUID]completion{}
+	handedOffAt := map[uuid.UUID]completion{}
 
 	if cycle != nil {
-		sec := e.cycleSection(d, w, cycle, units, deliveredAt)
-		rep.Cycle = sec
-		for _, t := range units {
-			if _, ok := deliveredAt[t.id]; ok {
-				delivered = append(delivered, t)
-			}
-		}
+		rep.Cycle = e.cycleSection(d, w, cycle, units, deliveredAt, handedOffAt)
 	} else {
-		sec := e.rangeSection(d, w, units, deliveredAt)
-		rep.Range = sec
-		for _, t := range units {
-			if _, ok := deliveredAt[t.id]; ok {
-				delivered = append(delivered, t)
-			}
+		rep.Range = e.rangeSection(d, w, units, deliveredAt, handedOffAt)
+	}
+	for _, t := range units {
+		if _, ok := deliveredAt[t.id]; ok {
+			delivered = append(delivered, t)
+		}
+		if _, ok := handedOffAt[t.id]; ok {
+			handedOff = append(handedOff, t)
 		}
 	}
 
-	rep.People = e.personTable(d, w, delivered, deliveredAt)
+	rep.People = e.personTable(d, w, delivered, deliveredAt, handedOff, handedOffAt)
 	rep.Health = e.health(d)
 	return rep, nil
 }
 
-func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units []*task, deliveredAt map[uuid.UUID]completion) *CycleSection {
+func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units []*task, deliveredAt, handedOffAt map[uuid.UUID]completion) *CycleSection {
 	spansOf := map[uuid.UUID][]span{}
 	for _, t := range units {
 		spansOf[t.id] = d.cycleMembership(d.top(t), cycle.ID)
 	}
 
-	var planned, added, removed, atClose, deliveredList, originalPlan []*task
+	var planned, added, removed, atClose, deliveredList, originalPlan, handedOffList []*task
 	var cancelled, archived, verification, carried []*task
 	for _, t := range units {
 		spans := spansOf[t.id]
@@ -210,6 +210,10 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 			if inAtStart {
 				originalPlan = append(originalPlan, t)
 			}
+		}
+		if h, ok := d.handedOffIn(t, w.start, w.cutoff, spans, true); ok {
+			handedOffAt[t.id] = h
+			handedOffList = append(handedOffList, t)
 		}
 		if inAtClose {
 			switch d.typeAt(t, w.cutoff) {
@@ -247,6 +251,8 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 	if d.hasType("verification") {
 		t := Tile{Metric: "verification", Count: len(verification), Cx: cxOver(verification)}
 		sec.InVerification = &t
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList)}
+		sec.HandedOff = &h
 	}
 	if d.hasType("cancelled") {
 		t := Tile{Metric: "cancelled", Count: len(cancelled)}
@@ -310,12 +316,16 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 	return sec
 }
 
-func (e *Engine) rangeSection(d *projectData, w window, units []*task, deliveredAt map[uuid.UUID]completion) *RangeSection {
-	var deliveredList, created, cancelled []*task
+func (e *Engine) rangeSection(d *projectData, w window, units []*task, deliveredAt, handedOffAt map[uuid.UUID]completion) *RangeSection {
+	var deliveredList, created, cancelled, handedOffList []*task
 	for _, t := range units {
 		if c, ok := d.deliveredIn(t, w.start, w.cutoff, nil, false); ok {
 			deliveredAt[t.id] = c
 			deliveredList = append(deliveredList, t)
+		}
+		if h, ok := d.handedOffIn(t, w.start, w.cutoff, nil, false); ok {
+			handedOffAt[t.id] = h
+			handedOffList = append(handedOffList, t)
 		}
 		if !t.createdAt.Before(w.start) && t.createdAt.Before(w.cutoff) {
 			created = append(created, t)
@@ -343,6 +353,10 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 		t := Tile{Metric: "cancelled", Count: len(cancelled)}
 		sec.Cancelled = &t
 	}
+	if d.hasType("verification") {
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList)}
+		sec.HandedOff = &h
+	}
 
 	for day := w.start; day.Before(w.endEx) && !day.After(w.cutoff); day = day.AddDate(0, 0, 1) {
 		dayEnd := day.AddDate(0, 0, 1)
@@ -362,7 +376,7 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 	return sec
 }
 
-func (e *Engine) personTable(d *projectData, w window, delivered []*task, deliveredAt map[uuid.UUID]completion) PersonTable {
+func (e *Engine) personTable(d *projectData, w window, delivered []*task, deliveredAt map[uuid.UUID]completion, handedOff []*task, handedOffAt map[uuid.UUID]completion) PersonTable {
 	type acc struct {
 		row  PersonRow
 		seen bool
@@ -381,8 +395,15 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	}
 
 	topRank, _ := d.topRank()
-	table := PersonTable{Rows: []PersonRow{}, CreditRule: creditRule, TotalCx: cxOver(delivered), TotalDelivered: len(delivered)}
+	table := PersonTable{Rows: []PersonRow{}, CreditRule: creditRule, TotalCx: cxOver(delivered),
+		TotalDelivered: len(delivered), TotalHandedOff: len(handedOff)}
 
+	for _, t := range handedOff {
+		h := handedOffAt[t.id]
+		for _, u := range d.credits(t, h.at) {
+			get(u).row.HandedOff++
+		}
+	}
 	for _, t := range delivered {
 		c := deliveredAt[t.id]
 		credits := d.credits(t, c.at)
@@ -430,7 +451,7 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	}
 	for u, a := range rows {
 		_ = u
-		if a.row.Delivered > 0 || a.row.Comments > 0 || a.row.Created > 0 {
+		if a.row.Delivered > 0 || a.row.HandedOff > 0 || a.row.Comments > 0 || a.row.Created > 0 {
 			a.row.HasActivity = true
 		}
 		if a.row.Cx.Of == 0 {
@@ -441,8 +462,13 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 	for _, a := range rows {
 		table.Rows = append(table.Rows, a.row)
 	}
+	// Handed off leads: it is the developer finish line the table answers for.
+	// Without verification states it equals Delivered, so the order is unchanged.
 	sort.Slice(table.Rows, func(i, j int) bool {
 		a, b := table.Rows[i], table.Rows[j]
+		if a.HandedOff != b.HandedOff {
+			return a.HandedOff > b.HandedOff
+		}
 		if a.Delivered != b.Delivered {
 			return a.Delivered > b.Delivered
 		}

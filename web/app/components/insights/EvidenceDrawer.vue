@@ -146,7 +146,8 @@ const cxLine = computed(() => {
               <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 <span v-if="row.priority">{{ row.priority.name }}</span>
                 <span>{{ row.assessed ? `cx ${row.complexity}` : "not assessed" }}</span>
-                <span v-if="row.completed_at">done {{ fmtDate(row.completed_at) }}</span>
+                <!-- For handoff metrics the timestamp is the crossing, not a completion. -->
+                <span v-if="row.completed_at">{{ evidence.metric.includes("handed_off") ? "handed off" : "done" }} {{ fmtDate(row.completed_at) }}</span>
                 <span v-if="row.marked_complete_by">by {{ row.marked_complete_by.username }}</span>
                 <span v-if="row.credits && row.credits.length">
                   credit: {{ row.credits.map((u) => u.username).join(", ") }}

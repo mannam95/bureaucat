@@ -427,3 +427,134 @@ func TestPortfolioAttention(t *testing.T) {
 		t.Errorf("oldest = %+v, want the Doing task with its state name", row.Oldest)
 	}
 }
+
+// TestHandedOffDevFinishLine covers the developer finish line: a crossing into
+// the verification band counts, a band-internal move does not count again, a
+// review bounce falls out until it crosses again, a straight-to-Done jump is
+// both handed off and delivered, and a crossing before the window is not a
+// window handoff.
+func TestHandedOffDevFinishLine(t *testing.T) {
+	f := newFixture("DEV")
+	f.state("Backlog", "backlog", 0)
+	f.state("In Progress", "started", 1)
+	f.state("Code Review", "verification", 2)
+	f.state("Testing", "verification", 3)
+	f.state("Done", "completed", 4)
+	f.prio("No priority", 0, true)
+
+	// T1: into Code Review, still there — handed off, not delivered.
+	f.task("T1", "Backlog", "No priority", 2, 3, "2026-10-02 09:00")
+	f.assign("T1", "ann", "2026-10-02 10:00")
+	f.move("T1", "Backlog", "In Progress", "2026-10-05 09:00", f.userIDs["ann"])
+	f.move("T1", "In Progress", "Code Review", "2026-10-10 09:00", f.userIDs["ann"])
+
+	// T2: crossed once, then moved inside the band — counts once.
+	f.task("T2", "Backlog", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T2", "bob", "2026-10-02 10:00")
+	f.move("T2", "Backlog", "Code Review", "2026-10-11 09:00", f.userIDs["bob"])
+	f.move("T2", "Code Review", "Testing", "2026-10-12 09:00", f.userIDs["bob"])
+
+	// T3: bounced back by review before the cutoff — falls out.
+	f.task("T3", "Backlog", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T3", "ann", "2026-10-02 10:00")
+	f.move("T3", "Backlog", "Code Review", "2026-10-11 09:00", f.userIDs["ann"])
+	f.move("T3", "Code Review", "In Progress", "2026-10-13 09:00", f.userIDs["ann"])
+
+	// T4: straight to Done — handed off and delivered.
+	f.task("T4", "Backlog", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T4", "bob", "2026-10-02 10:00")
+	f.move("T4", "Backlog", "Done", "2026-10-14 09:00", f.userIDs["bob"])
+
+	// T5: crossed before the window start, still in the band — not a window handoff.
+	f.task("T5", "Backlog", "No priority", 0, 0, "2026-09-01 09:00")
+	f.move("T5", "Backlog", "Code Review", "2026-09-10 09:00", f.userIDs["bob"])
+
+	// T6: bounced, then re-crossed inside the window — counts once.
+	f.task("T6", "Backlog", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T6", "carol", "2026-10-02 10:00")
+	f.move("T6", "Backlog", "Code Review", "2026-10-08 09:00", f.userIDs["carol"])
+	f.move("T6", "Code Review", "In Progress", "2026-10-09 09:00", f.userIDs["carol"])
+	f.move("T6", "In Progress", "Testing", "2026-10-15 09:00", f.userIDs["carol"])
+
+	e := f.engine("2026-10-25 12:00")
+	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
+		From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if !rep.HasVerification {
+		t.Error("has_verification must be true")
+	}
+	if rep.HandoffRule == "" {
+		t.Error("handoff_rule must name the band states")
+	}
+	if rep.Range.HandedOff == nil || rep.Range.HandedOff.Count != 4 {
+		t.Fatalf("handed off tile = %+v, want count 4 (T1, T2, T4, T6)", rep.Range.HandedOff)
+	}
+	if rep.Range.Completed.Count != 1 {
+		t.Errorf("completed = %d, want 1 (T4 alone)", rep.Range.Completed.Count)
+	}
+	if rep.People.TotalHandedOff != 4 {
+		t.Errorf("total handed off = %d, want 4", rep.People.TotalHandedOff)
+	}
+	wantPerPerson := map[string]int{"ann": 1, "bob": 2, "carol": 1}
+	for _, row := range rep.People.Rows {
+		if want, ok := wantPerPerson[row.User.Username]; ok && row.HandedOff != want {
+			t.Errorf("%s handed off = %d, want %d", row.User.Username, row.HandedOff, want)
+		}
+	}
+	if rep.People.Rows[0].User.Username != "bob" {
+		t.Errorf("table leads with %s, want bob (handed off leads the sort)", rep.People.Rows[0].User.Username)
+	}
+
+	ev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
+		Metric: "handed_off", From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	if ev.Count != 4 {
+		t.Errorf("evidence count = %d, want 4", ev.Count)
+	}
+	uid := f.userIDs["bob"]
+	pev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
+		Metric: "person_handed_off", UserID: &uid,
+		From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("person evidence: %v", err)
+	}
+	if pev.Count != 2 {
+		t.Errorf("bob's handed off evidence = %d, want 2 (T2, T4)", pev.Count)
+	}
+}
+
+// TestHandedOffAbsentWithoutVerification: with no verification states the band
+// is completed alone, so the tile stays absent and each person's handed-off
+// equals their delivered by construction.
+func TestHandedOffAbsentWithoutVerification(t *testing.T) {
+	f := newFixture("NOV")
+	f.state("Todo", "unstarted", 0)
+	f.state("Done", "completed", 1)
+	f.prio("No priority", 0, true)
+	f.task("T1", "Todo", "No priority", 0, 0, "2026-10-02 09:00")
+	f.assign("T1", "ann", "2026-10-02 10:00")
+	f.move("T1", "Todo", "Done", "2026-10-10 09:00", f.userIDs["ann"])
+
+	e := f.engine("2026-10-25 12:00")
+	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
+		From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if rep.HasVerification || rep.Range.HandedOff != nil || rep.HandoffRule != "" {
+		t.Error("handed off must stay absent without verification states")
+	}
+	for _, row := range rep.People.Rows {
+		if row.HandedOff != row.Delivered {
+			t.Errorf("%s handed off %d != delivered %d", row.User.Username, row.HandedOff, row.Delivered)
+		}
+	}
+}

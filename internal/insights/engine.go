@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ var activityTypes = []string{
 const countingRule = "Counts leaf items: a parent with subtasks counts through its subtasks. Cancelled is never delivery; archived is its own bucket; unknown estimates are never zero."
 
 // creditRule explains the person table.
-const creditRule = "A completed item credits its Contributors; with none recorded, it credits its assignees at completion. Shared items count once per credited person; the total counts each item once."
+const creditRule = "A completed item credits its Contributors; with none recorded, it credits its assignees at completion. Handed-off items credit the same way, at the moment of the handoff. Shared items count once per credited person; the total counts each item once."
 
 type stateInfo struct {
 	ID       uuid.UUID
@@ -143,6 +144,13 @@ func isOpenType(t string) bool {
 // or verification) — the population the aging panels watch.
 func isWorkingType(t string) bool {
 	return t == "started" || t == "verification"
+}
+
+// isHandedOffType marks the types at or beyond the developer finish line: the
+// work left the developer's hands and is being validated or is done. Archived
+// and cancelled are deliberately outside: shelving work is not handing it off.
+func isHandedOffType(t string) bool {
+	return t == "verification" || t == "completed"
 }
 
 func jsonMap(b []byte) map[string]any {
@@ -446,6 +454,50 @@ func (d *projectData) completions(t *task) []completion {
 	return out
 }
 
+// handoffs lists every event where the task crossed INTO the handed-off band
+// (verification- or completed-type) from outside it. A move between two states
+// inside the band is not a new handoff; a bounce back out and a later re-entry
+// is. An event without a readable old state counts as a crossing, mirroring
+// completions' permissiveness on import-era rows.
+func (d *projectData) handoffs(t *task) []completion {
+	var out []completion
+	for _, ev := range t.events {
+		if ev.typ != "state_changed" {
+			continue
+		}
+		next := uuidFrom(ev.new, "state_id")
+		if !isHandedOffType(d.states[next].Type) {
+			continue
+		}
+		if old := uuidFrom(ev.old, "state_id"); old != (uuid.UUID{}) && isHandedOffType(d.states[old].Type) {
+			continue
+		}
+		out = append(out, completion{at: ev.at, actor: ev.actor, stateID: next})
+	}
+	return out
+}
+
+// handedOffIn finds the first qualifying handoff for a unit: crossed into the
+// handed-off band inside [from, cutoff) and still at or beyond it at the cutoff
+// (work bounced back by review falls out until it crosses again). In a project
+// without verification states the band is completed alone, so handed off and
+// delivered coincide by construction. inCycle mirrors deliveredIn.
+func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span, requireCycle bool) (completion, bool) {
+	if !isHandedOffType(d.states[d.stateAt(t, cutoff)].Type) {
+		return completion{}, false
+	}
+	for _, h := range d.handoffs(t) {
+		if h.at.Before(from) || !h.at.Before(cutoff) {
+			continue
+		}
+		if requireCycle && !memberAt(spans, h.at) {
+			continue
+		}
+		return h, true
+	}
+	return completion{}, false
+}
+
 // span is a half-open membership interval [from, to); to zero = still open.
 type span struct {
 	from, to time.Time
@@ -648,6 +700,22 @@ func (d *projectData) prioRef(id uuid.UUID) *PriorityRef {
 		return nil
 	}
 	return &PriorityRef{ID: p.ID, Name: p.Name, Rank: p.Rank, Color: p.Color, Active: p.Active}
+}
+
+// handoffRule spells out the handed-off band in the project's own state
+// vocabulary, for the tile and column tooltips. Empty when the project has no
+// verification states (handed off equals delivered there, so no tile shows).
+func (d *projectData) handoffRule() string {
+	var names []string
+	for _, s := range d.stateList {
+		if s.Type == "verification" {
+			names = append(names, s.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "Handed off = entered " + strings.Join(names, ", ") + " or a completed state during the window, and not moved back before the cutoff. The developer finish line; everything after is carried by others."
 }
 
 // hasType says whether the project defines any state of the given type; a

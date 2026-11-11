@@ -173,6 +173,7 @@ func (e *Engine) portfolioRow(d *projectData, p store.Project, w window) Portfol
 type personSlice struct {
 	mine        []*task
 	completedOf map[uuid.UUID]completion
+	handed      []*task
 	topRank     int
 	openNow     int
 	comments    int
@@ -190,6 +191,14 @@ func (e *Engine) personSliceOf(d *projectData, w window, cycle *ListCycle, userI
 		var spans []span
 		if cycle != nil {
 			spans = d.cycleMembership(d.top(t), cycle.ID)
+		}
+		if h, ok := d.handedOffIn(t, w.start, w.cutoff, spans, cycle != nil); ok {
+			for _, u := range d.credits(t, h.at) {
+				if u == userID {
+					s.handed = append(s.handed, t)
+					break
+				}
+			}
 		}
 		c, ok := d.deliveredIn(t, w.start, w.cutoff, spans, cycle != nil)
 		if !ok {
@@ -321,9 +330,10 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 		cx := cxOver(s.mine)
 		rep.Projects = append(rep.Projects, PersonProjectRow{
 			ProjectKey: d.key, ProjectName: d.name,
-			Delivered: len(s.mine), Cx: cx, TopRank: s.topRank,
+			HandedOff: len(s.handed), Delivered: len(s.mine), Cx: cx, TopRank: s.topRank,
 			OpenNow: s.openNow, Comments: s.comments, Created: s.created,
 		})
+		rep.HandedOff += len(s.handed)
 		rep.Delivered.Count += len(s.mine)
 		rep.Delivered.Cx.Sum += cx.Sum
 		rep.Delivered.Cx.Assessed += cx.Assessed
@@ -387,6 +397,10 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 		Comments:   s.comments,
 		Created:    s.created,
 		Bands:      bandsOver(s.mine),
+	}
+	if d.hasType("verification") {
+		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed)}
+		rep.HandedOff = &h
 	}
 
 	peers, refs := map[uuid.UUID]int{}, map[uuid.UUID]UserRef{}

@@ -11,6 +11,8 @@ const props = defineProps<{
   sub?: string;
   highlight?: boolean;
   sign?: "plus" | "minus";
+  /** Overrides the default evidence hint, e.g. to spell out a computed rule. */
+  tooltip?: string;
 }>();
 
 const emit = defineEmits<{ open: [metric: string] }>();
@@ -38,7 +40,7 @@ const cxLine = computed(() => {
       highlight ? 'border-emerald-600/40 bg-emerald-500/10' : 'bg-card',
       metric && 'cursor-pointer hover:border-amber-500/60 focus-visible:ring-2 focus-visible:ring-ring outline-none',
     ]"
-    :title="metric ? 'Open the exact population behind this number' : undefined"
+    :title="tooltip || (metric ? 'Open the exact population behind this number' : undefined)"
     @click="metric && emit('open', metric)"
   >
     <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ label }}</span>

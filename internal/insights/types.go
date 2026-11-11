@@ -96,7 +96,11 @@ type BandCount struct {
 
 // PersonRow is one member in "what did each person deliver".
 type PersonRow struct {
-	User        UserRef        `json:"user"`
+	User UserRef `json:"user"`
+	// HandedOff counts items this person pushed past the developer finish line
+	// (into a verification- or completed-type state) during the window. In a
+	// project without verification states it equals Delivered by construction.
+	HandedOff   int            `json:"handed_off"`
 	Delivered   int            `json:"delivered"`
 	Shared      int            `json:"shared"` // of Delivered, items credited to >1 person
 	Cx          *ComplexitySum `json:"cx,omitempty"`
@@ -111,7 +115,8 @@ type PersonRow struct {
 // needs (rows may sum above the total because of shared items).
 type PersonTable struct {
 	Rows           []PersonRow    `json:"rows"`
-	TotalDelivered int            `json:"total_delivered"` // distinct items
+	TotalHandedOff int            `json:"total_handed_off"` // distinct items
+	TotalDelivered int            `json:"total_delivered"`  // distinct items
 	TotalCx        *ComplexitySum `json:"total_cx,omitempty"`
 	CreditRule     string         `json:"credit_rule"`
 }
@@ -174,6 +179,10 @@ type Health struct {
 
 // CycleSection is question 1 when the report is cycle-scoped.
 type CycleSection struct {
+	// HandedOff is nil when the project defines no verification states: the
+	// developer finish line coincides with delivery, so the tile would repeat
+	// the Delivered number.
+	HandedOff      *Tile `json:"handed_off,omitempty"`
 	Delivered      Tile `json:"delivered"`
 	OriginalPlan   Tile `json:"original_plan_delivered"` // delivered items that were planned at start
 	PlannedAtStart Tile `json:"planned_at_start"`
@@ -196,6 +205,8 @@ type CycleSection struct {
 // RangeSection is question 1 when the report is date-range-scoped (the
 // majority case: projects without cycles).
 type RangeSection struct {
+	// HandedOff mirrors CycleSection: absent without verification states.
+	HandedOff *Tile       `json:"handed_off,omitempty"`
 	Completed Tile        `json:"completed"`
 	Created   Tile        `json:"created"`
 	Cancelled *Tile       `json:"cancelled,omitempty"`
@@ -228,6 +239,10 @@ type ProjectReport struct {
 	// existence.
 	HasAreas  bool `json:"has_areas"`
 	HasLabels bool `json:"has_labels"`
+	// HasVerification gates the Handed off tile and person column; HandoffRule
+	// is its tooltip, spelled in the project's own state names.
+	HasVerification bool   `json:"has_verification"`
+	HandoffRule     string `json:"handoff_rule,omitempty"`
 }
 
 // PortfolioRow is one project in the attention table.
@@ -287,9 +302,11 @@ type UserCount struct {
 
 // PersonReport is one member's slice of one project.
 type PersonReport struct {
-	Scope     Scope        `json:"scope"`
-	User      UserRef      `json:"user"`
-	Delivered Tile         `json:"delivered"`
+	Scope Scope   `json:"scope"`
+	User  UserRef `json:"user"`
+	// HandedOff is absent when the project has no verification states.
+	HandedOff *Tile `json:"handed_off,omitempty"`
+	Delivered Tile  `json:"delivered"`
 	TopRank   int          `json:"top_rank_handled"`
 	OpenNow   int          `json:"open_now"`
 	Comments  int          `json:"comments"`
@@ -313,6 +330,7 @@ type CycleCount struct {
 type PersonProjectRow struct {
 	ProjectKey  string         `json:"project_key"`
 	ProjectName string         `json:"project_name"`
+	HandedOff   int            `json:"handed_off"`
 	Delivered   int            `json:"delivered"`
 	Cx          *ComplexitySum `json:"cx,omitempty"`
 	TopRank     int            `json:"top_rank_handled"`
@@ -327,6 +345,7 @@ type PersonProjectRow struct {
 type WorkspacePersonReport struct {
 	Scope     Scope   `json:"scope"`
 	User      UserRef `json:"user"`
+	HandedOff int     `json:"handed_off"`
 	Delivered Tile    `json:"delivered"`
 	TopRank   int     `json:"top_rank_handled"`
 	OpenNow   int     `json:"open_now"`
