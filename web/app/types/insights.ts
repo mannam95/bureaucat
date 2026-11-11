@@ -122,6 +122,8 @@ export interface WeekPoint {
 
 export interface InsightsHealth {
   open: number;
+  intake: number;
+  intake_by_state: StateCount[];
   in_started: number;
   in_verification: number;
   blocked: number;
@@ -188,6 +190,7 @@ export interface PortfolioRow {
   active_cycle?: InsightsCycle;
   has_cycles: boolean;
   open: number;
+  intake: number;
   archived: number;
   top_rank_open: number;
   top_rank_name: string;

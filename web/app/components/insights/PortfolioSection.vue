@@ -75,7 +75,10 @@ function trendWord(r: PortfolioRow): string {
                 </div>
               </div>
             </td>
-            <td class="px-3 py-2.5 text-right tabular-nums">{{ r.open }}</td>
+            <td class="px-3 py-2.5 text-right tabular-nums">
+              {{ r.open }}
+              <span v-if="r.intake > 0" class="block text-[10px] text-muted-foreground" title="Backlog-type items: arrived, not committed to yet — not counted as open work">+{{ r.intake }} intake</span>
+            </td>
             <td class="px-3 py-2.5 text-right tabular-nums">
               <span v-if="r.top_rank_open > 0" class="font-medium text-red-700 dark:text-red-400">
                 {{ r.top_rank_open }} · {{ r.top_rank_name }}

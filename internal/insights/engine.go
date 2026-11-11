@@ -134,10 +134,17 @@ var typeOrder = map[string]int{
 	"completed": 4, "cancelled": 5, "archived": 6,
 }
 
-// openTypes are the state types that count as open work. Verification is open:
-// built but still being validated is not delivered.
+// openTypes are the state types that count as open work: committed and not
+// finished. Verification is open (built but still being validated is not
+// delivered). Backlog is NOT open: it is intake — items nobody has committed
+// to yet — and gets its own quiet count instead of inflating the open story.
 func isOpenType(t string) bool {
-	return t == "backlog" || t == "unstarted" || t == "started" || t == "verification"
+	return t == "unstarted" || t == "started" || t == "verification"
+}
+
+// isIntakeType marks the pre-commitment bucket.
+func isIntakeType(t string) bool {
+	return t == "backlog"
 }
 
 // isWorkingType marks the types where an item is actively in flight (started

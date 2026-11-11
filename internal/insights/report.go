@@ -480,16 +480,23 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 func (e *Engine) health(d *projectData) Health {
 	now := e.now()
 	h := Health{
-		OpenByState: []StateCount{},
-		PriorityMix: []RankCount{},
-		Aging:       []AgingRow{},
-		Due:         []DueRow{},
+		IntakeByState: []StateCount{},
+		OpenByState:   []StateCount{},
+		PriorityMix:   []RankCount{},
+		Aging:         []AgingRow{},
+		Due:           []DueRow{},
 	}
 	byState := map[uuid.UUID]int{}
 	byPrio := map[uuid.UUID]int{}
+	intakeByState := map[uuid.UUID]int{}
 	units := d.leafUnits()
 	for _, t := range units {
 		st := d.states[t.stateID]
+		if isIntakeType(st.Type) {
+			h.Intake++
+			intakeByState[t.stateID]++
+			continue
+		}
 		if !isOpenType(st.Type) {
 			continue
 		}
@@ -531,6 +538,9 @@ func (e *Engine) health(d *projectData) Health {
 	for _, s := range d.stateList {
 		if isOpenType(s.Type) && byState[s.ID] > 0 {
 			h.OpenByState = append(h.OpenByState, StateCount{State: StateRef{ID: s.ID, Name: s.Name, Type: s.Type, Color: s.Color}, Count: byState[s.ID]})
+		}
+		if isIntakeType(s.Type) && intakeByState[s.ID] > 0 {
+			h.IntakeByState = append(h.IntakeByState, StateCount{State: StateRef{ID: s.ID, Name: s.Name, Type: s.Type, Color: s.Color}, Count: intakeByState[s.ID]})
 		}
 	}
 	for _, p := range d.prioList {

@@ -163,13 +163,17 @@ type WeekPoint struct {
 }
 
 // Health is "is the project healthy right now" — a snapshot at generation
-// time, independent of the selected window.
+// time, independent of the selected window. Open counts committed work
+// (unstarted, started, verification); backlog-type items are Intake, reported
+// as their own quiet line so new ideas never read as the team's failure.
 type Health struct {
 	Open           int          `json:"open"`
 	InStarted      int          `json:"in_started"`
 	InVerification int          `json:"in_verification"`
 	Blocked        int          `json:"blocked"`
 	Overdue        int          `json:"overdue"`
+	Intake         int          `json:"intake"`
+	IntakeByState  []StateCount `json:"intake_by_state"`
 	OpenByState    []StateCount `json:"open_by_state"`
 	PriorityMix    []RankCount  `json:"priority_mix"`
 	Aging          []AgingRow   `json:"aging"`
@@ -253,6 +257,7 @@ type PortfolioRow struct {
 	ActiveCycle  *CycleRef   `json:"active_cycle,omitempty"`
 	HasCycles    bool        `json:"has_cycles"`
 	Open         int         `json:"open"`
+	Intake       int         `json:"intake"`
 	Archived     int         `json:"archived"`
 	TopRankOpen  int         `json:"top_rank_open"`
 	TopRankName  string      `json:"top_rank_name"`

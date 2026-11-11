@@ -26,6 +26,14 @@ const narrative = computed(() => {
   return s + ".";
 });
 
+// Intake is named by the project's own backlog states: "114 in New, 9 in TBD".
+const intakeLine = computed(() => {
+  const h = props.health;
+  if (h.intake === 0) return "";
+  const parts = h.intake_by_state.map((sc) => `${sc.count} in ${sc.state.name}`);
+  return `${h.intake} items sit in intake (${parts.join(", ")}) — arrived, but not committed to yet. They are not counted as open work.`;
+});
+
 const totalOpen = computed(() => Math.max(1, props.health.open));
 const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) => m.count)));
 </script>
@@ -65,6 +73,14 @@ const maxMix = computed(() => Math.max(1, ...props.health.priority_mix.map((m) =
         <p class="mt-2 text-[11px] text-muted-foreground">
           States and colors are the project's own, grouped by lifecycle type.
         </p>
+        <button
+          v-if="intakeLine"
+          class="mt-2 rounded px-1 text-left text-[11px] text-muted-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          title="Open the intake list"
+          @click="emit('open', 'intake')"
+        >
+          {{ intakeLine }}
+        </button>
       </div>
 
       <!-- Priority mix by rank with the project's own labels. -->

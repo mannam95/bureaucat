@@ -115,6 +115,8 @@ func (e *Engine) portfolioRow(d *projectData, p store.Project, w window) Portfol
 						State: d.stateRef(t.stateID), Days: days}
 				}
 			}
+		case isIntakeType(st.Type):
+			row.Intake++
 		case st.Type == "archived":
 			row.Archived++
 		}

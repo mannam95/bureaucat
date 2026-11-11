@@ -226,8 +226,9 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			typ := d.typeAt(t, w.cutoff)
 			match := false
 			if p.Metric == "carried" {
-				// Verification is open but reported as its own band.
-				match = isOpenType(typ) && typ != "verification"
+				// Carried is the section's residual bucket: still to do in the
+				// cycle, whether committed (open) or sitting in intake.
+				match = (isOpenType(typ) || isIntakeType(typ)) && typ != "verification"
 			} else {
 				match = typ == wantType
 			}
@@ -306,7 +307,7 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			}
 		}
 
-	case "open_state", "priority_rank", "aging", "overdue", "due_soon", "blocked":
+	case "open_state", "priority_rank", "aging", "overdue", "due_soon", "blocked", "intake":
 		e.snapshotMetric(d, ev, p, units)
 
 	case "day":
@@ -417,10 +418,18 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 		ev.Title = "Blocked"
 		ev.HowComputed = "Open leaf items with at least one blocker task that is itself still open. Blocked is a relationship, not a state name."
 		ev.SourceEvents = "task blocker links"
+	case "intake":
+		ev.Title = "Intake"
+		ev.HowComputed = "Leaf items sitting in a backlog-type state: arrived, but not committed to yet. They are deliberately not counted as open work."
+		ev.SourceEvents = "current state (snapshot)"
 	}
 	for _, t := range units {
 		st := d.states[t.stateID]
-		if !isOpenType(st.Type) {
+		if p.Metric == "intake" {
+			if !isIntakeType(st.Type) {
+				continue
+			}
+		} else if !isOpenType(st.Type) {
 			continue
 		}
 		match := false
@@ -447,6 +456,8 @@ func (e *Engine) snapshotMetric(d *projectData, ev *Evidence, p EvidenceParams, 
 			match = !t.dueDate.IsZero() && !now.After(t.dueDate) && t.dueDate.Sub(now).Hours() <= 7*24
 		case "blocked":
 			match = d.blocked[t.id]
+		case "intake":
+			match = true
 		}
 		if match {
 			if !t.dueDate.IsZero() {

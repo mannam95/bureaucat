@@ -558,3 +558,62 @@ func TestHandedOffAbsentWithoutVerification(t *testing.T) {
 		}
 	}
 }
+
+// TestIntakeLeavesOpenWork: backlog-type items are intake, not open work. The
+// open headline, state bar and priority mix cover committed work only; intake
+// gets its own count, named by state, with its own evidence population.
+func TestIntakeLeavesOpenWork(t *testing.T) {
+	f := newFixture("INT")
+	f.state("New", "backlog", 0)
+	f.state("TBD", "backlog", 1)
+	f.state("Ready", "unstarted", 2)
+	f.state("Doing", "started", 3)
+	f.state("Done", "completed", 4)
+	f.prio("No priority", 0, true)
+	f.prio("Urgent", 4, true)
+
+	f.task("N1", "New", "Urgent", 0, 0, "2026-10-01 09:00")
+	f.task("N2", "New", "No priority", 0, 0, "2026-10-02 09:00")
+	f.task("N3", "TBD", "No priority", 0, 0, "2026-10-03 09:00")
+	f.task("R1", "Ready", "No priority", 0, 0, "2026-10-04 09:00")
+	f.task("D1", "Doing", "Urgent", 0, 0, "2026-10-05 09:00")
+
+	e := f.engine("2026-10-25 12:00")
+	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{
+		From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	h := rep.Health
+	if h.Open != 2 {
+		t.Errorf("open = %d, want 2 (Ready + Doing; intake excluded)", h.Open)
+	}
+	if h.Intake != 3 {
+		t.Errorf("intake = %d, want 3", h.Intake)
+	}
+	if len(h.IntakeByState) != 2 || h.IntakeByState[0].State.Name != "New" || h.IntakeByState[0].Count != 2 {
+		t.Errorf("intake_by_state = %+v, want New 2 then TBD 1", h.IntakeByState)
+	}
+	for _, sc := range h.OpenByState {
+		if sc.State.Type == "backlog" {
+			t.Errorf("open_by_state leaks a backlog state: %s", sc.State.Name)
+		}
+	}
+	// The urgent intake item must not inflate the open priority mix.
+	for _, rc := range h.PriorityMix {
+		if rc.Priority.Name == "Urgent" && rc.Count != 1 {
+			t.Errorf("urgent open = %d, want 1 (D1 alone; N1 is intake)", rc.Count)
+		}
+	}
+
+	ev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
+		Metric: "intake", From: ts("2026-10-01 00:00"), To: ts("2026-10-20 00:00"),
+	})
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	if ev.Count != 3 {
+		t.Errorf("intake evidence = %d, want 3", ev.Count)
+	}
+}
