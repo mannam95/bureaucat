@@ -22,6 +22,9 @@ build-then-verify hand-over (auto contributor credit); a shared-credit item;
 unassessed estimates; a cancelled outcome; blockers; overdue and due-soon
 dates; and completions spread over many days so the daily and weekly charts
 have shape. The third project runs without cycles (the date-range report).
+The fourth project (CORE) reshapes its states into a review-band pipeline —
+two intake states, a Needs Info started state, a three-state verification band
+— and scripts every handed-off and intake case the insights engine defines.
 
 Idempotent: it RESETS all app data first (TRUNCATE via the postgres container),
 then rebuilds, so `make seed` always yields the same clean dataset.
@@ -667,6 +670,148 @@ def seed_flow_project(p: Project):
          rank=3, dif=2, eff=2)
     p.mv("f15", "In Progress", m(0), T(1, "11:00"))
 
+def reshape_craft_states(key):
+    """Turn the default state set into a review-band pipeline, like tools where
+    work flows New/Triage -> Todo -> In Progress/Needs Info -> Code Review ->
+    QA -> In Production -> Done. Two backlog states feed the intake story; the
+    three verification states feed the handed-off story."""
+    states = {s["name"]: s for s in api("GET", f"/projects/{key}/states")}
+    api("PATCH", f"/projects/{key}/states/{states['Backlog']['id']}",
+        {"name": "New", "position": 0})
+    api("POST", f"/projects/{key}/states",
+        {"state_type": "backlog", "name": "Triage", "color": "#94A3B8", "position": 1})
+    api("PATCH", f"/projects/{key}/states/{states['Todo']['id']}", {"position": 2})
+    api("PATCH", f"/projects/{key}/states/{states['Approval Pending']['id']}",
+        {"name": "Needs Info", "state_type": "started", "color": "#F59E0B", "position": 4})
+    api("DELETE", f"/projects/{key}/states/{states['Blocked']['id']}")
+    api("PATCH", f"/projects/{key}/states/{states['Testing']['id']}",
+        {"name": "Code Review", "position": 5})
+    api("POST", f"/projects/{key}/states",
+        {"state_type": "verification", "name": "QA", "color": "#A855F7", "position": 6})
+    api("POST", f"/projects/{key}/states",
+        {"state_type": "verification", "name": "In Production", "color": "#6366F1", "position": 7})
+    api("PATCH", f"/projects/{key}/states/{states['Done']['id']}", {"position": 8})
+    api("PATCH", f"/projects/{key}/states/{states['Cancelled']['id']}", {"position": 9})
+
+def seed_craft_project(p: Project):
+    """The review-band pipeline story: every handed-off and intake case the
+    insights engine defines, visible in the UI.
+
+    Handed off (Sprint B, active): a full-pipeline delivery; an item parked in
+    Code Review (handed off but NOT delivered — the tiles must differ); a
+    bounce out of review that re-crosses (counts once, at the re-cross); a
+    straight-to-Done jump (handed off and delivered at the same moment); an
+    entry into the band at QA, skipping Code Review; two subtasks in the band
+    (the "N of them subtasks" caption); and a carry-over whose crossing
+    happened in Sprint A, which Sprint B must NOT count.
+
+    Intake: six untouched items split across New and Triage. They must leave
+    the open-work headline and state bar and read as one quiet intake line.
+    One of them is past its due date and must NOT appear in the overdue panel
+    (intake is pre-commitment, so it cannot be late)."""
+    m = p.member
+
+    p.cycle("Sprint A", 24, 11)
+    p.cycle("Sprint B", 9, -4)
+
+    # ---- Sprint A, finished: the normal pipeline, plus two band residents.
+    sa = [
+        ("a1", "User provisioning API", m(1), 3, 3),
+        ("a2", "Password reset emails", m(2), 2, 2),
+        ("a3", "Rework onboarding copy", m(5), 1, 1),
+        ("c0", "Legacy import cleanup", m(4), 2, 3),
+        ("c9", "Data retention job", m(6), 3, 2),
+    ]
+    for i, (h, title, who, dif, eff) in enumerate(sa):
+        p.mk(h, title, T(25, f"09:{10 + i:02d}"), assignees=[who], rank=2, dif=dif, eff=eff)
+        p.cyc_add(h, "Sprint A", T(25, f"15:{i:02d}"))
+    p.mv("a1", "In Progress", m(1), T(20, "09:30"))
+    p.mv("a2", "In Progress", m(2), T(19, "09:30"))
+    p.mv("a3", "In Progress", m(5), T(18, "09:30"))
+    p.mv("a1", "Code Review", m(1), T(18, "16:00"))
+    p.mv("a2", "Code Review", m(2), T(17, "16:00"))
+    p.mv("a1", "QA", m(6), T(17, "10:00"))
+    p.mv("c0", "In Progress", m(4), T(16, "09:30"))
+    p.mv("a1", "Done", m(6), T(15, "15:00"))
+    p.mv("c9", "In Progress", m(6), T(15, "10:00"))
+    p.mv("a2", "Done", m(6), T(14, "15:30"))
+    p.mv("c0", "Code Review", m(4), T(14, "16:20"))
+    p.mv("a3", "Done", m(5), T(13, "16:40"))           # straight to Done: a crossing too
+    p.mv("c0", "In Production", m(0), T(12, "11:00"))  # band-internal; still not Done
+    p.mv("c9", "Code Review", m(6), T(12, "16:30"))    # crossed inside Sprint A...
+
+    # ...and carried into Sprint B still inside the band: the crossing predates
+    # the new window, so Sprint B must NOT count it as handed off.
+    p.cyc_rm("c9", "Sprint A", T(10, "08:30"))
+    p.cyc_add("c9", "Sprint B", T(10, "08:35"))
+
+    # ---- Sprint B, active: the handed-off showcase.
+    sb = [
+        ("c1", "Checkout error messages", m(1), 2, 2),
+        ("c3", "Search indexing fix", m(3), 3, 2),
+        ("c4", "Delete stale feature flags", m(0), 1, 1),
+        ("c6", "Session timeout bug", m(6), 2, 2),
+        ("c7", "Notification digest", m(2), 2, 3),
+    ]
+    for i, (h, title, who, dif, eff) in enumerate(sb):
+        p.mk(h, title, T(10, f"09:{10 + i:02d}"), assignees=[who], rank=2, dif=dif, eff=eff)
+    p.mk("c2", "Rate limit middleware", T(10, "09:30"), assignees=[m(2)],
+         rank=3, dif=3, eff=3, due_in=1)
+    p.mk("c8", "Billing webhook hardening", T(10, "09:40"), assignees=[m(3)],
+         rank=3, dif=2, eff=2, due_in=-2)
+    p.mk("c5", "Payment retry logic", T(10, "10:00"), assignees=[m(1)],
+         labels=["feature"], rank=3)
+    p.mk("c5a", "Retry queue worker", T(10, "10:05"), parent="c5", assignees=[m(5)], dif=3, eff=3)
+    p.mk("c5b", "Retry backoff policy", T(10, "10:06"), parent="c5", assignees=[m(5)], dif=2, eff=2)
+    for i, h in enumerate(["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"]):
+        p.cyc_add(h, "Sprint B", T(10, f"15:{i:02d}"))
+
+    p.mv("c1", "Todo", m(1), T(9, "16:00"))
+    p.mv("c1", "In Progress", m(1), T(8, "09:30"))
+    p.mv("c3", "In Progress", m(3), T(8, "09:45"))
+    p.mv("c9", "QA", m(6), T(8, "10:30"))              # band-internal: no recount
+    p.mv("c2", "In Progress", m(2), T(7, "09:30"))
+    p.mv("c5a", "In Progress", m(5), T(7, "10:00"))
+    p.mv("c5", "In Progress", m(1), T(7, "10:01"))
+    p.mv("c3", "Code Review", m(3), T(7, "15:00"))
+    p.mv("c4", "In Progress", m(0), T(6, "10:00"))
+    p.mv("c5b", "In Progress", m(5), T(6, "10:10"))
+    p.cmt("c2", m(2), "Done from my side, over to review.", T(6, "15:55"))
+    p.mv("c2", "Code Review", m(2), T(6, "16:00"))     # handed off, parked in review
+    p.mv("c6", "In Progress", m(6), T(5, "09:40"))
+    p.cmt("c3", m(3), "Review found a race in the indexer, pulling it back.", T(5, "10:55"))
+    p.mv("c3", "In Progress", m(3), T(5, "11:00"))     # the bounce: falls out...
+    p.mv("c1", "Code Review", m(1), T(5, "15:30"))
+    p.mv("c8", "In Progress", m(3), T(4, "10:20"))
+    p.mv("c4", "Done", m(0), T(4, "15:00"))            # straight to Done
+    p.mv("c5a", "Code Review", m(5), T(4, "16:10"))
+    p.mv("c1", "QA", m(6), T(3, "11:20"))
+    p.mv("c5b", "Code Review", m(5), T(3, "14:30"))
+    p.mv("c6", "QA", m(6), T(3, "15:40"))              # enters the band at QA
+    p.mv("c7", "In Progress", m(2), T(2, "10:00"))
+    p.mv("c8", "Needs Info", m(3), T(2, "11:30"))
+    p.mv("c5a", "In Production", m(5), T(2, "12:00"))
+    p.cmt("c5", m(1), "Both subtasks in the band; parent closes when retries ship.", T(2, "12:30"))
+    p.mv("c3", "Code Review", m(3), T(2, "15:00"))     # ...and re-crosses: counts here
+    p.mv("c1", "Done", m(1), T(1, "14:00"))
+    p.mv("c5b", "Done", m(5), T(1, "15:10"))
+    p.mv("c3", "QA", m(6), T(1, "16:00"))
+
+    # ---- Intake: untouched requests across both backlog states. i3 carries a
+    # past due date on purpose: intake must never show up as overdue.
+    intake = [
+        ("i1", "Customer SSO request", 20, None),
+        ("i2", "Export to PDF", 15, None),
+        ("i3", "Bulk edit tasks", 12, -3),
+        ("i4", "Mobile offline mode", 9, None),
+        ("i5", "Audit trail export", 8, None),
+        ("i6", "SLA alerts", 6, None),
+    ]
+    for i, (h, title, created, due) in enumerate(intake):
+        p.mk(h, title, T(created, f"11:{40 + i:02d}"), rank=1, due_in=due)
+    p.mv("i5", "Triage", m(0), T(7, "10:15"))
+    p.mv("i6", "Triage", m(0), T(5, "10:20"))
+
 # ---------------------------------------------------------------- seed
 def main():
     global ADMIN_PW, USER_PW
@@ -735,7 +880,8 @@ def main():
     default_view_note = ""
     projects = [("Web Platform", "WEB", "sprints"),
                 ("Mobile App", "MOBILE", "sprints"),
-                ("Operations", "OPS", "flow")]
+                ("Operations", "OPS", "flow"),
+                ("Product Delivery", "CORE", "craft")]
     story_projects = []
     for pi, (name, key, kind) in enumerate(projects):
         print(f"→ project {key} ({name})")
@@ -755,6 +901,8 @@ def main():
             # bucket (its own bucket, never merged) shows up in insights.
             api("POST", f"/projects/{key}/states",
                 {"state_type": "archived", "name": "Archived", "color": "#A9AABC"})
+        if kind == "craft":
+            reshape_craft_states(key)
         p = Project(key, team)
         for lname, color in LABELS:
             l = api("POST", f"/projects/{key}/labels", {"name": lname, "color": color})
@@ -776,6 +924,8 @@ def main():
         print(f"   writing the {kind} story...")
         if kind == "sprints":
             seed_sprint_project(p)
+        elif kind == "craft":
+            seed_craft_project(p)
         else:
             seed_flow_project(p)
         total["cycles"] += len(p.cycles)
@@ -889,6 +1039,12 @@ def main():
         print(f"   {default_view_note}")
     print("   insights: /insights (portfolio) → WEB or MOBILE + Sprint 2 (the showcase),")
     print("             OPS as the no-cycles date-range report")
+    print("   CORE (Product Delivery): review-band pipeline — New/Triage intake,")
+    print("             Needs Info, Code Review → QA → In Production. Sprint B holds the")
+    print("             handed-off cases (parked review, bounce + re-cross, straight-to-")
+    print("             Done, QA entry, 2 subtasks, a pre-window carry that must not")
+    print("             count); 6 intake items (4 New, 2 Triage; CORE's 'Bulk edit")
+    print("             tasks' is past due but must NOT show as overdue)")
     print("   dashboard: the admin's plate spans WEB (parent + subtasks, a crumb),")
     print("              MOBILE and OPS — the grouped Assigned-to-You demo")
     print("   new in this seed: custom branding (Nova Tracker), a mandatory 'Bug")
