@@ -374,7 +374,6 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 		get(m.ID)
 	}
 
-	topRank, _ := d.topRank()
 	table := PersonTable{Rows: []PersonRow{}, CreditRule: d.creditRuleFor(), TotalCx: cxOver(delivered),
 		TotalDelivered: len(delivered), TotalHandedOff: len(handedOff)}
 
@@ -399,9 +398,6 @@ func (e *Engine) personTable(d *projectData, w window, delivered []*task, delive
 				a.row.Cx.Assessed++
 			} else {
 				a.row.Cx.NotAssessed++
-			}
-			if p, ok := d.priorities[t.priorityID]; ok && topRank > 0 && p.Rank >= topRank-1 {
-				a.row.TopRank++
 			}
 		}
 	}

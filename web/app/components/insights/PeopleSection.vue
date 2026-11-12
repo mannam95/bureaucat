@@ -57,7 +57,6 @@ const narrative = computed(() => {
             </th>
             <th class="px-3 py-2 text-right font-medium">Delivered</th>
             <th class="px-3 py-2 text-right font-medium">Complexity</th>
-            <th class="px-3 py-2 text-right font-medium">Top priority handled</th>
             <th class="px-3 py-2 text-right font-medium">Open at end</th>
             <th class="px-3 py-2 text-right font-medium">Comments</th>
             <th class="px-3 py-2 text-right font-medium">Created</th>
@@ -106,13 +105,12 @@ const narrative = computed(() => {
               </template>
               <span v-else class="text-muted-foreground">—</span>
             </td>
-            <td class="px-3 py-2.5 text-right tabular-nums">{{ r.top_rank_handled }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums">{{ r.open_at_end }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums">{{ r.comments }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums">{{ r.created }}</td>
           </tr>
           <tr v-if="quietRows.length > 0" class="border-b last:border-0">
-            <td :colspan="hasVerification ? 8 : 7" class="px-3 py-2.5 text-xs text-muted-foreground">
+            <td :colspan="hasVerification ? 7 : 6" class="px-3 py-2.5 text-xs text-muted-foreground">
               No recorded activity in this project during the window:
               <span v-for="(r, i) in quietRows" :key="r.user.id">{{ i > 0 ? ", " : "" }}{{ r.user.first_name }} {{ r.user.last_name }}</span>
             </td>
@@ -125,7 +123,7 @@ const narrative = computed(() => {
               <template v-if="people.total_cx && people.total_cx.assessed > 0">{{ people.total_cx.sum }}</template>
               <span v-else>—</span>
             </td>
-            <td colspan="4" />
+            <td colspan="3" />
           </tr>
         </tbody>
       </table>

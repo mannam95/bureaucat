@@ -170,59 +170,81 @@ func (e *Engine) portfolioRow(d *projectData, p store.Project, w window) Portfol
 }
 
 // personSlice is one person's numbers over one project window. One computation
-// feeds the person view, the people table and the workspace report, so the
-// surfaces can never disagree.
+// feeds the person view, the people table, the evidence drawer and the
+// workspace report, so the surfaces can never disagree. Ownership splits at
+// the developer line: before it, work belongs to whoever is assigned at the
+// cutoff (inDev, deferred); once it crosses, to whoever crossed it (handed,
+// inVerif, mine). assigned = inDev + inVerif + mine + deferred.
 type personSlice struct {
 	mine        []*task
 	completedOf map[uuid.UUID]completion
 	handed      []*task
-	topRank     int
-	openNow     int
+	inVerif     []*task // handed, still verification-type at the cutoff
+	inDev       []*task // assigned at cutoff, unstarted/started (in scope)
+	deferred    []*task // assigned at cutoff, parked in the cycle (cycle mode)
 	comments    int
 	created     int
 }
 
-// personSliceOf computes the slice. With a cycle, delivery requires membership
-// at the completion moment — the same rule the cycle section and the evidence
-// drawer apply.
+func (s personSlice) assigned() []*task {
+	out := make([]*task, 0, len(s.inDev)+len(s.inVerif)+len(s.mine)+len(s.deferred))
+	out = append(out, s.inDev...)
+	out = append(out, s.inVerif...)
+	out = append(out, s.mine...)
+	out = append(out, s.deferred...)
+	return out
+}
+
+// personSliceOf computes the slice. With a cycle the buckets follow the
+// snapshot reading and are bounded by membership at the cutoff; a date range
+// keeps the flow reading, and inDev is the open plate at the cutoff.
 func (e *Engine) personSliceOf(d *projectData, w window, cycle *ListCycle, userID uuid.UUID) personSlice {
 	s := personSlice{completedOf: map[uuid.UUID]completion{}}
 	units := d.leafUnits()
-	topRank, _ := d.topRank()
 	for _, t := range units {
 		var spans []span
 		if cycle != nil {
 			spans = d.cycleMembership(d.top(t), cycle.ID)
 		}
+		typ := d.typeAt(t, w.cutoff)
 		if h, ok := d.handedOffIn(t, w.start, w.cutoff, spans, cycle != nil); ok {
 			for _, u := range d.credits(t, h.at) {
 				if u == userID {
 					s.handed = append(s.handed, t)
+					if typ == "verification" {
+						s.inVerif = append(s.inVerif, t)
+					}
 					break
 				}
 			}
 		}
-		c, ok := d.deliveredIn(t, w.start, w.cutoff, spans, cycle != nil)
-		if !ok {
-			continue
-		}
-		for _, u := range d.credits(t, c.at) {
-			if u == userID {
-				s.mine = append(s.mine, t)
-				s.completedOf[t.id] = c
-				if p, ok := d.priorities[t.priorityID]; ok && topRank > 0 && p.Rank >= topRank-1 {
-					s.topRank++
+		if c, ok := d.deliveredIn(t, w.start, w.cutoff, spans, cycle != nil); ok {
+			for _, u := range d.credits(t, c.at) {
+				if u == userID {
+					s.mine = append(s.mine, t)
+					s.completedOf[t.id] = c
+					break
 				}
-				break
 			}
 		}
-	}
-	for _, t := range units {
-		if isOpenType(d.states[t.stateID].Type) {
-			for _, u := range t.assigneesNow {
-				if u == userID {
-					s.openNow++
+		// Before the line, assignment owns the work. Parked (deferred) items
+		// are a cycle notion; a date range has no membership to park in.
+		inDev := typ == "unstarted" || typ == "started"
+		parked := cycle != nil && (typ == "backlog" || typ == "cancelled" || typ == "archived")
+		if !inDev && !parked {
+			continue
+		}
+		if cycle != nil && !memberAt(spans, w.cutoff.Add(-time.Nanosecond)) {
+			continue
+		}
+		for _, u := range d.assigneesAt(t, w.cutoff) {
+			if u == userID {
+				if inDev {
+					s.inDev = append(s.inDev, t)
+				} else {
+					s.deferred = append(s.deferred, t)
 				}
+				break
 			}
 		}
 	}
@@ -321,7 +343,7 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 			}
 		}
 		s := e.personSliceOf(d, w, nil, userID)
-		if !isMember && len(s.mine) == 0 && len(s.handed) == 0 && s.openNow == 0 && s.comments == 0 && s.created == 0 {
+		if !isMember && len(s.mine) == 0 && len(s.handed) == 0 && len(s.inDev) == 0 && s.comments == 0 && s.created == 0 {
 			continue
 		}
 		if u, ok := d.users[userID]; ok && !haveUser {
@@ -332,10 +354,13 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 		cx := cxOver(s.mine)
 		rep.Projects = append(rep.Projects, PersonProjectRow{
 			ProjectKey: d.key, ProjectName: d.name,
-			HandedOff: len(s.handed), Delivered: len(s.mine), Cx: cx, TopRank: s.topRank,
-			OpenNow: s.openNow, Comments: s.comments, Created: s.created,
+			HandedOff: len(s.handed), Delivered: len(s.mine), Cx: cx,
+			InDevelopment: len(s.inDev), Comments: s.comments, Created: s.created,
 		})
+		rep.AssignedWork += len(s.assigned())
+		rep.InDevelopment += len(s.inDev)
 		rep.HandedOff += len(s.handed)
+		rep.InVerification += len(s.inVerif)
 		if d.hasType("verification") {
 			rep.HasVerification = true
 		}
@@ -345,8 +370,6 @@ func (e *Engine) PersonAcrossProjects(ctx context.Context, projects []store.Proj
 		rep.Delivered.Cx.Assessed += cx.Assessed
 		rep.Delivered.Cx.Of += cx.Of
 		rep.Delivered.Cx.NotAssessed += cx.NotAssessed
-		rep.TopRank += s.topRank
-		rep.OpenNow += s.openNow
 		rep.Comments += s.comments
 		rep.Created += s.created
 
@@ -395,22 +418,29 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 	w, cycle := e.resolveWindow(opts, d.cycles)
 
 	s := e.personSliceOf(d, w, cycle, userID)
+	cycleMode := cycle != nil
+	assigned := s.assigned()
 	rep := &PersonReport{
-		Scope:      e.scope(d, w, cycle),
-		User:       d.userRef(userID),
-		CreditRule: d.creditRuleFor(),
-		ByCycle:    []CycleCount{},
-		Delivered:  Tile{Metric: "person_delivered", Count: len(s.mine), Cx: cxOver(s.mine), Subtasks: subtasksOver(s.mine)},
-		TopRank:    s.topRank,
-		OpenNow:    s.openNow,
-		Comments:   s.comments,
-		Created:    s.created,
-		Bands:      bandsOver(s.mine),
+		Scope:         e.scope(d, w, cycle),
+		User:          d.userRef(userID),
+		CreditRule:    d.creditRuleFor(),
+		ByCycle:       []CycleCount{},
+		AssignedWork:  Tile{Metric: "person_assigned", Count: len(assigned), Cx: cxOver(assigned), Subtasks: subtasksOver(assigned), Rule: d.personAssignedRule(cycleMode)},
+		InDevelopment: Tile{Metric: "person_in_development", Count: len(s.inDev), Cx: cxOver(s.inDev), Rule: d.personInDevelopmentRule(cycleMode)},
+		Delivered:     Tile{Metric: "person_delivered", Count: len(s.mine), Cx: cxOver(s.mine), Subtasks: subtasksOver(s.mine), Rule: d.personDeliveredRule(cycleMode)},
+		Comments:      s.comments,
+		Created:       s.created,
+		Bands:         bandsOver(s.mine),
 	}
 	if d.hasType("verification") {
-		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed), Subtasks: subtasksOver(s.handed)}
+		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed), Subtasks: subtasksOver(s.handed), Rule: d.handoffRule(cycleMode)}
 		rep.HandedOff = &h
-		rep.HandoffRule = d.handoffRule(cycle != nil)
+		v := Tile{Metric: "person_in_verification", Count: len(s.inVerif), Cx: cxOver(s.inVerif), Rule: d.personInVerificationRule()}
+		rep.InVerification = &v
+	}
+	if len(s.deferred) > 0 {
+		t := Tile{Metric: "person_deferred", Count: len(s.deferred), Rule: d.personDeferredRule()}
+		rep.Deferred = &t
 	}
 
 	peers, refs := map[uuid.UUID]int{}, map[uuid.UUID]UserRef{}

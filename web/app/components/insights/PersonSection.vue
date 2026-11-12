@@ -46,16 +46,17 @@ function fmtDate(iso?: string): string {
 
 const narrative = computed(() => {
   const p = props.person;
-  let s = `${p.delivered.count} items completed`;
-  if (p.delivered.subtasks) s += ` (${p.delivered.subtasks} of them subtasks)`;
-  if (p.handed_off) s = `${p.handed_off.count} items handed off, ` + s;
-  if (p.delivered.cx && p.delivered.cx.assessed > 0) {
-    s += ` (complexity ${p.delivered.cx.sum}`;
-    if (p.delivered.cx.not_assessed > 0) s += `, ${p.delivered.cx.not_assessed} not assessed`;
-    s += ")";
+  let s = `${p.assigned_work.count} work items are theirs here: ${p.in_development.count} in development`;
+  if (p.in_verification) s += `, ${p.in_verification.count} in verification`;
+  s += `, ${p.delivered.count} delivered`;
+  if (p.deferred) s += `, ${p.deferred.count} deferred`;
+  s += ".";
+  if (p.handed_off) {
+    s += ` ${p.handed_off.count} ${p.handed_off.count === 1 ? "is" : "are"} past the developer line`;
+    if (p.handed_off.subtasks) s += ` (${p.handed_off.subtasks} of them subtasks)`;
+    s += ".";
   }
-  if (p.top_rank_handled > 0) s += `; ${p.top_rank_handled} at the project's top priority ranks`;
-  s += `. ${p.comments} comments written, ${p.created} tasks created.`;
+  s += ` Also wrote ${p.comments} comments and filed ${p.created} tasks in this window.`;
   return s;
 });
 
@@ -75,7 +76,27 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
       Everyone in the project sees this slice; the numbers are identical for every viewer.
     </p>
 
+    <!-- The person row mirrors the project cards: Assigned Work = In
+         Development + In Verification + Delivered + Deferred; Dev Handed Off
+         is the tinted milestone rollup. Deferred shows only when nonzero. -->
     <div class="mt-4 flex flex-wrap gap-3">
+      <MetricTile
+        label="Assigned Work"
+        :count="person.assigned_work.count"
+        metric="person_assigned"
+        :cx="person.assigned_work.cx"
+        :subtasks="person.assigned_work.subtasks"
+        :tooltip="person.assigned_work.rule"
+        @open="emit('open', 'person_assigned', person.user.id)"
+      />
+      <MetricTile
+        label="In Development"
+        :count="person.in_development.count"
+        metric="person_in_development"
+        :cx="person.in_development.cx"
+        :tooltip="person.in_development.rule"
+        @open="emit('open', 'person_in_development', person.user.id)"
+      />
       <MetricTile
         v-if="person.handed_off"
         label="Dev Handed Off"
@@ -84,9 +105,19 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
         :cx="person.handed_off.cx"
         :subtasks="person.handed_off.subtasks"
         milestone
-        sub="the developer finish line"
-        :tooltip="person.handoff_rule"
+        sub="in verification + delivered"
+        :tooltip="person.handed_off.rule"
         @open="emit('open', 'person_handed_off', person.user.id)"
+      />
+      <MetricTile
+        v-if="person.in_verification"
+        label="In Verification"
+        :count="person.in_verification.count"
+        metric="person_in_verification"
+        :cx="person.in_verification.cx"
+        sub="built, being validated"
+        :tooltip="person.in_verification.rule"
+        @open="emit('open', 'person_in_verification', person.user.id)"
       />
       <MetricTile
         label="Delivered"
@@ -95,17 +126,18 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
         :cx="person.delivered.cx"
         :subtasks="person.delivered.subtasks"
         highlight
+        :tooltip="person.delivered.rule"
         @open="emit('open', 'person_delivered', person.user.id)"
       />
-      <MetricTile label="Top Priority Handled" :count="person.top_rank_handled" />
       <MetricTile
-        label="Open Assigned Now"
-        :count="person.open_now"
-        metric="person_open"
-        @open="emit('open', 'person_open', person.user.id)"
+        v-if="person.deferred"
+        label="Deferred"
+        :count="person.deferred.count"
+        metric="person_deferred"
+        sub="parked, cancelled or archived"
+        :tooltip="person.deferred.rule"
+        @open="emit('open', 'person_deferred', person.user.id)"
       />
-      <MetricTile label="Comments" :count="person.comments" />
-      <MetricTile label="Created" :count="person.created" />
     </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-2">

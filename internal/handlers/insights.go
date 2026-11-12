@@ -257,7 +257,7 @@ func (h *InsightsHandler) PersonReport(c *echo.Context) error {
 //	@Tags			Insights
 //	@Produce		json
 //	@Param			projectKey	path		string	true	"Project key"
-//	@Param			metric		query		string	true	"Metric key (in_cycle, in_development, deferred, delivered, handed_off, planned, added, descoped, carried, verification, cancelled, archived, completed, created, original_plan, person_delivered, person_handed_off, person_open, open_state, priority_rank, aging, overdue, due_soon, blocked, intake, day)"
+//	@Param			metric		query		string	true	"Metric key (in_cycle, in_development, deferred, delivered, handed_off, planned, added, descoped, carried, verification, cancelled, archived, completed, created, original_plan, person_assigned, person_in_development, person_in_verification, person_deferred, person_delivered, person_handed_off, person_open, open_state, priority_rank, aging, overdue, due_soon, blocked, intake, day)"
 //	@Param			format		query		string	false	"csv for a CSV export of the rows"
 //	@Success		200			{object}	insights.Evidence
 //	@Security		BearerAuth

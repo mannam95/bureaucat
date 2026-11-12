@@ -660,6 +660,41 @@ func TestHandedOffCycleSnapshot(t *testing.T) {
 			t.Errorf("S1 handoff date = %v, want the original crossing on the 3rd", row.CompletedAt)
 		}
 	}
+
+	// The person row mirrors the project cards: assignment owns un-crossed
+	// work, the crossing credits everything past the line, and the row sums.
+	// bob: S3 assigned and back in progress (in development), S2 delivered.
+	bob, err := e.PersonReport(context.Background(), f.project, f.userIDs["bob"], ReportOptions{CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("person report: %v", err)
+	}
+	if bob.AssignedWork.Count != 2 || bob.InDevelopment.Count != 1 ||
+		bob.HandedOff == nil || bob.HandedOff.Count != 1 ||
+		bob.InVerification == nil || bob.InVerification.Count != 0 ||
+		bob.Delivered.Count != 1 || bob.Deferred != nil {
+		t.Errorf("bob's row = %d assigned = %d in dev + %d in verif + %d delivered (handed %d), want 2 = 1 + 0 + 1 (1)",
+			bob.AssignedWork.Count, bob.InDevelopment.Count, bob.InVerification.Count,
+			bob.Delivered.Count, bob.HandedOff.Count)
+	}
+	// ann: only the carried S1, credited at its pre-cycle crossing.
+	ann, err := e.PersonReport(context.Background(), f.project, f.userIDs["ann"], ReportOptions{CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("person report: %v", err)
+	}
+	if ann.AssignedWork.Count != 1 || ann.InDevelopment.Count != 0 ||
+		ann.InVerification == nil || ann.InVerification.Count != 1 || ann.Delivered.Count != 0 {
+		t.Errorf("ann's row = %d assigned = %d in dev + %d in verif + %d delivered, want 1 = 0 + 1 + 0",
+			ann.AssignedWork.Count, ann.InDevelopment.Count, ann.InVerification.Count, ann.Delivered.Count)
+	}
+	aev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
+		Metric: "person_assigned", CycleID: &cycle, UserID: ptr(f.userIDs["bob"]),
+	})
+	if err != nil {
+		t.Fatalf("person_assigned evidence: %v", err)
+	}
+	if aev.Count != 2 {
+		t.Errorf("bob's assigned evidence = %d, want 2 (S2 + S3)", aev.Count)
+	}
 }
 
 // TestHandedOffAbsentWithoutVerification: with no verification states the band

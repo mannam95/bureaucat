@@ -76,7 +76,6 @@ export interface PersonRow {
   delivered: number;
   shared: number;
   cx?: ComplexitySum;
-  top_rank_handled: number;
   open_at_end: number;
   comments: number;
   created: number;
@@ -229,14 +228,17 @@ export interface UserCount {
   count: number;
 }
 
+// The person row mirrors the project cards: assigned_work = in_development +
+// in_verification + delivered + deferred, with handed_off as the rollup.
 export interface PersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
+  assigned_work: MetricTile;
+  in_development: MetricTile;
   handed_off?: MetricTile;
-  handoff_rule?: string;
+  in_verification?: MetricTile;
   delivered: MetricTile;
-  top_rank_handled: number;
-  open_now: number;
+  deferred?: MetricTile;
   comments: number;
   created: number;
   weekly: WeekPoint[];
@@ -252,8 +254,7 @@ export interface PersonProjectRow {
   handed_off: number;
   delivered: number;
   cx?: ComplexitySum;
-  top_rank_handled: number;
-  open_now: number;
+  in_development: number;
   comments: number;
   created: number;
 }
@@ -261,11 +262,12 @@ export interface PersonProjectRow {
 export interface WorkspacePersonInsights {
   scope: InsightsScope;
   user: InsightsUser;
+  assigned_work: number;
+  in_development: number;
   handed_off: number;
+  in_verification: number;
   has_verification: boolean;
   delivered: MetricTile;
-  top_rank_handled: number;
-  open_now: number;
   comments: number;
   created: number;
   projects: PersonProjectRow[];

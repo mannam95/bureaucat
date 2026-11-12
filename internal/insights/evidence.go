@@ -350,6 +350,40 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			}
 		}
 
+	case "person_assigned", "person_in_development", "person_in_verification", "person_deferred":
+		if p.UserID == nil {
+			return nil, fmt.Errorf("metric %q needs a user", p.Metric)
+		}
+		u := d.userRef(*p.UserID)
+		// The exact slice the person report counts — one computation, two views.
+		s := e.personSliceOf(d, w, cycle, *p.UserID)
+		var pop []*task
+		switch p.Metric {
+		case "person_assigned":
+			pop = s.assigned()
+			ev.Title = "Assigned work of " + u.Username
+			ev.HowComputed = "Everything of theirs in scope: open work assigned to them at the cutoff, plus work credited to them past the line. In development, in verification, delivered and deferred partition this set."
+		case "person_in_development":
+			pop = s.inDev
+			ev.Title = "In development, assigned to " + u.Username
+			ev.HowComputed = "Leaf items assigned to this person at the cutoff, in an unstarted- or started-type state — still on the developer's side of the line."
+		case "person_in_verification":
+			pop = s.inVerif
+			ev.Title = "In verification by " + u.Username
+			ev.HowComputed = "Handed-off items credited to this person that still sit in a verification-type state at the cutoff."
+		case "person_deferred":
+			pop = s.deferred
+			ev.Title = "Deferred, assigned to " + u.Username
+			ev.HowComputed = "Cycle items assigned to this person that sit parked at the cutoff: a backlog-, cancelled- or archived-type state."
+		}
+		ev.SourceEvents = "state_changed, assignee_added, assignee_removed + task contributors"
+		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "owned by "+u.Username)
+		for _, t := range pop {
+			row := e.rowWithState(d, t, w.cutoff)
+			row.EnteredCycle = enteredLabel(t)
+			ev.Rows = append(ev.Rows, row)
+		}
+
 	case "open_state", "priority_rank", "aging", "overdue", "due_soon", "blocked", "intake":
 		e.snapshotMetric(d, ev, p, units)
 

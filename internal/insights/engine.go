@@ -896,6 +896,75 @@ func (d *projectData) createdRule() string {
 	return "Counts every leaf item created during this window, whatever has happened to it since."
 }
 
+// The person rules mirror the project bucket rules for one member's row.
+// Ownership splits at the developer line: assignment owns un-crossed work,
+// the crossing credits everything past it.
+
+func (d *projectData) personAssignedRule(cycleMode bool) string {
+	first := "Everything in this window that is theirs: open work assigned to them at the cutoff, plus work credited to them past the line during the window."
+	if cycleMode {
+		first = "Everything in this cycle that is theirs: work assigned to them still before the line, plus work credited to them past it."
+	}
+	return strings.Join([]string{
+		first,
+		"Before the line, work belongs to whoever is assigned; once it crosses, to whoever crossed it — Contributors, or the assignees at the crossing.",
+		"The cards to the right add up to exactly this number.",
+	}, "\n")
+}
+
+func (d *projectData) personInDevelopmentRule(cycleMode bool) string {
+	names := "an unstarted- or started-type state"
+	if n := d.namesOfType("unstarted", "started"); len(n) > 0 {
+		names = orJoin(n)
+	}
+	first := "Open work assigned to them at the cutoff, still before the line: in " + names + "."
+	if cycleMode {
+		first = "Cycle items assigned to them, still before the line: in " + names + " at the cutoff."
+	}
+	lines := []string{first}
+	if d.hasType("verification") {
+		lines = append(lines, "Work bounced back by review sits here again until it crosses the line once more.")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (d *projectData) personInVerificationRule() string {
+	doneNames := "a completed state"
+	if done := d.namesOfType("completed"); len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	return strings.Join([]string{
+		"Work they handed off, now being validated: in " + orJoin(d.namesOfType("verification")) + " at the cutoff.",
+		"Still open — it is not delivered until it reaches " + doneNames + ".",
+	}, "\n")
+}
+
+func (d *projectData) personDeliveredRule(cycleMode bool) string {
+	doneNames := "a completed-type state"
+	if done := d.namesOfType("completed"); len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	first := "Work credited to them that entered " + doneNames + " during this window and is still there."
+	if cycleMode {
+		first = "Work credited to them sitting in " + doneNames + " at the cutoff — done, whenever it crossed."
+	}
+	return strings.Join([]string{
+		first,
+		"Reopened work drops out until it is completed again.",
+	}, "\n")
+}
+
+func (d *projectData) personDeferredRule() string {
+	names := "a backlog-, cancelled- or archived-type state"
+	if n := d.namesOfType("backlog", "cancelled", "archived"); len(n) > 0 {
+		names = orJoin(n)
+	}
+	return strings.Join([]string{
+		"Assigned to them but parked at the cutoff: in " + names + ".",
+		"Not open work, and never delivery.",
+	}, "\n")
+}
+
 // hasType says whether the project defines any state of the given type; a
 // missing type means the matching tile is absent, never zero.
 func (d *projectData) hasType(stateType string) bool {

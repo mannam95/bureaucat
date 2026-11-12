@@ -113,7 +113,6 @@ type PersonRow struct {
 	Delivered   int            `json:"delivered"`
 	Shared      int            `json:"shared"` // of Delivered, items credited to >1 person
 	Cx          *ComplexitySum `json:"cx,omitempty"`
-	TopRank     int            `json:"top_rank_handled"` // delivered at the project's top two ranks
 	OpenAtEnd   int            `json:"open_at_end"`
 	Comments    int            `json:"comments"`
 	Created     int            `json:"created"`
@@ -315,22 +314,30 @@ type UserCount struct {
 	Count int     `json:"count"`
 }
 
-// PersonReport is one member's slice of one project.
+// PersonReport is one member's slice of one project. The row mirrors the
+// project cards: AssignedWork = InDevelopment + InVerification + Delivered +
+// Deferred, with HandedOff as the milestone rollup. Ownership splits at the
+// line: before it, work belongs to whoever is assigned at the cutoff; once it
+// crosses, to whoever crossed it (Contributors, else the assignees at the
+// crossing).
 type PersonReport struct {
-	Scope Scope   `json:"scope"`
-	User  UserRef `json:"user"`
-	// HandedOff is absent when the project has no verification states;
-	// HandoffRule is its tooltip, as on the project report.
-	HandedOff   *Tile        `json:"handed_off,omitempty"`
-	HandoffRule string       `json:"handoff_rule,omitempty"`
-	Delivered   Tile         `json:"delivered"`
-	TopRank     int          `json:"top_rank_handled"`
-	OpenNow     int          `json:"open_now"`
-	Comments    int          `json:"comments"`
-	Created     int          `json:"created"`
-	Weekly      []WeekPoint  `json:"weekly"`
-	ByCycle     []CycleCount `json:"by_cycle"`
-	Bands       []BandCount  `json:"bands"`
+	Scope         Scope   `json:"scope"`
+	User          UserRef `json:"user"`
+	AssignedWork  Tile    `json:"assigned_work"`
+	InDevelopment Tile    `json:"in_development"`
+	// HandedOff/InVerification are absent when the project has no
+	// verification states.
+	HandedOff      *Tile `json:"handed_off,omitempty"`
+	InVerification *Tile `json:"in_verification,omitempty"`
+	Delivered      Tile  `json:"delivered"`
+	// Deferred renders only when the person has parked items in scope, so the
+	// row stays short and the sum never lies.
+	Deferred *Tile        `json:"deferred,omitempty"`
+	Comments int          `json:"comments"`
+	Created  int          `json:"created"`
+	Weekly   []WeekPoint  `json:"weekly"`
+	ByCycle  []CycleCount `json:"by_cycle"`
+	Bands    []BandCount  `json:"bands"`
 	// WorkedWith lists the people who shared credit on this person's delivered
 	// items over the window.
 	WorkedWith []UserCount `json:"worked_with"`
@@ -345,30 +352,32 @@ type CycleCount struct {
 
 // PersonProjectRow is one project's share of a workspace person report.
 type PersonProjectRow struct {
-	ProjectKey  string         `json:"project_key"`
-	ProjectName string         `json:"project_name"`
-	HandedOff   int            `json:"handed_off"`
-	Delivered   int            `json:"delivered"`
-	Cx          *ComplexitySum `json:"cx,omitempty"`
-	TopRank     int            `json:"top_rank_handled"`
-	OpenNow     int            `json:"open_now"`
-	Comments    int            `json:"comments"`
-	Created     int            `json:"created"`
+	ProjectKey    string         `json:"project_key"`
+	ProjectName   string         `json:"project_name"`
+	HandedOff     int            `json:"handed_off"`
+	Delivered     int            `json:"delivered"`
+	Cx            *ComplexitySum `json:"cx,omitempty"`
+	InDevelopment int            `json:"in_development"`
+	Comments      int            `json:"comments"`
+	Created       int            `json:"created"`
 }
 
 // WorkspacePersonReport aggregates one person across the projects the viewer
 // may see. The scope is the intersection of viewer and person: a viewer with
 // different project access sees different totals, and the report says so.
 type WorkspacePersonReport struct {
-	Scope     Scope   `json:"scope"`
-	User      UserRef `json:"user"`
-	HandedOff int     `json:"handed_off"`
+	Scope Scope   `json:"scope"`
+	User  UserRef `json:"user"`
+	// The summed person row, same grammar as the project person view:
+	// AssignedWork = InDevelopment + InVerification + Delivered.
+	AssignedWork   int `json:"assigned_work"`
+	InDevelopment  int `json:"in_development"`
+	HandedOff      int `json:"handed_off"`
+	InVerification int `json:"in_verification"`
 	// HasVerification is true when any contributing project defines
 	// verification states — the gate for showing the Handed off tile.
 	HasVerification bool `json:"has_verification"`
 	Delivered       Tile `json:"delivered"`
-	TopRank         int  `json:"top_rank_handled"`
-	OpenNow         int  `json:"open_now"`
 	Comments        int  `json:"comments"`
 	Created         int  `json:"created"`
 	// Projects holds one row per project that contributed anything (membership

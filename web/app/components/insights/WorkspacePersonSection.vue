@@ -13,14 +13,13 @@ const emit = defineEmits<{ project: [projectKey: string] }>();
 const narrative = computed(() => {
   const p = props.person;
   const active = p.projects.filter((r) => r.delivered > 0).length;
-  let s = `${p.delivered.count} items completed across ${active} of ${p.projects_considered} projects`;
+  let s = `${p.delivered.count} items delivered across ${active} of ${p.projects_considered} projects`;
   if (p.delivered.cx && p.delivered.cx.assessed > 0) {
     s += ` (complexity ${p.delivered.cx.sum}`;
     if (p.delivered.cx.not_assessed > 0) s += `, ${p.delivered.cx.not_assessed} not assessed`;
     s += ")";
   }
-  if (p.top_rank_handled > 0) s += `; ${p.top_rank_handled} at top priority ranks`;
-  s += `. ${p.comments} comments written, ${p.created} tasks created.`;
+  s += `. Also wrote ${p.comments} comments and filed ${p.created} tasks in this window.`;
   return s;
 });
 
@@ -46,19 +45,20 @@ function cxLabel(row: { cx?: { sum: number; assessed: number; not_assessed: numb
       project access sees different totals.
     </p>
 
+    <!-- The same person row as the project view, summed across projects:
+         Assigned Work = In Development + In Verification + Delivered. -->
     <div class="mt-4 flex flex-wrap gap-3">
+      <MetricTile label="Assigned Work" :count="person.assigned_work" />
+      <MetricTile label="In Development" :count="person.in_development" />
       <MetricTile
         v-if="person.has_verification"
         label="Dev Handed Off"
         :count="person.handed_off"
         milestone
-        sub="the developer finish line"
+        sub="in verification + delivered"
       />
+      <MetricTile v-if="person.has_verification" label="In Verification" :count="person.in_verification" />
       <MetricTile label="Delivered" :count="person.delivered.count" :cx="person.delivered.cx" :subtasks="person.delivered.subtasks" highlight />
-      <MetricTile label="Top Priority Handled" :count="person.top_rank_handled" />
-      <MetricTile label="Open Assigned Now" :count="person.open_now" />
-      <MetricTile label="Comments" :count="person.comments" />
-      <MetricTile label="Created" :count="person.created" />
     </div>
 
     <div class="mt-6 rounded-lg border p-4">
@@ -76,8 +76,8 @@ function cxLabel(row: { cx?: { sum: number; assessed: number; not_assessed: numb
           <span class="shrink-0 text-xs tabular-nums">{{ row.delivered }}</span>
           <span class="shrink-0 text-[11px] text-muted-foreground">{{ cxLabel(row) }}</span>
           <span class="ml-auto hidden shrink-0 flex-wrap gap-x-3 text-[11px] text-muted-foreground sm:flex">
-            <span v-if="row.top_rank_handled">{{ row.top_rank_handled }} top priority</span>
-            <span v-if="row.open_now">{{ row.open_now }} open now</span>
+            <span v-if="row.handed_off">{{ row.handed_off }} handed off</span>
+            <span v-if="row.in_development">{{ row.in_development }} in development</span>
             <span v-if="row.comments">{{ row.comments }} comments</span>
           </span>
           <ArrowRight class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
