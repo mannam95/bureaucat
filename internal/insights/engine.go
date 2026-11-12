@@ -725,19 +725,39 @@ func (d *projectData) prioRef(id uuid.UUID) *PriorityRef {
 }
 
 // handoffRule spells out the handed-off band in the project's own state
-// vocabulary, for the tile and column tooltips. Empty when the project has no
-// verification states (handed off equals delivered there, so no tile shows).
+// vocabulary, one bullet per line (the UI renders the lines as a list behind
+// an info dot). Empty when the project has no verification states (handed off
+// equals delivered there, so no tile shows).
 func (d *projectData) handoffRule() string {
-	var names []string
+	var band, done []string
 	for _, s := range d.stateList {
-		if s.Type == "verification" {
-			names = append(names, s.Name)
+		switch s.Type {
+		case "verification":
+			band = append(band, s.Name)
+		case "completed":
+			done = append(done, s.Name)
 		}
 	}
-	if len(names) == 0 {
+	if len(band) == 0 {
 		return ""
 	}
-	return "Handed off = crossed into " + strings.Join(names, ", ") + " (or straight into a completed state) during the window, and still past that line at the cutoff. Work bounced back by review counts again when it re-crosses. The developer finish line; everything after is carried by others."
+	orJoin := func(names []string) string {
+		if len(names) == 1 {
+			return names[0]
+		}
+		return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+	}
+	doneNames := "a completed state"
+	if len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	return strings.Join([]string{
+		"Counts when a task crosses into " + orJoin(band) + " during this window.",
+		"Going straight to " + doneNames + " counts too.",
+		"It must still be at or past that line at the cutoff; work pulled back into progress drops out.",
+		"If review bounces it back, it counts again when it re-crosses.",
+		"Everything after this line is carried by others.",
+	}, "\n")
 }
 
 // hasType says whether the project defines any state of the given type; a

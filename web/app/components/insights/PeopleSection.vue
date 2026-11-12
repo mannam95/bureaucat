@@ -50,7 +50,10 @@ const narrative = computed(() => {
           <tr class="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
             <th class="px-3 py-2 font-medium">Member</th>
             <th v-if="hasVerification" class="px-3 py-2 text-right font-medium">
-              <span :title="handoffRule" class="cursor-help underline decoration-dotted underline-offset-2">Handed off</span>
+              <span class="inline-flex items-center gap-1">
+                Handed off
+                <RuleInfo v-if="handoffRule" label="Handed off" :rule="handoffRule" />
+              </span>
             </th>
             <th class="px-3 py-2 text-right font-medium">Delivered</th>
             <th class="px-3 py-2 text-right font-medium">Complexity</th>
