@@ -161,7 +161,7 @@ func (e *Engine) ProjectReport(ctx context.Context, project store.Project, opts 
 	}
 
 	rep.HasVerification = d.hasType("verification")
-	rep.HandoffRule = d.handoffRule()
+	rep.HandoffRule = d.handoffRule(cycle != nil)
 
 	units := d.leafUnits()
 	var delivered, handedOff []*task

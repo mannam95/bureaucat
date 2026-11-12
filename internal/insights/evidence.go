@@ -87,7 +87,11 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 
 	case "handed_off":
 		ev.Title = "Handed off"
-		ev.HowComputed = "Leaf items that crossed into a verification- or completed-type state during the window and were still at or beyond it at the cutoff. Work bounced back by review falls out until it crosses again; the date shown is the handoff."
+		if requireCycle {
+			ev.HowComputed = "Every leaf item in the cycle still at or beyond a verification- or completed-type state at the cutoff, no matter when it crossed — a cycle reads as a snapshot. Work bounced back by review falls out until it crosses again; the date shown is the crossing that holds."
+		} else {
+			ev.HowComputed = "Leaf items that crossed into a verification- or completed-type state during the window and were still at or beyond it at the cutoff. Work bounced back by review falls out until it crosses again; the date shown is the handoff."
+		}
 		ev.SourceEvents = "state_changed"
 		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "still handed off at cutoff")
 		for _, t := range units {

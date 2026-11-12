@@ -3,6 +3,7 @@ package insights
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -537,6 +538,84 @@ func TestHandedOffDevFinishLine(t *testing.T) {
 	}
 	if pev.Count != 2 {
 		t.Errorf("bob's handed off evidence = %d, want 2 (T2, T4)", pev.Count)
+	}
+}
+
+// TestHandedOffCycleSnapshot: a cycle reads as a snapshot — carried work that
+// crossed the line before the cycle started still counts in the cycle it sits
+// in now, dated and credited at that original crossing, so a sprint report
+// needs no memory of the previous one. The flow reading (crossing must fall
+// inside the window) stays for date ranges: TestHandedOffDevFinishLine's T5.
+func TestHandedOffCycleSnapshot(t *testing.T) {
+	f := newFixture("SNAP")
+	f.state("Backlog", "backlog", 0)
+	f.state("In Progress", "started", 1)
+	f.state("Code Review", "verification", 2)
+	f.state("Done", "completed", 3)
+	f.prio("No priority", 0, true)
+	cycle := f.cycle("Sprint 16", "2026-10-10", "2026-10-20")
+
+	// S1 crossed on the 3rd, before the cycle existed, and was carried in
+	// still inside the band — counts, dated the 3rd, credited to ann.
+	f.task("S1", "Backlog", "No priority", 0, 0, "2026-10-01 09:00")
+	f.assign("S1", "ann", "2026-10-01 10:00")
+	f.move("S1", "Backlog", "In Progress", "2026-10-02 09:00", f.userIDs["ann"])
+	f.move("S1", "In Progress", "Code Review", "2026-10-03 09:00", f.userIDs["ann"])
+	f.cycleAdd("S1", cycle, "2026-10-10 08:00")
+
+	// S2 crossed inside the cycle — counts as before (straight to Done).
+	f.task("S2", "Backlog", "No priority", 0, 0, "2026-10-09 09:00")
+	f.assign("S2", "bob", "2026-10-09 10:00")
+	f.cycleAdd("S2", cycle, "2026-10-10 08:01")
+	f.move("S2", "Backlog", "In Progress", "2026-10-11 09:00", f.userIDs["bob"])
+	f.move("S2", "In Progress", "Done", "2026-10-14 09:00", f.userIDs["bob"])
+
+	// S3 is a member whose pre-cycle crossing was bounced inside the cycle and
+	// never re-crossed: not past the line at the cutoff, so it never counts.
+	f.task("S3", "Backlog", "No priority", 0, 0, "2026-10-01 09:00")
+	f.assign("S3", "bob", "2026-10-01 10:00")
+	f.move("S3", "Backlog", "Code Review", "2026-10-05 09:00", f.userIDs["bob"])
+	f.cycleAdd("S3", cycle, "2026-10-10 08:02")
+	f.move("S3", "Code Review", "In Progress", "2026-10-12 09:00", f.userIDs["bob"])
+
+	// S4 is past the line but never a member of this cycle — absent.
+	f.task("S4", "Backlog", "No priority", 0, 0, "2026-10-01 09:00")
+	f.move("S4", "Backlog", "Code Review", "2026-10-12 09:00", f.userIDs["ann"])
+
+	e := f.engine("2026-10-25 12:00")
+	rep, err := e.ProjectReport(context.Background(), f.project, ReportOptions{CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if rep.Cycle.HandedOff == nil || rep.Cycle.HandedOff.Count != 2 {
+		t.Fatalf("handed off tile = %+v, want count 2 (S1 carried + S2)", rep.Cycle.HandedOff)
+	}
+	if rep.Cycle.Delivered.Count != 1 {
+		t.Errorf("delivered = %d, want 1 (S2 alone)", rep.Cycle.Delivered.Count)
+	}
+	if !strings.Contains(rep.HandoffRule, "earlier cycle") {
+		t.Errorf("cycle handoff_rule must explain the snapshot reading, got %q", rep.HandoffRule)
+	}
+	wantPerPerson := map[string]int{"ann": 1, "bob": 1}
+	for _, row := range rep.People.Rows {
+		if want, ok := wantPerPerson[row.User.Username]; ok && row.HandedOff != want {
+			t.Errorf("%s handed off = %d, want %d", row.User.Username, row.HandedOff, want)
+		}
+	}
+
+	ev, err := e.Evidence(context.Background(), f.project, EvidenceParams{
+		Metric: "handed_off", CycleID: &cycle,
+	})
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	if ev.Count != 2 {
+		t.Errorf("evidence count = %d, want 2", ev.Count)
+	}
+	for _, row := range ev.Rows {
+		if row.Key == "SNAP-1" && (row.CompletedAt == nil || row.CompletedAt.Day() != 3) {
+			t.Errorf("S1 handoff date = %v, want the original crossing on the 3rd", row.CompletedAt)
+		}
 	}
 }
 

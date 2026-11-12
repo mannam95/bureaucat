@@ -410,7 +410,7 @@ func (e *Engine) PersonReport(ctx context.Context, project store.Project, userID
 	if d.hasType("verification") {
 		h := Tile{Metric: "person_handed_off", Count: len(s.handed), Cx: cxOver(s.handed), Subtasks: subtasksOver(s.handed)}
 		rep.HandedOff = &h
-		rep.HandoffRule = d.handoffRule()
+		rep.HandoffRule = d.handoffRule(cycle != nil)
 	}
 
 	peers, refs := map[uuid.UUID]int{}, map[uuid.UUID]UserRef{}

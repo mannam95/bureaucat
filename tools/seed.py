@@ -702,8 +702,9 @@ def seed_craft_project(p: Project):
     bounce out of review that re-crosses (counts once, at the re-cross); a
     straight-to-Done jump (handed off and delivered at the same moment); an
     entry into the band at QA, skipping Code Review; two subtasks in the band
-    (the "N of them subtasks" caption); and a carry-over whose crossing
-    happened in Sprint A, which Sprint B must NOT count.
+    (the "N of them subtasks" caption); and a carry-over that crossed in
+    Sprint A — a cycle reads as a snapshot, so Sprint B counts it too, dated
+    at that Sprint A crossing (date ranges keep the crossed-in-window rule).
 
     Intake: six untouched items split across New and Triage. They must leave
     the open-work headline and state bar and read as one quiet intake line.
@@ -740,8 +741,9 @@ def seed_craft_project(p: Project):
     p.mv("c0", "In Production", m(0), T(12, "11:00"))  # band-internal; still not Done
     p.mv("c9", "Code Review", m(6), T(12, "16:30"))    # crossed inside Sprint A...
 
-    # ...and carried into Sprint B still inside the band: the crossing predates
-    # the new window, so Sprint B must NOT count it as handed off.
+    # ...and carried into Sprint B still inside the band: a cycle reads as a
+    # snapshot, so Sprint B also counts it as handed off, dated and credited
+    # at the Sprint A crossing. Only the date-range view scopes crossings.
     p.cyc_rm("c9", "Sprint A", T(10, "08:30"))
     p.cyc_add("c9", "Sprint B", T(10, "08:35"))
 
@@ -1042,9 +1044,9 @@ def main():
     print("   CORE (Product Delivery): review-band pipeline — New/Triage intake,")
     print("             Needs Info, Code Review → QA → In Production. Sprint B holds the")
     print("             handed-off cases (parked review, bounce + re-cross, straight-to-")
-    print("             Done, QA entry, 2 subtasks, a pre-window carry that must not")
-    print("             count); 6 intake items (4 New, 2 Triage; CORE's 'Bulk edit")
-    print("             tasks' is past due but must NOT show as overdue)")
+    print("             Done, QA entry, 2 subtasks, a carried band item counted by the")
+    print("             snapshot rule); 6 intake items (4 New, 2 Triage; CORE's 'Bulk")
+    print("             edit tasks' is past due but must NOT show as overdue)")
     print("   dashboard: the admin's plate spans WEB (parent + subtasks, a crumb),")
     print("              MOBILE and OPS — the grouped Assigned-to-You demo")
     print("   new in this seed: custom branding (Nova Tracker), a mandatory 'Bug")

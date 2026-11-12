@@ -496,23 +496,30 @@ func (d *projectData) handoffs(t *task) []completion {
 	return out
 }
 
-// handedOffIn finds the qualifying handoff for a unit: crossed into the
-// handed-off band inside [from, cutoff) and still at or beyond it at the
-// cutoff. Work bounced back by review falls out until it crosses again, and
-// when it does, the LAST crossing in the window is the one that holds — its
-// moment dates the handoff and its assignees take the credit, not the earlier
-// attempt that review rejected. inCycle mirrors deliveredIn.
-func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span, requireCycle bool) (completion, bool) {
+// handedOffIn finds the qualifying handoff for a unit. A cycle reads as a
+// SNAPSHOT: every unit in the cycle at the cutoff that sits at or beyond the
+// band counts, no matter when it crossed — a sprint must make sense on its
+// own, with no memory of the previous one, so carried work is never hidden
+// behind "it crossed last sprint". A date range reads as a FLOW: only
+// crossings inside [from, cutoff) count, so range totals never count the same
+// item across two windows. Either way, work bounced back by review falls out
+// until it crosses again, and the LAST crossing before the cutoff is the one
+// that holds — its moment dates the handoff and its assignees take the
+// credit, not the earlier attempt that review rejected.
+func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span, cycleMode bool) (completion, bool) {
 	if !isHandedOffType(d.states[d.stateAt(t, cutoff)].Type) {
+		return completion{}, false
+	}
+	if cycleMode && !memberAt(spans, cutoff.Add(-time.Nanosecond)) {
 		return completion{}, false
 	}
 	var best completion
 	found := false
 	for _, h := range d.handoffs(t) {
-		if h.at.Before(from) || !h.at.Before(cutoff) {
+		if !h.at.Before(cutoff) {
 			continue
 		}
-		if requireCycle && !memberAt(spans, h.at) {
+		if !cycleMode && h.at.Before(from) {
 			continue
 		}
 		best, found = h, true
@@ -726,9 +733,10 @@ func (d *projectData) prioRef(id uuid.UUID) *PriorityRef {
 
 // handoffRule spells out the handed-off band in the project's own state
 // vocabulary, one bullet per line (the UI renders the lines as a list behind
-// an info dot). Empty when the project has no verification states (handed off
-// equals delivered there, so no tile shows).
-func (d *projectData) handoffRule() string {
+// an info dot). The wording follows the report mode: a cycle is a snapshot, a
+// range is a flow. Empty when the project has no verification states (handed
+// off equals delivered there, so no tile shows).
+func (d *projectData) handoffRule(cycleMode bool) string {
 	var band, done []string
 	for _, s := range d.stateList {
 		switch s.Type {
@@ -750,6 +758,14 @@ func (d *projectData) handoffRule() string {
 	doneNames := "a completed state"
 	if len(done) > 0 {
 		doneNames = orJoin(done)
+	}
+	if cycleMode {
+		return strings.Join([]string{
+			"Counts every item in this cycle that is past the line at the cutoff: in " + orJoin(band) + ", or already in " + doneNames + ".",
+			"It counts even when the crossing happened in an earlier cycle; the date and the credit follow that crossing.",
+			"Work bounced back by review does not count until it crosses again.",
+			"Everything after this line is carried by others.",
+		}, "\n")
 	}
 	return strings.Join([]string{
 		"Counts when a task crosses into " + orJoin(band) + " during this window.",
