@@ -13,11 +13,11 @@ import (
 )
 
 // buildHarbor reproduces the shared data contract of the final build
-// reference: 30 planned + 6 added - 3 removed = 33 at close = 25 completed +
-// 7 open + 1 archived; original-plan delivery 22/30; delivered complexity 142
-// across 20 of 25 assessed; planned complexity 171 across 23 of 30; 27 person
-// credits across 25 items with 2 shared. The engine must reproduce it digit
-// for digit.
+// reference: 30 planned + 6 added - 3 removed = 33 in the cycle = 0 in
+// development + 25 delivered + 8 deferred (7 parked in Backlog + 1 archived);
+// original-plan delivery 22/30; delivered complexity 142 across 20 of 25
+// assessed; planned complexity 171 across 23 of 30; 27 person credits across
+// 25 items with 2 shared. The engine must reproduce it digit for digit.
 func buildHarbor(t *testing.T) (*fixture, uuid.UUID) {
 	t.Helper()
 	f := newFixture("HBR")
@@ -144,44 +144,31 @@ func TestHarborCycleContract(t *testing.T) {
 		t.Fatal("expected a cycle section")
 	}
 
-	if sec.PlannedAtStart.Count != 30 {
-		t.Errorf("planned = %d, want 30", sec.PlannedAtStart.Count)
+	if sec.InCycle.Count != 33 {
+		t.Errorf("in cycle = %d, want 33", sec.InCycle.Count)
 	}
-	if sec.Added.Count != 6 {
-		t.Errorf("added = %d, want 6 (re-entry must count once)", sec.Added.Count)
-	}
-	if sec.Removed.Count != 3 {
-		t.Errorf("removed = %d, want 3", sec.Removed.Count)
-	}
-	if sec.AtClose != 33 {
-		t.Errorf("at close = %d, want 33", sec.AtClose)
+	if sec.BoardTasks != 33 {
+		t.Errorf("board tasks = %d, want 33 (PP stands in for its one subtask)", sec.BoardTasks)
 	}
 	if sec.Delivered.Count != 25 {
 		t.Errorf("delivered = %d, want 25", sec.Delivered.Count)
 	}
-	if sec.OriginalPlan.Count != 22 {
-		t.Errorf("original plan delivered = %d, want 22", sec.OriginalPlan.Count)
+	if sec.InDevelopment.Count != 0 {
+		t.Errorf("in development = %d, want 0 (the unfinished work parks in Backlog)", sec.InDevelopment.Count)
 	}
-	if sec.CarriedOver.Count != 7 {
-		t.Errorf("carried = %d, want 7", sec.CarriedOver.Count)
+	if sec.Deferred.Count != 8 {
+		t.Errorf("deferred = %d, want 8 (7 parked in Backlog + 1 archived)", sec.Deferred.Count)
 	}
-	if sec.Cancelled != nil {
-		t.Errorf("cancelled tile must be absent: Harbor defines no cancelled-type state")
-	}
-	if sec.Archived == nil || sec.Archived.Count != 1 {
-		t.Errorf("archived tile = %+v, want count 1", sec.Archived)
+	if sec.HandedOff != nil || sec.InVerification != nil {
+		t.Error("handed off and in verification must be absent without verification states")
 	}
 
 	cx := sec.Delivered.Cx
 	if cx.Sum != 142 || cx.Assessed != 20 || cx.Of != 25 || cx.NotAssessed != 5 {
 		t.Errorf("delivered cx = %+v, want 142 across 20 of 25", cx)
 	}
-	pcx := sec.PlannedAtStart.Cx
-	if pcx.Sum != 171 || pcx.Assessed != 23 || pcx.Of != 30 {
-		t.Errorf("planned cx = %+v, want 171 across 23 of 30", pcx)
-	}
 
-	wantIdentity := "30 planned + 6 added - 3 removed = 33 at close = 25 completed + 7 still to do + 1 archived"
+	wantIdentity := "30 planned + 6 added - 3 removed = 33 in the cycle = 0 in development + 25 delivered + 8 deferred"
 	if sec.Identity != wantIdentity {
 		t.Errorf("identity = %q, want %q", sec.Identity, wantIdentity)
 	}
@@ -266,7 +253,40 @@ func TestHarborEvidence(t *testing.T) {
 		t.Fatalf("added evidence: %v", err)
 	}
 	if added.Count != 6 {
-		t.Errorf("added evidence rows = %d, want 6", added.Count)
+		t.Errorf("added evidence rows = %d, want 6 (re-entry must count once)", added.Count)
+	}
+
+	// The plan history keeps its populations (and the contract's planned
+	// complexity) even though it renders as the identity line, not as cards.
+	planned, err := e.Evidence(ctx, f.project, EvidenceParams{Metric: "planned", CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("planned evidence: %v", err)
+	}
+	if planned.Count != 30 || planned.Cx.Sum != 171 || planned.Cx.Assessed != 23 {
+		t.Errorf("planned evidence = %d with cx %+v, want 30 with 171 across 23", planned.Count, planned.Cx)
+	}
+	originalPlan, err := e.Evidence(ctx, f.project, EvidenceParams{Metric: "original_plan", CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("original_plan evidence: %v", err)
+	}
+	if originalPlan.Count != 22 {
+		t.Errorf("original plan delivered = %d, want 22", originalPlan.Count)
+	}
+
+	// The snapshot buckets have their own drawers and partition In Cycle.
+	inCycle, err := e.Evidence(ctx, f.project, EvidenceParams{Metric: "in_cycle", CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("in_cycle evidence: %v", err)
+	}
+	if inCycle.Count != 33 {
+		t.Errorf("in_cycle evidence rows = %d, want 33", inCycle.Count)
+	}
+	deferred, err := e.Evidence(ctx, f.project, EvidenceParams{Metric: "deferred", CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("deferred evidence: %v", err)
+	}
+	if deferred.Count != 8 {
+		t.Errorf("deferred evidence rows = %d, want 8", deferred.Count)
 	}
 
 	person, err := e.Evidence(ctx, f.project, EvidenceParams{Metric: "person_delivered", CycleID: &cycle, UserID: ptr(f.userIDs["dev2"])})
@@ -313,12 +333,17 @@ func TestReopenFallsOut(t *testing.T) {
 	if rep.Cycle.Delivered.Count != 0 {
 		t.Errorf("delivered = %d, want 0: reopened work falls out", rep.Cycle.Delivered.Count)
 	}
-	if rep.Cycle.CarriedOver.Count != 1 {
-		t.Errorf("carried = %d, want 1", rep.Cycle.CarriedOver.Count)
+	if rep.Cycle.InCycle.Count != 1 || rep.Cycle.InDevelopment.Count != 1 {
+		t.Errorf("in cycle/in development = %d/%d, want 1/1: reopened work sits in development again",
+			rep.Cycle.InCycle.Count, rep.Cycle.InDevelopment.Count)
 	}
 }
 
-func TestPreCompletedArrivalIsNotCycleDelivery(t *testing.T) {
+// TestPreCompletedArrivalCountsInCycleSnapshot: a cycle reads as a snapshot,
+// so an item added to the cycle already complete counts as delivered there —
+// the cycle shows what it holds, not where the work happened — dated and
+// credited at the completion that holds.
+func TestPreCompletedArrivalCountsInCycleSnapshot(t *testing.T) {
 	f := newFixture("PC")
 	f.state("Todo", "unstarted", 0)
 	f.state("Done", "completed", 1)
@@ -334,11 +359,19 @@ func TestPreCompletedArrivalIsNotCycleDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}
-	if rep.Cycle.Added.Count != 1 {
-		t.Errorf("added = %d, want 1", rep.Cycle.Added.Count)
+	if rep.Cycle.Delivered.Count != 1 {
+		t.Errorf("delivered = %d, want 1: a cycle counts what sits in it at the cutoff", rep.Cycle.Delivered.Count)
 	}
-	if rep.Cycle.Delivered.Count != 0 {
-		t.Errorf("delivered = %d, want 0: an already-completed arrival is added scope, not cycle delivery", rep.Cycle.Delivered.Count)
+	wantIdentity := "0 planned + 1 added - 0 removed = 1 in the cycle = 0 in development + 1 delivered + 0 deferred"
+	if rep.Cycle.Identity != wantIdentity {
+		t.Errorf("identity = %q, want %q", rep.Cycle.Identity, wantIdentity)
+	}
+	ev, err := e.Evidence(context.Background(), f.project, EvidenceParams{Metric: "delivered", CycleID: &cycle})
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	if ev.Count != 1 || ev.Rows[0].CompletedAt == nil || ev.Rows[0].CompletedAt.Day() != 20 {
+		t.Errorf("delivered evidence = %+v, want T1 dated its pre-cycle completion on the 20th", ev.Rows)
 	}
 }
 
@@ -592,6 +625,16 @@ func TestHandedOffCycleSnapshot(t *testing.T) {
 	}
 	if rep.Cycle.Delivered.Count != 1 {
 		t.Errorf("delivered = %d, want 1 (S2 alone)", rep.Cycle.Delivered.Count)
+	}
+	// The buckets partition In Cycle; Dev Handed Off is their band rollup.
+	if rep.Cycle.InCycle.Count != 3 || rep.Cycle.InDevelopment.Count != 1 || rep.Cycle.Deferred.Count != 0 {
+		t.Errorf("partition = %d in cycle, %d in development, %d deferred; want 3, 1, 0",
+			rep.Cycle.InCycle.Count, rep.Cycle.InDevelopment.Count, rep.Cycle.Deferred.Count)
+	}
+	if rep.Cycle.InVerification == nil ||
+		rep.Cycle.HandedOff.Count != rep.Cycle.InVerification.Count+rep.Cycle.Delivered.Count {
+		t.Errorf("handed off = %+v, want in verification (%+v) + delivered (%d)",
+			rep.Cycle.HandedOff, rep.Cycle.InVerification, rep.Cycle.Delivered.Count)
 	}
 	if !strings.Contains(rep.HandoffRule, "earlier cycle") {
 		t.Errorf("cycle handoff_rule must explain the snapshot reading, got %q", rep.HandoffRule)

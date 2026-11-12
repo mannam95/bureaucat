@@ -78,17 +78,18 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
     <div class="mt-4 flex flex-wrap gap-3">
       <MetricTile
         v-if="person.handed_off"
-        label="Handed off"
+        label="Dev Handed Off"
         :count="person.handed_off.count"
         metric="person_handed_off"
         :cx="person.handed_off.cx"
         :subtasks="person.handed_off.subtasks"
+        milestone
         sub="the developer finish line"
         :tooltip="person.handoff_rule"
         @open="emit('open', 'person_handed_off', person.user.id)"
       />
       <MetricTile
-        label="Completed"
+        label="Delivered"
         :count="person.delivered.count"
         metric="person_delivered"
         :cx="person.delivered.cx"
@@ -96,9 +97,9 @@ const maxBand = computed(() => Math.max(1, ...props.person.bands.map((b) => b.co
         highlight
         @open="emit('open', 'person_delivered', person.user.id)"
       />
-      <MetricTile label="Top priority handled" :count="person.top_rank_handled" />
+      <MetricTile label="Top Priority Handled" :count="person.top_rank_handled" />
       <MetricTile
-        label="Open assigned now"
+        label="Open Assigned Now"
         :count="person.open_now"
         metric="person_open"
         @open="emit('open', 'person_open', person.user.id)"

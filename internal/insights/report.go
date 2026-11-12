@@ -193,8 +193,12 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		spansOf[t.id] = d.cycleMembership(d.top(t), cycle.ID)
 	}
 
-	var planned, added, removed, atClose, deliveredList, originalPlan, handedOffList []*task
-	var cancelled, archived, verification, carried []*task
+	// The buckets partition the snapshot: every member at the cutoff lands in
+	// exactly one of development, verification, delivered or deferred, so the
+	// In Cycle number is always the sum of its cards. Planned/added/removed
+	// keep the plan history for the identity line; they have no cards.
+	var planned, added, removed, atClose, inDev, verification, deliveredList, deferred, handedOffList []*task
+	boardTops := map[uuid.UUID]bool{}
 	for _, t := range units {
 		spans := spansOf[t.id]
 		inAtStart := memberAt(spans, w.start)
@@ -211,88 +215,51 @@ func (e *Engine) cycleSection(d *projectData, w window, cycle *ListCycle, units 
 		if (inAtStart || addedInWin) && !inAtClose {
 			removed = append(removed, t)
 		}
-		if inAtClose {
-			atClose = append(atClose, t)
+		if !inAtClose {
+			continue
 		}
-
-		if c, ok := d.deliveredIn(t, w.start, w.cutoff, spans, true); ok {
-			deliveredAt[t.id] = c
+		atClose = append(atClose, t)
+		boardTops[d.top(t).id] = true
+		switch d.typeAt(t, w.cutoff) {
+		case "completed":
 			deliveredList = append(deliveredList, t)
-			if inAtStart {
-				originalPlan = append(originalPlan, t)
+			if c, ok := d.deliveredIn(t, w.start, w.cutoff, spans, true); ok {
+				deliveredAt[t.id] = c
 			}
+		case "verification":
+			verification = append(verification, t)
+		case "unstarted", "started":
+			inDev = append(inDev, t)
+		default: // backlog, cancelled, archived: in the cycle but parked
+			deferred = append(deferred, t)
 		}
 		if h, ok := d.handedOffIn(t, w.start, w.cutoff, spans, true); ok {
 			handedOffAt[t.id] = h
 			handedOffList = append(handedOffList, t)
 		}
-		if inAtClose {
-			switch d.typeAt(t, w.cutoff) {
-			case "cancelled":
-				cancelled = append(cancelled, t)
-			case "archived":
-				archived = append(archived, t)
-			case "verification":
-				verification = append(verification, t)
-			case "completed":
-				// counted via deliveredList
-			default:
-				carried = append(carried, t)
-			}
-		}
 	}
 
-	// Without verification states the bucket is empty by construction; folding
-	// it into carried keeps the identity honest either way.
-	if !d.hasType("verification") {
-		carried = append(carried, verification...)
-		verification = nil
-	}
 	sec := &CycleSection{
-		Delivered:      Tile{Metric: "delivered", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList)},
-		OriginalPlan:   Tile{Metric: "original_plan", Count: len(originalPlan)},
-		PlannedAtStart: Tile{Metric: "planned", Count: len(planned), Cx: cxOver(planned)},
-		Added:          Tile{Metric: "added", Count: len(added)},
-		Removed:        Tile{Metric: "descoped", Count: len(removed)},
-		CarriedOver:    Tile{Metric: "carried", Count: len(carried), Cx: cxOver(carried)},
-		AtClose:        len(atClose),
-		Days:           []DayPoint{},
-		Bands:          bandsOver(deliveredList),
+		InCycle:       Tile{Metric: "in_cycle", Count: len(atClose), Cx: cxOver(atClose), Subtasks: subtasksOver(atClose), Rule: d.inCycleRule()},
+		InDevelopment: Tile{Metric: "in_development", Count: len(inDev), Cx: cxOver(inDev), Rule: d.inDevelopmentRule()},
+		Delivered:     Tile{Metric: "delivered", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList), Rule: d.deliveredRule()},
+		Deferred:      Tile{Metric: "deferred", Count: len(deferred), Rule: d.deferredRule()},
+		BoardTasks:    len(boardTops),
+		Days:          []DayPoint{},
+		Bands:         bandsOver(deliveredList),
 	}
 	if d.hasType("verification") {
-		t := Tile{Metric: "verification", Count: len(verification), Cx: cxOver(verification)}
-		sec.InVerification = &t
-		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList)}
+		v := Tile{Metric: "verification", Count: len(verification), Cx: cxOver(verification), Rule: d.inVerificationRule()}
+		sec.InVerification = &v
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList), Rule: d.handoffRule(true)}
 		sec.HandedOff = &h
 	}
-	if d.hasType("cancelled") {
-		t := Tile{Metric: "cancelled", Count: len(cancelled)}
-		sec.Cancelled = &t
-	}
-	if d.hasType("archived") {
-		t := Tile{Metric: "archived", Count: len(archived)}
-		sec.Archived = &t
-	}
-	completedAtClose := 0
-	for _, t := range atClose {
-		if d.typeAt(t, w.cutoff) == "completed" {
-			completedAtClose++
-		}
-	}
-	sec.Identity = fmt.Sprintf("%d planned + %d added - %d removed = %d at close = %d completed",
-		len(planned), len(added), len(removed), len(atClose), completedAtClose)
+	sec.Identity = fmt.Sprintf("%d planned + %d added - %d removed = %d in the cycle = %d in development",
+		len(planned), len(added), len(removed), len(atClose), len(inDev))
 	if sec.InVerification != nil {
 		sec.Identity += fmt.Sprintf(" + %d in verification", sec.InVerification.Count)
 	}
-	// "still to do", not "open": the bucket holds committed-but-unfinished work
-	// AND intake-typed items that sit in the cycle.
-	sec.Identity += fmt.Sprintf(" + %d still to do", len(carried))
-	if sec.Cancelled != nil {
-		sec.Identity += fmt.Sprintf(" + %d cancelled", sec.Cancelled.Count)
-	}
-	if sec.Archived != nil {
-		sec.Identity += fmt.Sprintf(" + %d archived", sec.Archived.Count)
-	}
+	sec.Identity += fmt.Sprintf(" + %d delivered + %d deferred", len(deliveredList), len(deferred))
 
 	// Daily series across the cycle, capped at the cutoff day.
 	for day := w.start; day.Before(w.endEx); day = day.AddDate(0, 0, 1) {
@@ -356,18 +323,18 @@ func (e *Engine) rangeSection(d *projectData, w window, units []*task, delivered
 	}
 
 	sec := &RangeSection{
-		Completed: Tile{Metric: "completed", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList)},
-		Created:   Tile{Metric: "created", Count: len(created)},
+		Completed: Tile{Metric: "completed", Count: len(deliveredList), Cx: cxOver(deliveredList), Subtasks: subtasksOver(deliveredList), Rule: d.rangeDeliveredRule()},
+		Created:   Tile{Metric: "created", Count: len(created), Rule: d.createdRule()},
 		Days:      []DayPoint{},
 		Bands:     bandsOver(deliveredList),
 		HasCycles: len(d.cycles) > 0,
 	}
 	if d.hasType("cancelled") {
-		t := Tile{Metric: "cancelled", Count: len(cancelled)}
+		t := Tile{Metric: "cancelled", Count: len(cancelled), Rule: d.rangeCancelledRule()}
 		sec.Cancelled = &t
 	}
 	if d.hasType("verification") {
-		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList)}
+		h := Tile{Metric: "handed_off", Count: len(handedOffList), Cx: cxOver(handedOffList), Subtasks: subtasksOver(handedOffList), Rule: d.handoffRule(false)}
 		sec.HandedOff = &h
 	}
 

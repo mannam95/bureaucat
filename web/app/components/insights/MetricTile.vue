@@ -10,6 +10,8 @@ const props = defineProps<{
   cx?: ComplexitySum;
   sub?: string;
   highlight?: boolean;
+  /** Tints the card as a milestone rollup (a sum of other cards, not a bucket). */
+  milestone?: boolean;
   sign?: "plus" | "minus";
   /** Rule bullets for the info dot beside the label, one per newline. */
   tooltip?: string;
@@ -39,13 +41,14 @@ const cxLine = computed(() => {
     :is="metric ? 'button' : 'div'"
     class="flex min-w-28 flex-col rounded-lg border p-3 text-left transition-colors"
     :class="[
-      highlight ? 'border-emerald-600/40 bg-emerald-500/10' : 'bg-card',
+      highlight ? 'border-emerald-600/40 bg-emerald-500/10' : milestone ? 'border-sky-600/40 bg-sky-500/10' : 'bg-card',
       metric && 'cursor-pointer hover:border-amber-500/60 focus-visible:ring-2 focus-visible:ring-ring outline-none',
     ]"
     :title="metric ? 'Open the exact population behind this number' : undefined"
     @click="metric && emit('open', metric)"
   >
-    <span class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <!-- Labels render as written (Title Case), no CSS uppercasing. -->
+    <span class="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
       {{ label }}
       <RuleInfo v-if="tooltip" :label="label" :rule="tooltip" />
     </span>

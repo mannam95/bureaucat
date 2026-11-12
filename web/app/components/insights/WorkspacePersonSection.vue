@@ -49,13 +49,14 @@ function cxLabel(row: { cx?: { sum: number; assessed: number; not_assessed: numb
     <div class="mt-4 flex flex-wrap gap-3">
       <MetricTile
         v-if="person.has_verification"
-        label="Handed off"
+        label="Dev Handed Off"
         :count="person.handed_off"
+        milestone
         sub="the developer finish line"
       />
-      <MetricTile label="Completed" :count="person.delivered.count" :cx="person.delivered.cx" :subtasks="person.delivered.subtasks" highlight />
-      <MetricTile label="Top priority handled" :count="person.top_rank_handled" />
-      <MetricTile label="Open assigned now" :count="person.open_now" />
+      <MetricTile label="Delivered" :count="person.delivered.count" :cx="person.delivered.cx" :subtasks="person.delivered.subtasks" highlight />
+      <MetricTile label="Top Priority Handled" :count="person.top_rank_handled" />
+      <MetricTile label="Open Assigned Now" :count="person.open_now" />
       <MetricTile label="Comments" :count="person.comments" />
       <MetricTile label="Created" :count="person.created" />
     </div>

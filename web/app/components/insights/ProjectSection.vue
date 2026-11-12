@@ -14,36 +14,35 @@ const emit = defineEmits<{
 const cycle = computed(() => props.report.cycle);
 const range = computed(() => props.report.range);
 
-const planPercent = computed(() => {
-  if (!cycle.value || cycle.value.planned_at_start.count === 0) return null;
-  return Math.round((cycle.value.original_plan_delivered.count / cycle.value.planned_at_start.count) * 100);
+// Delivered share of the cycle snapshot; the cycle's total is the honest
+// denominator ("whatever sits in the sprint belongs to the sprint").
+const deliveredPercent = computed(() => {
+  if (!cycle.value || cycle.value.in_cycle.count === 0) return null;
+  return Math.round((cycle.value.delivered.count / cycle.value.in_cycle.count) * 100);
 });
 
-const endScopePercent = computed(() => {
-  if (!cycle.value || cycle.value.at_close === 0) return null;
-  return Math.round((cycle.value.delivered.count / cycle.value.at_close) * 100);
+// The In Cycle card explains a board/report difference itself: the board
+// lists tasks, the report counts leaf units (subtasks replace their parent).
+const boardNote = computed(() => {
+  const c = cycle.value;
+  if (!c || c.board_tasks === c.in_cycle.count) return undefined;
+  return `the board lists ${c.board_tasks} tasks`;
 });
 
 const narrative = computed(() => {
   if (cycle.value) {
     const c = cycle.value;
-    let s = `${c.delivered.count} work items completed`;
-    if (c.delivered.subtasks) s += ` (${c.delivered.subtasks} of them subtasks)`;
+    let s = `${c.in_cycle.count} work items in the cycle: ${c.in_development.count} in development`;
+    if (c.in_verification) s += `, ${c.in_verification.count} in verification`;
+    s += `, ${c.delivered.count} delivered`;
+    if (c.deferred.count > 0) s += `, ${c.deferred.count} deferred`;
+    s += ".";
     if (c.handed_off) {
-      s += `, ${c.handed_off.count} handed off by their developers`;
+      s += ` ${c.handed_off.count} ${c.handed_off.count === 1 ? "is" : "are"} past the developer line`;
       if (c.handed_off.subtasks) s += ` (${c.handed_off.subtasks} of them subtasks)`;
+      s += ".";
     }
-    if (planPercent.value !== null) {
-      s += `; ${c.original_plan_delivered.count} of ${c.planned_at_start.count} planned items delivered (${planPercent.value}% of the original plan)`;
-    }
-    s += `. The cycle started with ${c.planned_at_start.count} items`;
-    if (c.added.count > 0) s += `, ${c.added.count} were added`;
-    if (c.removed.count > 0) s += ` and ${c.removed.count} removed`;
-    s += `. ${c.carried_over.count} carried over`;
-    if (c.in_verification && c.in_verification.count > 0) s += `, ${c.in_verification.count} in verification`;
-    if (c.cancelled && c.cancelled.count > 0) s += `, ${c.cancelled.count} cancelled`;
-    if (c.archived && c.archived.count > 0) s += `, ${c.archived.count} archived`;
-    return s + ".";
+    return s;
   }
   if (range.value) {
     const r = range.value;
@@ -80,17 +79,48 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
     </h2>
     <p class="mt-1 text-sm text-muted-foreground">{{ narrative }}</p>
 
-    <!-- Cycle tiles -->
+    <!-- Cycle cards: In Cycle = In Development + In Verification + Delivered
+         + Deferred; Dev Handed Off is the tinted milestone rollup
+         (In Verification + Delivered), not another bucket. -->
     <div v-if="cycle" class="mt-4 flex flex-wrap gap-3">
       <MetricTile
+        label="In Cycle"
+        :count="cycle.in_cycle.count"
+        metric="in_cycle"
+        :cx="cycle.in_cycle.cx"
+        :subtasks="cycle.in_cycle.subtasks"
+        :sub="boardNote"
+        :tooltip="cycle.in_cycle.rule"
+        @open="emit('open', $event)"
+      />
+      <MetricTile
+        label="In Development"
+        :count="cycle.in_development.count"
+        metric="in_development"
+        :cx="cycle.in_development.cx"
+        :tooltip="cycle.in_development.rule"
+        @open="emit('open', $event)"
+      />
+      <MetricTile
         v-if="cycle.handed_off"
-        label="Handed off"
+        label="Dev Handed Off"
         :count="cycle.handed_off.count"
         metric="handed_off"
         :cx="cycle.handed_off.cx"
         :subtasks="cycle.handed_off.subtasks"
-        sub="the developer finish line"
-        :tooltip="report.handoff_rule"
+        milestone
+        sub="in verification + delivered"
+        :tooltip="cycle.handed_off.rule"
+        @open="emit('open', $event)"
+      />
+      <MetricTile
+        v-if="cycle.in_verification"
+        label="In Verification"
+        :count="cycle.in_verification.count"
+        metric="verification"
+        :cx="cycle.in_verification.cx"
+        sub="built, being validated"
+        :tooltip="cycle.in_verification.rule"
         @open="emit('open', $event)"
       />
       <MetricTile
@@ -100,54 +130,16 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
         :cx="cycle.delivered.cx"
         :subtasks="cycle.delivered.subtasks"
         highlight
-        :sub="endScopePercent !== null ? `${endScopePercent}% of end scope (${cycle.at_close})` : undefined"
+        :sub="deliveredPercent !== null ? `${deliveredPercent}% of the cycle` : undefined"
+        :tooltip="cycle.delivered.rule"
         @open="emit('open', $event)"
       />
       <MetricTile
-        label="Original plan"
-        :count="cycle.original_plan_delivered.count"
-        metric="original_plan"
-        :sub="planPercent !== null ? `of ${cycle.planned_at_start.count} planned · ${planPercent}%` : undefined"
-        @open="emit('open', $event)"
-      />
-      <MetricTile
-        label="Planned at start"
-        :count="cycle.planned_at_start.count"
-        metric="planned"
-        :cx="cycle.planned_at_start.cx"
-        @open="emit('open', $event)"
-      />
-      <MetricTile label="Added" :count="cycle.added.count" metric="added" sign="plus" @open="emit('open', $event)" />
-      <MetricTile label="Descoped" :count="cycle.removed.count" metric="descoped" sign="minus" @open="emit('open', $event)" />
-      <MetricTile
-        v-if="cycle.in_verification"
-        label="In verification"
-        :count="cycle.in_verification.count"
-        metric="verification"
-        :cx="cycle.in_verification.cx"
-        sub="built, being validated"
-        @open="emit('open', $event)"
-      />
-      <MetricTile
-        label="Carried over"
-        :count="cycle.carried_over.count"
-        metric="carried"
-        :cx="cycle.carried_over.cx"
-        @open="emit('open', $event)"
-      />
-      <MetricTile
-        v-if="cycle.cancelled"
-        label="Cancelled"
-        :count="cycle.cancelled.count"
-        metric="cancelled"
-        sub="not delivery"
-        @open="emit('open', $event)"
-      />
-      <MetricTile
-        v-if="cycle.archived"
-        label="Archived"
-        :count="cycle.archived.count"
-        metric="archived"
+        label="Deferred"
+        :count="cycle.deferred.count"
+        metric="deferred"
+        sub="parked, cancelled or archived"
+        :tooltip="cycle.deferred.rule"
         @open="emit('open', $event)"
       />
     </div>
@@ -156,23 +148,34 @@ const days = computed(() => (cycle.value ?? range.value)?.days ?? []);
     <div v-else-if="range" class="mt-4 flex flex-wrap gap-3">
       <MetricTile
         v-if="range.handed_off"
-        label="Handed off"
+        label="Dev Handed Off"
         :count="range.handed_off.count"
         metric="handed_off"
         :cx="range.handed_off.cx"
         :subtasks="range.handed_off.subtasks"
+        milestone
         sub="the developer finish line"
-        :tooltip="report.handoff_rule"
+        :tooltip="range.handed_off.rule || report.handoff_rule"
         @open="emit('open', $event)"
       />
-      <MetricTile label="Completed" :count="range.completed.count" metric="completed" :cx="range.completed.cx" :subtasks="range.completed.subtasks" highlight @open="emit('open', $event)" />
-      <MetricTile label="Created" :count="range.created.count" metric="created" @open="emit('open', $event)" />
+      <MetricTile
+        label="Delivered"
+        :count="range.completed.count"
+        metric="completed"
+        :cx="range.completed.cx"
+        :subtasks="range.completed.subtasks"
+        highlight
+        :tooltip="range.completed.rule"
+        @open="emit('open', $event)"
+      />
+      <MetricTile label="Created" :count="range.created.count" metric="created" :tooltip="range.created.rule" @open="emit('open', $event)" />
       <MetricTile
         v-if="range.cancelled"
         label="Cancelled"
         :count="range.cancelled.count"
         metric="cancelled"
         sub="not delivery"
+        :tooltip="range.cancelled.rule"
         @open="emit('open', $event)"
       />
     </div>

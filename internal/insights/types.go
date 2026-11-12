@@ -78,6 +78,9 @@ type Tile struct {
 	// honest about its units ("17 delivered · 9 subtasks"). Only the delivery
 	// tiles fill it.
 	Subtasks int `json:"subtasks,omitempty"`
+	// Rule is the tile's own explanation, one bullet per line, spelled in the
+	// project's state vocabulary; the UI renders it behind an info dot.
+	Rule string `json:"rule,omitempty"`
 }
 
 // DayPoint is one day of the scope-vs-completed series plus the day strip.
@@ -187,26 +190,27 @@ type Health struct {
 	Weekly         []WeekPoint  `json:"weekly"`
 }
 
-// CycleSection is question 1 when the report is cycle-scoped.
+// CycleSection is question 1 when the report is cycle-scoped. A cycle reads
+// as a snapshot: InCycle is every leaf member at the cutoff, and the buckets
+// (InDevelopment, InVerification, Delivered, Deferred) partition it exactly,
+// so the total is always the sum of its cards. HandedOff is the milestone
+// rollup (InVerification + Delivered), not another bucket.
 type CycleSection struct {
-	// HandedOff is nil when the project defines no verification states: the
-	// developer finish line coincides with delivery, so the tile would repeat
-	// the Delivered number.
+	InCycle       Tile `json:"in_cycle"`
+	InDevelopment Tile `json:"in_development"`
+	// HandedOff/InVerification are nil when the project defines no
+	// verification states: the developer finish line coincides with delivery
+	// there, so the tiles would repeat the Delivered number.
 	HandedOff      *Tile `json:"handed_off,omitempty"`
-	Delivered      Tile `json:"delivered"`
-	OriginalPlan   Tile `json:"original_plan_delivered"` // delivered items that were planned at start
-	PlannedAtStart Tile `json:"planned_at_start"`
-	Added          Tile `json:"added"`
-	Removed        Tile `json:"removed"`
-	CarriedOver    Tile `json:"carried_over"`
-	// InVerification/Cancelled/Archived are nil when the project defines no
-	// state of that type — the tile is absent, not zero.
 	InVerification *Tile `json:"in_verification,omitempty"`
-	Cancelled      *Tile `json:"cancelled,omitempty"`
-	Archived       *Tile `json:"archived,omitempty"`
-	AtClose        int   `json:"at_close"`
-	// Identity is the reconciliation line: planned + added - removed = at
-	// close = completed + in verification + open + cancelled + archived.
+	Delivered      Tile  `json:"delivered"`
+	Deferred       Tile  `json:"deferred"`
+	// BoardTasks counts the board rows behind InCycle (a parent with subtasks
+	// is one row but counts through its subtasks), so the In Cycle card can
+	// explain a board/report difference.
+	BoardTasks int `json:"board_tasks"`
+	// Identity is the reconciliation line: planned + added - removed = in the
+	// cycle = in development + in verification + delivered + deferred.
 	Identity string      `json:"identity"`
 	Days     []DayPoint  `json:"days"`
 	Bands    []BandCount `json:"bands"`
@@ -317,16 +321,16 @@ type PersonReport struct {
 	User  UserRef `json:"user"`
 	// HandedOff is absent when the project has no verification states;
 	// HandoffRule is its tooltip, as on the project report.
-	HandedOff   *Tile  `json:"handed_off,omitempty"`
-	HandoffRule string `json:"handoff_rule,omitempty"`
-	Delivered   Tile   `json:"delivered"`
-	TopRank   int          `json:"top_rank_handled"`
-	OpenNow   int          `json:"open_now"`
-	Comments  int          `json:"comments"`
-	Created   int          `json:"created"`
-	Weekly    []WeekPoint  `json:"weekly"`
-	ByCycle   []CycleCount `json:"by_cycle"`
-	Bands     []BandCount  `json:"bands"`
+	HandedOff   *Tile        `json:"handed_off,omitempty"`
+	HandoffRule string       `json:"handoff_rule,omitempty"`
+	Delivered   Tile         `json:"delivered"`
+	TopRank     int          `json:"top_rank_handled"`
+	OpenNow     int          `json:"open_now"`
+	Comments    int          `json:"comments"`
+	Created     int          `json:"created"`
+	Weekly      []WeekPoint  `json:"weekly"`
+	ByCycle     []CycleCount `json:"by_cycle"`
+	Bands       []BandCount  `json:"bands"`
 	// WorkedWith lists the people who shared credit on this person's delivered
 	// items over the window.
 	WorkedWith []UserCount `json:"worked_with"`
@@ -363,10 +367,10 @@ type WorkspacePersonReport struct {
 	// verification states — the gate for showing the Handed off tile.
 	HasVerification bool `json:"has_verification"`
 	Delivered       Tile `json:"delivered"`
-	TopRank   int     `json:"top_rank_handled"`
-	OpenNow   int     `json:"open_now"`
-	Comments  int     `json:"comments"`
-	Created   int     `json:"created"`
+	TopRank         int  `json:"top_rank_handled"`
+	OpenNow         int  `json:"open_now"`
+	Comments        int  `json:"comments"`
+	Created         int  `json:"created"`
 	// Projects holds one row per project that contributed anything (membership
 	// or windowed activity), most delivered first.
 	Projects   []PersonProjectRow `json:"projects"`

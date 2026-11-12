@@ -76,7 +76,11 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 	switch p.Metric {
 	case "delivered", "completed":
 		ev.Title = "Delivered"
-		ev.HowComputed = "Leaf items that entered a completed-type state during the window and were still completed at the cutoff. Reopened items fall out; a repeated completion counts once."
+		if requireCycle {
+			ev.HowComputed = "Every leaf item in the cycle sitting in a completed-type state at the cutoff, no matter when it was completed — a cycle reads as a snapshot. The completion that holds (the last before the cutoff) carries the date; reopened items fall out until completed again."
+		} else {
+			ev.HowComputed = "Leaf items that entered a completed-type state during the window and were still completed at the cutoff. Reopened items fall out; a repeated completion counts once."
+		}
 		ev.SourceEvents = "state_changed"
 		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "still completed at cutoff")
 		for _, t := range units {
@@ -219,7 +223,7 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 			return nil, fmt.Errorf("metric %q needs a cycle", p.Metric)
 		}
 		wantType := map[string]string{"carried": "", "cancelled": "cancelled", "archived": "archived", "verification": "verification"}[p.Metric]
-		ev.Title = map[string]string{"carried": "Carried over", "cancelled": "Cancelled", "archived": "Archived", "verification": "In verification"}[p.Metric]
+		ev.Title = map[string]string{"carried": "Carried over", "cancelled": "Cancelled", "archived": "Archived", "verification": "In Verification"}[p.Metric]
 		ev.HowComputed = "Leaf items in the cycle at the cutoff whose state type at that moment matches this outcome. Outcomes are exclusive: completed, in verification, open, cancelled and archived partition the scope at close."
 		ev.SourceEvents = "state_changed, cycle_added, cycle_removed"
 		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "in cycle at close")
@@ -235,6 +239,41 @@ func (e *Engine) Evidence(ctx context.Context, project store.Project, p Evidence
 				match = (isOpenType(typ) || isIntakeType(typ)) && typ != "verification"
 			} else {
 				match = typ == wantType
+			}
+			if match {
+				row := e.rowWithState(d, t, w.cutoff)
+				row.EnteredCycle = enteredLabel(t)
+				ev.Rows = append(ev.Rows, row)
+			}
+		}
+
+	case "in_cycle", "in_development", "deferred":
+		// The snapshot buckets: in_cycle is every member at the cutoff, and
+		// in_development/verification/delivered/deferred partition it.
+		if cycle == nil {
+			return nil, fmt.Errorf("metric %q needs a cycle", p.Metric)
+		}
+		ev.Title = map[string]string{"in_cycle": "In Cycle", "in_development": "In Development", "deferred": "Deferred"}[p.Metric]
+		ev.HowComputed = map[string]string{
+			"in_cycle":       "Every leaf item in the cycle at the cutoff. In development, in verification, delivered and deferred partition this set exactly; a parent with subtasks counts through its subtasks.",
+			"in_development": "Leaf items in the cycle at the cutoff whose state is unstarted- or started-type: still on the developer's side of the line.",
+			"deferred":       "Leaf items in the cycle at the cutoff sitting in a backlog-, cancelled- or archived-type state: parked, not open work and never delivery.",
+		}[p.Metric]
+		ev.SourceEvents = "state_changed, cycle_added, cycle_removed"
+		ev.Chips = e.windowChips(d, w, cycle, "leaf items", "in cycle at close")
+		for _, t := range units {
+			if !memberAt(spansOf[t.id], w.cutoff.Add(-time.Nanosecond)) {
+				continue
+			}
+			typ := d.typeAt(t, w.cutoff)
+			match := false
+			switch p.Metric {
+			case "in_cycle":
+				match = true
+			case "in_development":
+				match = typ == "unstarted" || typ == "started"
+			case "deferred":
+				match = typ == "backlog" || typ == "cancelled" || typ == "archived"
 			}
 			if match {
 				row := e.rowWithState(d, t, w.cutoff)

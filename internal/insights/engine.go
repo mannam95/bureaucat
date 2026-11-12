@@ -524,6 +524,12 @@ func (d *projectData) handedOffIn(t *task, from, cutoff time.Time, spans []span,
 		}
 		best, found = h, true
 	}
+	if cycleMode && !found {
+		// In the band since creation with no recorded crossing (import-era, or
+		// created directly past the line): creation is the moment, so the
+		// snapshot rollup always equals in-verification plus delivered.
+		best, found = completion{at: t.createdAt}, true
+	}
 	return best, found
 }
 
@@ -691,19 +697,32 @@ func (d *projectData) credits(t *task, completedAt time.Time) []uuid.UUID {
 	return d.assigneesAt(t, completedAt)
 }
 
-// deliveredIn finds the first qualifying completion for a unit: entered a
-// completed-type state inside [from, cutoff) and still completed-type at the
-// cutoff (reopened work falls out). inCycle additionally requires membership
-// at the completion moment.
-func (d *projectData) deliveredIn(t *task, from, cutoff time.Time, spans []span, requireCycle bool) (completion, bool) {
+// deliveredIn finds the qualifying completion for a unit. A cycle reads as a
+// SNAPSHOT, like handedOffIn: every member sitting in a completed-type state
+// at the cutoff counts, no matter when it was completed, so the cycle buckets
+// always partition the scope. The completion that HOLDS (the last one before
+// the cutoff) carries the date and the credit; an item completed since
+// creation with no recorded completion falls back to its creation moment. A
+// date range reads as a FLOW: only completions inside [from, cutoff) count.
+// Either way, reopened work falls out until it is completed again.
+func (d *projectData) deliveredIn(t *task, from, cutoff time.Time, spans []span, cycleMode bool) (completion, bool) {
 	if d.states[d.stateAt(t, cutoff)].Type != "completed" {
 		return completion{}, false
 	}
+	if cycleMode {
+		if !memberAt(spans, cutoff.Add(-time.Nanosecond)) {
+			return completion{}, false
+		}
+		best := completion{at: t.createdAt}
+		for _, c := range d.completions(t) {
+			if c.at.Before(cutoff) {
+				best = c
+			}
+		}
+		return best, true
+	}
 	for _, c := range d.completions(t) {
 		if c.at.Before(from) || !c.at.Before(cutoff) {
-			continue
-		}
-		if requireCycle && !memberAt(spans, c.at) {
 			continue
 		}
 		return c, true
@@ -731,37 +750,50 @@ func (d *projectData) prioRef(id uuid.UUID) *PriorityRef {
 	return &PriorityRef{ID: p.ID, Name: p.Name, Rank: p.Rank, Color: p.Color, Active: p.Active}
 }
 
+// orJoin spells a name list as prose: "A, B or C".
+func orJoin(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	if len(names) == 1 {
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+}
+
+// namesOfType collects the project's state names for the given types, in
+// display order.
+func (d *projectData) namesOfType(types ...string) []string {
+	var out []string
+	for _, s := range d.stateList {
+		for _, typ := range types {
+			if s.Type == typ {
+				out = append(out, s.Name)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // handoffRule spells out the handed-off band in the project's own state
 // vocabulary, one bullet per line (the UI renders the lines as a list behind
 // an info dot). The wording follows the report mode: a cycle is a snapshot, a
 // range is a flow. Empty when the project has no verification states (handed
 // off equals delivered there, so no tile shows).
 func (d *projectData) handoffRule(cycleMode bool) string {
-	var band, done []string
-	for _, s := range d.stateList {
-		switch s.Type {
-		case "verification":
-			band = append(band, s.Name)
-		case "completed":
-			done = append(done, s.Name)
-		}
-	}
+	band := d.namesOfType("verification")
 	if len(band) == 0 {
 		return ""
 	}
-	orJoin := func(names []string) string {
-		if len(names) == 1 {
-			return names[0]
-		}
-		return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
-	}
 	doneNames := "a completed state"
-	if len(done) > 0 {
+	if done := d.namesOfType("completed"); len(done) > 0 {
 		doneNames = orJoin(done)
 	}
 	if cycleMode {
 		return strings.Join([]string{
 			"Counts every item in this cycle that is past the line at the cutoff: in " + orJoin(band) + ", or already in " + doneNames + ".",
+			"Dev Handed Off = In Verification + Delivered: one milestone crossed, not another bucket.",
 			"It counts even when the crossing happened in an earlier cycle; the date and the credit follow that crossing.",
 			"Work bounced back by review does not count until it crosses again.",
 			"Everything after this line is carried by others.",
@@ -774,6 +806,94 @@ func (d *projectData) handoffRule(cycleMode bool) string {
 		"If review bounces it back, it counts again when it re-crosses.",
 		"Everything after this line is carried by others.",
 	}, "\n")
+}
+
+// The bucket rules below back the info dot on each cycle card, in the
+// project's own state vocabulary. The buckets partition the cycle snapshot;
+// Dev Handed Off is the rollup and keeps its own rule (handoffRule).
+
+func (d *projectData) inCycleRule() string {
+	sum := "In Development + In Verification + Delivered + Deferred add up to exactly this number."
+	if !d.hasType("verification") {
+		sum = "In Development + Delivered + Deferred add up to exactly this number."
+	}
+	return strings.Join([]string{
+		"Every work item in this cycle at the cutoff — the close of a finished cycle, now for a running one.",
+		"Counts leaf items: a task with subtasks counts through its subtasks, so this can differ from the board's task count.",
+		"Work carried from an earlier cycle counts here too; a cycle reads on its own.",
+		sum,
+	}, "\n")
+}
+
+func (d *projectData) inDevelopmentRule() string {
+	first := "Members still on the developer's side of the line at the cutoff: in an unstarted- or started-type state."
+	if names := d.namesOfType("unstarted", "started"); len(names) > 0 {
+		first = "Members still on the developer's side of the line at the cutoff: in " + orJoin(names) + "."
+	}
+	lines := []string{first}
+	if d.hasType("verification") {
+		lines = append(lines, "Work bounced back by review sits here again until it crosses the line once more.")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (d *projectData) inVerificationRule() string {
+	doneNames := "a completed state"
+	if done := d.namesOfType("completed"); len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	return strings.Join([]string{
+		"Handed off by their developers and being validated: in " + orJoin(d.namesOfType("verification")) + " at the cutoff.",
+		"Still open work — nothing counts as delivered until it reaches " + doneNames + ".",
+	}, "\n")
+}
+
+func (d *projectData) deliveredRule() string {
+	doneNames := "a completed-type state"
+	if done := d.namesOfType("completed"); len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	return strings.Join([]string{
+		"Members sitting in " + doneNames + " at the cutoff — done, whenever they crossed.",
+		"Reopened work drops out until it is completed again.",
+	}, "\n")
+}
+
+func (d *projectData) deferredRule() string {
+	first := "In the cycle but parked at the cutoff: in a backlog-, cancelled- or archived-type state."
+	if names := d.namesOfType("backlog", "cancelled", "archived"); len(names) > 0 {
+		first = "In the cycle but parked at the cutoff: in " + orJoin(names) + "."
+	}
+	return strings.Join([]string{
+		first,
+		"Not open work, and never delivery.",
+	}, "\n")
+}
+
+func (d *projectData) rangeDeliveredRule() string {
+	doneNames := "a completed-type state"
+	if done := d.namesOfType("completed"); len(done) > 0 {
+		doneNames = orJoin(done)
+	}
+	return strings.Join([]string{
+		"Counts when a task enters " + doneNames + " during this window and is still completed at the cutoff.",
+		"Reopened work falls out; a repeated completion counts once.",
+	}, "\n")
+}
+
+func (d *projectData) rangeCancelledRule() string {
+	names := "a cancelled-type state"
+	if c := d.namesOfType("cancelled"); len(c) > 0 {
+		names = orJoin(c)
+	}
+	return strings.Join([]string{
+		"Counts when a task enters " + names + " during this window and is still cancelled at the cutoff.",
+		"Cancelled is never delivery.",
+	}, "\n")
+}
+
+func (d *projectData) createdRule() string {
+	return "Counts every leaf item created during this window, whatever has happened to it since."
 }
 
 // hasType says whether the project defines any state of the given type; a

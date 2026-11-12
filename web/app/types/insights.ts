@@ -50,6 +50,8 @@ export interface MetricTile {
   count: number;
   cx?: ComplexitySum;
   subtasks?: number;
+  /** Info-dot bullets, one per newline, in the project's state vocabulary. */
+  rule?: string;
 }
 
 export interface DayPoint {
@@ -136,18 +138,17 @@ export interface InsightsHealth {
   weekly: WeekPoint[];
 }
 
+// A cycle reads as a snapshot: in_cycle is every leaf member at the cutoff,
+// and in_development + in_verification + delivered + deferred partition it.
+// handed_off is the milestone rollup (in_verification + delivered).
 export interface CycleSection {
+  in_cycle: MetricTile;
+  in_development: MetricTile;
   handed_off?: MetricTile;
-  delivered: MetricTile;
-  original_plan_delivered: MetricTile;
-  planned_at_start: MetricTile;
-  added: MetricTile;
-  removed: MetricTile;
-  carried_over: MetricTile;
   in_verification?: MetricTile;
-  cancelled?: MetricTile;
-  archived?: MetricTile;
-  at_close: number;
+  delivered: MetricTile;
+  deferred: MetricTile;
+  board_tasks: number;
   identity: string;
   days: DayPoint[];
   bands: BandCount[];
